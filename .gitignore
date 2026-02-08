@@ -1,0 +1,7 @@
+external/
+target/
+public/
+*.pyc
+__pycache__/
+.venv/
+.sync-repo/

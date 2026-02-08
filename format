@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+./format-rs
+./format-py
+
+echo "All formatting complete!"

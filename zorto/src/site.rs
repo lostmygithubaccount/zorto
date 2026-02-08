@@ -1,0 +1,573 @@
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use crate::config::Config;
+use crate::content::{self, Page, Section};
+use crate::execute;
+use crate::links;
+use crate::markdown;
+use crate::sass;
+use crate::shortcodes;
+use crate::templates::{self, Paginator, TaxonomyTerm};
+
+pub struct Site {
+    pub config: Config,
+    pub sections: HashMap<String, Section>,
+    pub pages: HashMap<String, Page>,
+    pub assets: Vec<PathBuf>,
+    pub root: PathBuf,
+    pub output_dir: PathBuf,
+    pub drafts: bool,
+}
+
+impl Site {
+    /// Load site from disk
+    pub fn load(root: &Path, output_dir: &Path, drafts: bool) -> anyhow::Result<Self> {
+        let config = Config::load(root)?;
+        let content_dir = root.join("content");
+
+        let (sections, pages, assets) = content::load_content(&content_dir, &config.base_url)?;
+
+        Ok(Site {
+            config,
+            sections,
+            pages,
+            assets,
+            root: root.to_path_buf(),
+            output_dir: output_dir.to_path_buf(),
+            drafts,
+        })
+    }
+
+    /// Override the base URL and rewrite all permalinks
+    pub fn set_base_url(&mut self, new_base_url: String) {
+        let old = &self.config.base_url;
+        for page in self.pages.values_mut() {
+            page.permalink = page.permalink.replacen(old.as_str(), &new_base_url, 1);
+        }
+        for section in self.sections.values_mut() {
+            section.permalink = section.permalink.replacen(old.as_str(), &new_base_url, 1);
+        }
+        self.config.base_url = new_base_url;
+    }
+
+    /// Full build pipeline
+    pub fn build(&mut self) -> anyhow::Result<()> {
+        // Filter drafts
+        if !self.drafts {
+            self.pages.retain(|_, p| !p.draft);
+        }
+
+        // Phase 2: RESOLVE — assign pages to sections, build taxonomy
+        content::assign_pages_to_sections(&mut self.sections, &self.pages);
+
+        // Phase 3: RENDER MARKDOWN
+        self.render_all_markdown()?;
+
+        // Re-assign pages after rendering (content is now filled)
+        self.reassign_rendered_pages();
+
+        // Phase 4: TEMPLATE RENDERING
+        let templates_dir = self.root.join("templates");
+        let tera = templates::setup_tera(&templates_dir, &self.config, &self.sections)?;
+        self.render_templates(&tera)?;
+
+        // Phase 5: ASSETS
+        if self.config.compile_sass {
+            let sass_dir = self.root.join("sass");
+            if sass_dir.exists() {
+                sass::compile_sass(&sass_dir, &self.output_dir)?;
+            }
+        }
+
+        // Copy static files
+        let static_dir = self.root.join("static");
+        if static_dir.exists() {
+            copy_dir_recursive(&static_dir, &self.output_dir)?;
+        }
+
+        // Copy co-located assets
+        self.copy_colocated_assets()?;
+
+        Ok(())
+    }
+
+    /// Render markdown for all pages and sections
+    fn render_all_markdown(&mut self) -> anyhow::Result<()> {
+        let templates_dir = self.root.join("templates");
+        let shortcode_dir = templates_dir.join("shortcodes");
+        let tera = tera::Tera::default(); // minimal tera for shortcodes
+
+        // Render pages
+        let page_keys: Vec<String> = self.pages.keys().cloned().collect();
+        for key in page_keys {
+            let page = self.pages.get(&key).unwrap();
+            let mut raw = page.raw_content.clone();
+
+            // Resolve internal links
+            raw = links::resolve_internal_links(
+                &raw,
+                &self.pages,
+                &self.sections,
+                &self.config.base_url,
+            );
+
+            // Process shortcodes
+            if shortcode_dir.exists() {
+                raw = shortcodes::process_shortcodes(&raw, &shortcode_dir, &tera)?;
+            }
+
+            // Extract summary before full render
+            let summary_raw = markdown::extract_summary(&raw);
+
+            // Render markdown with code block detection
+            let mut exec_blocks = Vec::new();
+            let html = markdown::render_markdown(
+                &raw,
+                &self.config.markdown,
+                &mut exec_blocks,
+                &self.config.base_url,
+            );
+
+            // Execute code blocks
+            if !exec_blocks.is_empty() {
+                let content_dir = self.root.join("content");
+                let page_dir = Path::new(&key)
+                    .parent()
+                    .map(|p| content_dir.join(p))
+                    .unwrap_or(content_dir.clone());
+                execute::execute_blocks(&mut exec_blocks, &page_dir, &self.root);
+            }
+
+            // Replace execution placeholders
+            let html =
+                markdown::replace_exec_placeholders(&html, &exec_blocks, &self.config.markdown);
+
+            // Render summary separately
+            let base_url = self.config.base_url.clone();
+            let summary = summary_raw.map(|(summary_md, _)| {
+                let mut dummy_blocks = Vec::new();
+                markdown::render_markdown(
+                    &summary_md,
+                    &self.config.markdown,
+                    &mut dummy_blocks,
+                    &base_url,
+                )
+            });
+
+            let page = self.pages.get_mut(&key).unwrap();
+            page.content = html;
+            page.summary = summary;
+        }
+
+        // Render section content
+        let section_keys: Vec<String> = self.sections.keys().cloned().collect();
+        for key in section_keys {
+            let section = self.sections.get(&key).unwrap();
+            let mut raw = section.raw_content.clone();
+
+            if !raw.trim().is_empty() {
+                raw = links::resolve_internal_links(
+                    &raw,
+                    &self.pages,
+                    &self.sections,
+                    &self.config.base_url,
+                );
+                if shortcode_dir.exists() {
+                    raw = shortcodes::process_shortcodes(&raw, &shortcode_dir, &tera)?;
+                }
+                let mut exec_blocks = Vec::new();
+                let html = markdown::render_markdown(
+                    &raw,
+                    &self.config.markdown,
+                    &mut exec_blocks,
+                    &self.config.base_url,
+                );
+                let html =
+                    markdown::replace_exec_placeholders(&html, &exec_blocks, &self.config.markdown);
+                self.sections.get_mut(&key).unwrap().content = html;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Re-assign rendered pages to sections (since we modified page content in-place)
+    fn reassign_rendered_pages(&mut self) {
+        // Clear existing pages from sections
+        for section in self.sections.values_mut() {
+            section.pages.clear();
+        }
+        content::assign_pages_to_sections(&mut self.sections, &self.pages);
+    }
+
+    /// Render all templates and write output
+    fn render_templates(&self, tera: &tera::Tera) -> anyhow::Result<()> {
+        // Clean and create output dir
+        if self.output_dir.exists() {
+            std::fs::remove_dir_all(&self.output_dir)?;
+        }
+        std::fs::create_dir_all(&self.output_dir)?;
+
+        // Render pages
+        for page in self.pages.values() {
+            let template_name = "page.html";
+            let ctx = templates::page_context(page, &self.config);
+            let html = tera.render(template_name, &ctx)?;
+            let out_path = self.output_dir.join(page.path.trim_start_matches('/'));
+            std::fs::create_dir_all(&out_path)?;
+            std::fs::write(out_path.join("index.html"), html)?;
+
+            // Generate alias redirects
+            for alias in &page.aliases {
+                let alias_path = self.output_dir.join(alias.trim_start_matches('/'));
+                std::fs::create_dir_all(&alias_path)?;
+                let redirect_html = format!(
+                    r#"<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url={}"></head><body></body></html>"#,
+                    page.permalink
+                );
+                std::fs::write(alias_path.join("index.html"), redirect_html)?;
+            }
+        }
+
+        // Render sections
+        for section in self.sections.values() {
+            let template_name = if section.path == "/" {
+                "index.html"
+            } else {
+                "section.html"
+            };
+
+            // Render base page (or paginated pages)
+            if let Some(paginate_by) = section.paginate_by {
+                let total_pages = section.pages.len();
+                let num_pagers = total_pages.div_ceil(paginate_by);
+                let num_pagers = num_pagers.max(1);
+
+                for pager_idx in 0..num_pagers {
+                    let start = pager_idx * paginate_by;
+                    let end = (start + paginate_by).min(total_pages);
+                    let pager_pages = section.pages[start..end].to_vec();
+
+                    let previous = if pager_idx > 0 {
+                        if pager_idx == 1 {
+                            Some(section.permalink.clone())
+                        } else {
+                            Some(format!("{}page/{}/", section.permalink, pager_idx))
+                        }
+                    } else {
+                        None
+                    };
+
+                    let next = if pager_idx < num_pagers - 1 {
+                        Some(format!("{}page/{}/", section.permalink, pager_idx + 2))
+                    } else {
+                        None
+                    };
+
+                    let paginator = Paginator {
+                        pages: pager_pages,
+                        current_index: pager_idx + 1,
+                        number_pagers: num_pagers,
+                        previous,
+                        next,
+                        first: section.permalink.clone(),
+                        last: if num_pagers > 1 {
+                            format!("{}page/{}/", section.permalink, num_pagers)
+                        } else {
+                            section.permalink.clone()
+                        },
+                    };
+
+                    let ctx = templates::section_context(section, &self.config, Some(&paginator));
+                    let html = tera.render(template_name, &ctx)?;
+
+                    let out_path = if pager_idx == 0 {
+                        self.output_dir.join(section.path.trim_start_matches('/'))
+                    } else {
+                        self.output_dir
+                            .join(section.path.trim_start_matches('/'))
+                            .join("page")
+                            .join((pager_idx + 1).to_string())
+                    };
+                    std::fs::create_dir_all(&out_path)?;
+                    std::fs::write(out_path.join("index.html"), html)?;
+                }
+            } else {
+                let ctx = templates::section_context(section, &self.config, None);
+                let html = tera.render(template_name, &ctx)?;
+                let out_path = self.output_dir.join(section.path.trim_start_matches('/'));
+                std::fs::create_dir_all(&out_path)?;
+                std::fs::write(out_path.join("index.html"), html)?;
+            }
+        }
+
+        // Render taxonomy pages
+        self.render_taxonomies(tera)?;
+
+        // Render 404
+        if tera.get_template_names().any(|n| n == "404.html") {
+            let mut ctx = tera::Context::new();
+            ctx.insert("config", &templates::config_to_value(&self.config));
+            let html = tera.render("404.html", &ctx)?;
+            std::fs::write(self.output_dir.join("404.html"), html)?;
+        }
+
+        Ok(())
+    }
+
+    /// Render taxonomy list and individual term pages
+    fn render_taxonomies(&self, tera: &tera::Tera) -> anyhow::Result<()> {
+        for tax_config in &self.config.taxonomies {
+            let tax_name = &tax_config.name;
+
+            // Collect all terms
+            let mut term_map: HashMap<String, Vec<Page>> = HashMap::new();
+            for page in self.pages.values() {
+                if let Some(terms) = page.taxonomies.get(tax_name) {
+                    for term in terms {
+                        term_map.entry(term.clone()).or_default().push(page.clone());
+                    }
+                }
+            }
+
+            // Sort pages within each term by date (reverse chronological)
+            for pages in term_map.values_mut() {
+                pages.sort_by(|a, b| {
+                    let da = a.date.as_deref().unwrap_or("");
+                    let db = b.date.as_deref().unwrap_or("");
+                    db.cmp(da)
+                });
+            }
+
+            // Build TaxonomyTerm structs
+            let mut terms: Vec<TaxonomyTerm> = term_map
+                .into_iter()
+                .map(|(name, pages)| {
+                    let term_slug = slug::slugify(&name);
+                    TaxonomyTerm {
+                        permalink: format!("{}/{tax_name}/{term_slug}/", self.config.base_url),
+                        slug: term_slug,
+                        name,
+                        pages,
+                    }
+                })
+                .collect();
+            terms.sort_by(|a, b| a.name.cmp(&b.name));
+
+            // Render taxonomy list page
+            let list_template = format!("{tax_name}/list.html");
+            if tera.get_template_names().any(|n| n == list_template) {
+                let ctx = templates::taxonomy_list_context(&terms, &self.config);
+                let html = tera.render(&list_template, &ctx)?;
+                let out_path = self.output_dir.join(tax_name);
+                std::fs::create_dir_all(&out_path)?;
+                std::fs::write(out_path.join("index.html"), html)?;
+            }
+
+            // Render individual term pages
+            let single_template = format!("{tax_name}/single.html");
+            if tera.get_template_names().any(|n| n == single_template) {
+                for term in &terms {
+                    let ctx = templates::taxonomy_single_context(term, &self.config);
+                    let html = tera.render(&single_template, &ctx)?;
+                    let out_path = self.output_dir.join(tax_name).join(&term.slug);
+                    std::fs::create_dir_all(&out_path)?;
+                    std::fs::write(out_path.join("index.html"), html)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Copy co-located assets to their page's output directory
+    fn copy_colocated_assets(&self) -> anyhow::Result<()> {
+        let content_dir = self.root.join("content");
+
+        for asset_path in &self.assets {
+            let relative = asset_path.strip_prefix(&content_dir)?;
+            let dest = self.output_dir.join(relative);
+            if let Some(parent) = dest.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::copy(asset_path, &dest)?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Recursively copy a directory
+fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
+    for entry in walkdir::WalkDir::new(src)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        let relative = path.strip_prefix(src)?;
+        let dest = dst.join(relative);
+
+        if path.is_dir() {
+            std::fs::create_dir_all(&dest)?;
+        } else {
+            if let Some(parent) = dest.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::copy(path, &dest)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    /// Create a minimal site structure in a tempdir
+    fn make_test_site(tmp: &TempDir) -> std::path::PathBuf {
+        let root = tmp.path().join("site");
+        let content = root.join("content");
+        let templates = root.join("templates");
+        let static_dir = root.join("static");
+
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::create_dir_all(content.join("posts")).unwrap();
+        std::fs::create_dir_all(&templates).unwrap();
+        std::fs::create_dir_all(&static_dir).unwrap();
+
+        // Config
+        std::fs::write(
+            root.join("config.toml"),
+            r#"base_url = "https://example.com"
+title = "Test Site"
+"#,
+        )
+        .unwrap();
+
+        // Root section
+        std::fs::write(
+            content.join("_index.md"),
+            "+++\ntitle = \"Home\"\n+++\nWelcome",
+        )
+        .unwrap();
+
+        // Posts section
+        std::fs::write(
+            content.join("posts/_index.md"),
+            "+++\ntitle = \"Blog\"\nsort_by = \"date\"\n+++\n",
+        )
+        .unwrap();
+
+        // A page
+        std::fs::write(
+            content.join("posts/hello.md"),
+            "+++\ntitle = \"Hello World\"\ndate = \"2025-01-01\"\n+++\nHello content",
+        )
+        .unwrap();
+
+        // A draft page
+        std::fs::write(
+            content.join("posts/draft.md"),
+            "+++\ntitle = \"Draft Post\"\ndraft = true\n+++\nDraft content",
+        )
+        .unwrap();
+
+        // Templates
+        std::fs::write(
+            templates.join("base.html"),
+            "<!DOCTYPE html><html><body>{% block content %}{% endblock %}</body></html>",
+        )
+        .unwrap();
+        std::fs::write(
+            templates.join("index.html"),
+            r#"{% extends "base.html" %}{% block content %}{{ section.title }}{% endblock %}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            templates.join("section.html"),
+            r#"{% extends "base.html" %}{% block content %}{{ section.title }}{% endblock %}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            templates.join("page.html"),
+            r#"{% extends "base.html" %}{% block content %}{{ page.title }}{{ page.content | safe }}{% endblock %}"#,
+        )
+        .unwrap();
+
+        // Static file
+        std::fs::write(static_dir.join("style.css"), "body {}").unwrap();
+
+        root
+    }
+
+    #[test]
+    fn test_site_load() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = tmp.path().join("public");
+        let site = Site::load(&root, &output, false).unwrap();
+        assert_eq!(site.config.base_url, "https://example.com");
+        assert!(!site.pages.is_empty());
+        assert!(!site.sections.is_empty());
+    }
+
+    #[test]
+    fn test_set_base_url() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.set_base_url("http://localhost:1111".into());
+        assert_eq!(site.config.base_url, "http://localhost:1111");
+        for page in site.pages.values() {
+            assert!(
+                page.permalink.starts_with("http://localhost:1111"),
+                "page permalink not rewritten: {}",
+                page.permalink
+            );
+        }
+        for section in site.sections.values() {
+            assert!(
+                section.permalink.starts_with("http://localhost:1111"),
+                "section permalink not rewritten: {}",
+                section.permalink
+            );
+        }
+    }
+
+    #[test]
+    fn test_build_filters_drafts() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        // Before build, draft is present
+        assert!(site.pages.values().any(|p| p.draft));
+        site.build().unwrap();
+        // After build, draft is filtered out
+        assert!(!site.pages.values().any(|p| p.draft));
+    }
+
+    #[test]
+    fn test_build_creates_output() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+        assert!(output.join("index.html").exists());
+        assert!(output.join("posts/hello/index.html").exists());
+    }
+
+    #[test]
+    fn test_build_copies_static() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+        assert!(output.join("style.css").exists());
+    }
+}

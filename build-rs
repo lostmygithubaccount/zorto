@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Building zorto..."
+cargo build --manifest-path zorto/Cargo.toml "$@"
+
+echo "Rust build complete!"

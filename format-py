@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Formatting Python code..."
+uv run ruff format .
+
+echo "Sorting Python imports..."
+uv run ruff check --fix --select I .
+
+echo "Python formatting complete!"

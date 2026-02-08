@@ -1,0 +1,28 @@
+[project]
+name = "zorto"
+version = "0.1.0"
+description = "A fast static site generator with executable code blocks"
+requires-python = ">=3.11"
+
+[project.scripts]
+zorto = "zorto:main"
+
+[dependency-groups]
+dev = ["maturin>=1.0,<2.0", "ruff>=0.9", "pytest>=8"]
+
+[tool.maturin]
+module-name = "zorto.core"
+python-packages = ["zorto"]
+python-source = "src"
+manifest-path = "zorto-py/Cargo.toml"
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "zorto/**/*.rs" },
+    { file = "zorto-py/**/*.rs" },
+]

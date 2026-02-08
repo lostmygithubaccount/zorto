@@ -1,0 +1,68 @@
+[workspace]
+
+[package]
+name = "zorto"
+version = "0.1.0"
+edition = "2024"
+authors = ["Cody <cody@dkdc.dev>"]
+description = "A fast static site generator with executable code blocks"
+license = "MIT"
+
+[lib]
+name = "zorto"
+path = "src/lib.rs"
+
+[[bin]]
+name = "zorto"
+path = "src/main.rs"
+
+[features]
+default = ["embed-python"]
+embed-python = ["pyo3/auto-initialize"]
+
+[dependencies]
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Templating
+tera = "1"
+
+# Markdown
+pulldown-cmark = { version = "0.12", features = ["simd"] }
+
+# Syntax highlighting
+syntect = "5"
+
+# SCSS
+grass = "0.13"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync", "fs"] }
+
+# HTTP server (preview)
+axum = { version = "0.8", features = ["ws"] }
+
+# File watching
+notify = "7"
+notify-debouncer-mini = "0.5"
+
+# Directory traversal
+walkdir = "2"
+
+# Python execution
+pyo3 = { version = "0.28", optional = true }
+
+# Utilities
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+slug = "0.1"
+regex = "1"
+open = "5"
+
+[dev-dependencies]
+tempfile = "3"

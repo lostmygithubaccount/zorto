@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+./install-rs
+./install-py
+
+echo "Done! Run 'zorto --help' to get started."

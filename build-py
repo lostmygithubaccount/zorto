@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Building zorto Python bindings..."
+uv run maturin develop
+
+echo "Python build complete!"

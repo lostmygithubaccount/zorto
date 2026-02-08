@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Checking Rust formatting..."
+cargo fmt --manifest-path zorto/Cargo.toml -- --check
+
+echo "Running clippy..."
+cargo clippy --manifest-path zorto/Cargo.toml -- -D warnings
+
+echo "Running Rust tests..."
+cargo test --manifest-path zorto/Cargo.toml
+
+echo "Rust checks passed!"
