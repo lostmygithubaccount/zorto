@@ -83,6 +83,14 @@ impl Site {
             copy_dir_recursive(&static_dir, &self.output_dir)?;
         }
 
+        // Generate sitemap
+        self.generate_sitemap()?;
+
+        // Generate feed
+        if self.config.generate_feed {
+            self.generate_feed()?;
+        }
+
         // Copy co-located assets
         self.copy_colocated_assets()?;
 
@@ -362,6 +370,117 @@ impl Site {
         Ok(())
     }
 
+    /// Validate site without writing output
+    pub fn check(&mut self) -> anyhow::Result<()> {
+        if !self.drafts {
+            self.pages.retain(|_, p| !p.draft);
+        }
+
+        self.render_all_markdown()?;
+        content::assign_pages_to_sections(&mut self.sections, &self.pages);
+
+        let templates_dir = self.root.join("templates");
+        let _tera = templates::setup_tera(&templates_dir, &self.config, &self.sections)?;
+
+        Ok(())
+    }
+
+    /// Generate Atom feed
+    fn generate_feed(&self) -> anyhow::Result<()> {
+        let mut pages: Vec<&Page> = self.pages.values().filter(|p| p.date.is_some()).collect();
+        pages.sort_by(|a, b| {
+            let da = a.date.as_deref().unwrap_or("");
+            let db = b.date.as_deref().unwrap_or("");
+            db.cmp(da)
+        });
+
+        let updated = pages
+            .first()
+            .and_then(|p| p.date.as_deref())
+            .unwrap_or("1970-01-01");
+        let updated = normalize_date(updated);
+
+        let mut xml = String::new();
+        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
+        xml.push('\n');
+        xml.push_str(r#"<feed xmlns="http://www.w3.org/2005/Atom">"#);
+        xml.push('\n');
+        xml.push_str(&format!("  <title>{}</title>\n", escape_xml(&self.config.title)));
+        xml.push_str(&format!(
+            "  <link href=\"{}/atom.xml\" rel=\"self\"/>\n",
+            self.config.base_url
+        ));
+        xml.push_str(&format!(
+            "  <link href=\"{}/\"/>\n",
+            self.config.base_url
+        ));
+        xml.push_str(&format!("  <updated>{updated}</updated>\n"));
+        xml.push_str(&format!(
+            "  <id>{}/</id>\n",
+            self.config.base_url
+        ));
+
+        for page in &pages {
+            let date = normalize_date(page.date.as_deref().unwrap_or("1970-01-01"));
+            xml.push_str("  <entry>\n");
+            xml.push_str(&format!("    <title>{}</title>\n", escape_xml(&page.title)));
+            xml.push_str(&format!(
+                "    <link href=\"{}\"/>\n",
+                escape_xml(&page.permalink)
+            ));
+            xml.push_str(&format!("    <id>{}</id>\n", escape_xml(&page.permalink)));
+            xml.push_str(&format!("    <updated>{date}</updated>\n"));
+            if let Some(summary) = &page.summary {
+                xml.push_str(&format!(
+                    "    <summary type=\"html\">{}</summary>\n",
+                    escape_xml(summary)
+                ));
+            } else if let Some(desc) = &page.description {
+                xml.push_str(&format!(
+                    "    <summary>{}</summary>\n",
+                    escape_xml(desc)
+                ));
+            }
+            xml.push_str("  </entry>\n");
+        }
+
+        xml.push_str("</feed>\n");
+
+        std::fs::write(self.output_dir.join("atom.xml"), xml)?;
+        Ok(())
+    }
+
+    /// Generate sitemap.xml
+    fn generate_sitemap(&self) -> anyhow::Result<()> {
+        let mut xml = String::new();
+        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
+        xml.push('\n');
+        xml.push_str(r#"<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">"#);
+        xml.push('\n');
+
+        // Sections
+        for section in self.sections.values() {
+            xml.push_str("  <url>\n");
+            xml.push_str(&format!("    <loc>{}</loc>\n", escape_xml(&section.permalink)));
+            xml.push_str("  </url>\n");
+        }
+
+        // Pages
+        for page in self.pages.values() {
+            xml.push_str("  <url>\n");
+            xml.push_str(&format!("    <loc>{}</loc>\n", escape_xml(&page.permalink)));
+            if let Some(date) = &page.date {
+                xml.push_str(&format!("    <lastmod>{date}</lastmod>\n"));
+            }
+            xml.push_str("  </url>\n");
+        }
+
+        xml.push_str("</urlset>\n");
+
+        std::fs::write(self.output_dir.join("sitemap.xml"), xml)?;
+        Ok(())
+    }
+
     /// Copy co-located assets to their page's output directory
     fn copy_colocated_assets(&self) -> anyhow::Result<()> {
         let content_dir = self.root.join("content");
@@ -399,6 +518,28 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+/// Escape special characters for XML
+fn escape_xml(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
+/// Normalize a date string to RFC 3339 (append T00:00:00Z if date-only)
+fn normalize_date(s: &str) -> String {
+    if s.contains('T') {
+        if s.ends_with('Z') || s.contains('+') {
+            s.to_string()
+        } else {
+            format!("{s}Z")
+        }
+    } else {
+        format!("{s}T00:00:00Z")
+    }
 }
 
 #[cfg(test)]

@@ -21,7 +21,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: bin/check-rs
+      - run: bin/setup
+      - run: bin/check
 
   build:
     name: Build (${{ matrix.target }})
@@ -44,6 +45,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - run: bin/setup
       - run: rustup target add ${{ matrix.target }}
       - run: bin/build-rs --release --target ${{ matrix.target }}
       - name: Determine version

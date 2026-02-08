@@ -11,6 +11,8 @@ pub struct Config {
     #[serde(default = "default_true", skip_serializing)]
     pub compile_sass: bool,
     #[serde(default)]
+    pub generate_feed: bool,
+    #[serde(default)]
     pub markdown: MarkdownConfig,
     #[serde(default = "default_toml_table", serialize_with = "serialize_extra")]
     pub extra: toml::Value,

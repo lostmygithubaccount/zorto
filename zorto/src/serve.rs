@@ -41,7 +41,19 @@ pub async fn serve(
     port: u16,
     open_browser: bool,
 ) -> anyhow::Result<()> {
-    let base_url = format!("http://{interface}:{port}");
+    // Bind listener first so we know the actual port before building
+    let requested: SocketAddr = format!("{interface}:{port}").parse()?;
+    let listener = match tokio::net::TcpListener::bind(requested).await {
+        Ok(l) => l,
+        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+            eprintln!("Port {port} is in use, using a random available port...");
+            let fallback: SocketAddr = format!("{interface}:0").parse()?;
+            tokio::net::TcpListener::bind(fallback).await?
+        }
+        Err(e) => return Err(e.into()),
+    };
+    let addr = listener.local_addr()?;
+    let base_url = format!("http://{addr}");
 
     // Initial build
     println!("Building site...");
@@ -62,7 +74,6 @@ pub async fn serve(
         .fallback(get(serve_file).head(serve_file))
         .with_state(state);
 
-    let addr: SocketAddr = format!("{interface}:{port}").parse()?;
     println!("Serving at http://{addr}");
 
     if open_browser {
@@ -121,7 +132,6 @@ pub async fn serve(
         eprintln!("\nShutting down...");
     };
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown)
         .await?;
