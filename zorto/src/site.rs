@@ -405,20 +405,17 @@ impl Site {
         xml.push('\n');
         xml.push_str(r#"<feed xmlns="http://www.w3.org/2005/Atom">"#);
         xml.push('\n');
-        xml.push_str(&format!("  <title>{}</title>\n", escape_xml(&self.config.title)));
+        xml.push_str(&format!(
+            "  <title>{}</title>\n",
+            escape_xml(&self.config.title)
+        ));
         xml.push_str(&format!(
             "  <link href=\"{}/atom.xml\" rel=\"self\"/>\n",
             self.config.base_url
         ));
-        xml.push_str(&format!(
-            "  <link href=\"{}/\"/>\n",
-            self.config.base_url
-        ));
+        xml.push_str(&format!("  <link href=\"{}/\"/>\n", self.config.base_url));
         xml.push_str(&format!("  <updated>{updated}</updated>\n"));
-        xml.push_str(&format!(
-            "  <id>{}/</id>\n",
-            self.config.base_url
-        ));
+        xml.push_str(&format!("  <id>{}/</id>\n", self.config.base_url));
 
         for page in &pages {
             let date = normalize_date(page.date.as_deref().unwrap_or("1970-01-01"));
@@ -436,10 +433,7 @@ impl Site {
                     escape_xml(summary)
                 ));
             } else if let Some(desc) = &page.description {
-                xml.push_str(&format!(
-                    "    <summary>{}</summary>\n",
-                    escape_xml(desc)
-                ));
+                xml.push_str(&format!("    <summary>{}</summary>\n", escape_xml(desc)));
             }
             xml.push_str("  </entry>\n");
         }
@@ -461,7 +455,10 @@ impl Site {
         // Sections
         for section in self.sections.values() {
             xml.push_str("  <url>\n");
-            xml.push_str(&format!("    <loc>{}</loc>\n", escape_xml(&section.permalink)));
+            xml.push_str(&format!(
+                "    <loc>{}</loc>\n",
+                escape_xml(&section.permalink)
+            ));
             xml.push_str("  </url>\n");
         }
 
