@@ -1,5 +1,5 @@
 use std::path::Path;
-#[cfg(feature = "embed-python")]
+#[cfg(feature = "python")]
 use std::sync::Once;
 
 /// A detected executable code block
@@ -17,7 +17,7 @@ pub fn execute_blocks(blocks: &mut [ExecutableBlock], working_dir: &Path, site_r
     for block in blocks.iter_mut() {
         match block.language.as_str() {
             "python" => {
-                #[cfg(feature = "embed-python")]
+                #[cfg(feature = "python")]
                 {
                     match execute_python(block, working_dir, site_root) {
                         Ok((stdout, stderr)) => {
@@ -31,11 +31,10 @@ pub fn execute_blocks(blocks: &mut [ExecutableBlock], working_dir: &Path, site_r
                         }
                     }
                 }
-                #[cfg(not(feature = "embed-python"))]
+                #[cfg(not(feature = "python"))]
                 {
                     block.error = Some(
-                        "Python execution not available (built without embed-python feature)"
-                            .to_string(),
+                        "Python execution not available (built without python feature)".to_string(),
                     );
                 }
             }
@@ -58,7 +57,7 @@ pub fn execute_blocks(blocks: &mut [ExecutableBlock], working_dir: &Path, site_r
 }
 
 /// Find a .venv directory: check site root, walk up parents, then fall back to VIRTUAL_ENV env var
-#[cfg(feature = "embed-python")]
+#[cfg(feature = "python")]
 fn find_venv(site_root: &Path) -> Option<std::path::PathBuf> {
     // Walk up from site root looking for .venv
     let mut dir = Some(site_root);
@@ -76,7 +75,7 @@ fn find_venv(site_root: &Path) -> Option<std::path::PathBuf> {
 }
 
 /// Activate a venv's site-packages in the embedded Python interpreter (once per process)
-#[cfg(feature = "embed-python")]
+#[cfg(feature = "python")]
 fn activate_venv(py: pyo3::Python<'_>, site_root: &Path) -> pyo3::PyResult<()> {
     use pyo3::prelude::*;
     static VENV_ACTIVATED: Once = Once::new();
@@ -116,7 +115,7 @@ fn activate_venv(py: pyo3::Python<'_>, site_root: &Path) -> pyo3::PyResult<()> {
 }
 
 /// Execute a Python code block using PyO3
-#[cfg(feature = "embed-python")]
+#[cfg(feature = "python")]
 fn execute_python(
     block: &ExecutableBlock,
     working_dir: &Path,
