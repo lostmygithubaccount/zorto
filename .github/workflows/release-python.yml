@@ -44,6 +44,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: rustup target add ${{ matrix.target }}
       - run: bin/build-wheels --target ${{ matrix.target }} --out dist
       - uses: actions/upload-artifact@v4
@@ -61,6 +62,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: bin/build-sdist
       - uses: actions/upload-artifact@v4
         with:
