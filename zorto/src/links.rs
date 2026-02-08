@@ -127,9 +127,11 @@ mod tests {
         let input = "See [missing](@/posts/missing.md)";
         let result = resolve_internal_links(input, &pages, &sections);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("unresolved internal link"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("unresolved internal link")
+        );
     }
 }

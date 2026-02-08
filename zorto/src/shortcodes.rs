@@ -33,22 +33,19 @@ fn process_body_shortcodes(content: &str, shortcode_dir: &Path) -> anyhow::Resul
     // Loop to handle nested shortcodes
     while BODY_SHORTCODE_RE.is_match(&result) && iterations < 10 {
         let mut error: Option<anyhow::Error> = None;
-        let new_result =
-            BODY_SHORTCODE_RE.replace_all(&result, |caps: &regex::Captures| {
-                let name = &caps[1];
-                let args_str = &caps[2];
-                let body = &caps[3];
+        let new_result = BODY_SHORTCODE_RE.replace_all(&result, |caps: &regex::Captures| {
+            let name = &caps[1];
+            let args_str = &caps[2];
+            let body = &caps[3];
 
-                match render_shortcode(name, args_str, Some(body.trim()), shortcode_dir) {
-                    Ok(rendered) => rendered,
-                    Err(e) => {
-                        error = Some(
-                            anyhow::anyhow!("shortcode error in {name}: {e}"),
-                        );
-                        caps[0].to_string()
-                    }
+            match render_shortcode(name, args_str, Some(body.trim()), shortcode_dir) {
+                Ok(rendered) => rendered,
+                Err(e) => {
+                    error = Some(anyhow::anyhow!("shortcode error in {name}: {e}"));
+                    caps[0].to_string()
                 }
-            });
+            }
+        });
         if let Some(e) = error {
             return Err(e);
         }
@@ -149,8 +146,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let dir = setup_shortcode_dir(&tmp, "greeting", "<b>Hello {{ name }}</b>");
         let result =
-            process_shortcodes(r#"Before {{ greeting(name="World") }} after"#, &dir)
-                .unwrap();
+            process_shortcodes(r#"Before {{ greeting(name="World") }} after"#, &dir).unwrap();
         assert!(result.contains("<b>Hello World</b>"));
         assert!(result.starts_with("Before "));
         assert!(result.ends_with(" after"));
@@ -160,11 +156,8 @@ mod tests {
     fn test_body_shortcode() {
         let tmp = TempDir::new().unwrap();
         let dir = setup_shortcode_dir(&tmp, "note", r#"<div class="{{ kind }}">{{ body }}</div>"#);
-        let result = process_shortcodes(
-            r#"{% note(kind="warning") %}Be careful!{% end %}"#,
-            &dir,
-        )
-        .unwrap();
+        let result =
+            process_shortcodes(r#"{% note(kind="warning") %}Be careful!{% end %}"#, &dir).unwrap();
         assert!(result.contains(r#"<div class="warning">Be careful!</div>"#));
     }
 

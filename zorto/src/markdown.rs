@@ -10,8 +10,7 @@ use crate::execute::ExecutableBlock;
 
 static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
 static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
-static FILE_ATTR_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"file="([^"]+)""#).unwrap());
+static FILE_ATTR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"file="([^"]+)""#).unwrap());
 
 /// Render markdown to HTML with all processing steps.
 pub fn render_markdown(

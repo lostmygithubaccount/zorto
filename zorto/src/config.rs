@@ -94,7 +94,6 @@ impl Config {
 
         Ok(config)
     }
-
 }
 
 #[cfg(test)]

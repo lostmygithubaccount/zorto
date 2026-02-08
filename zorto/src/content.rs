@@ -408,12 +408,7 @@ Content goes here"#;
     #[test]
     fn test_build_page_slug_from_filename() {
         let fm = Frontmatter::default();
-        let page = build_page(
-            fm,
-            "body".into(),
-            "hello-world.md",
-            "https://example.com",
-        );
+        let page = build_page(fm, "body".into(), "hello-world.md", "https://example.com");
         assert_eq!(page.slug, "hello-world");
     }
 
@@ -423,24 +418,14 @@ Content goes here"#;
             slug: Some("custom".into()),
             ..Default::default()
         };
-        let page = build_page(
-            fm,
-            "body".into(),
-            "hello-world.md",
-            "https://example.com",
-        );
+        let page = build_page(fm, "body".into(), "hello-world.md", "https://example.com");
         assert_eq!(page.slug, "custom");
     }
 
     #[test]
     fn test_build_page_path_nested() {
         let fm = Frontmatter::default();
-        let page = build_page(
-            fm,
-            "body".into(),
-            "posts/hello.md",
-            "https://example.com",
-        );
+        let page = build_page(fm, "body".into(), "posts/hello.md", "https://example.com");
         assert_eq!(page.path, "/posts/hello/");
     }
 
@@ -454,12 +439,7 @@ Content goes here"#;
     #[test]
     fn test_build_page_permalink() {
         let fm = Frontmatter::default();
-        let page = build_page(
-            fm,
-            "body".into(),
-            "posts/hello.md",
-            "https://example.com",
-        );
+        let page = build_page(fm, "body".into(), "posts/hello.md", "https://example.com");
         assert_eq!(page.permalink, "https://example.com/posts/hello/");
     }
 
