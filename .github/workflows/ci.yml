@@ -14,7 +14,4 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo fmt --manifest-path zorto/Cargo.toml -- --check
-      - run: cargo clippy --manifest-path zorto/Cargo.toml -- -D warnings
-      - run: cargo test --manifest-path zorto/Cargo.toml
+      - run: bin/check-rs
