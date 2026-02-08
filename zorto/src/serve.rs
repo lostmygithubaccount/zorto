@@ -79,16 +79,16 @@ pub async fn serve(
     for dir in &watch_dirs {
         let path = root.join(dir);
         if path.exists() {
-            let _ = debouncer
+            debouncer
                 .watcher()
-                .watch(&path, notify::RecursiveMode::Recursive);
+                .watch(&path, notify::RecursiveMode::Recursive)?;
         }
     }
     let config_path = root.join("config.toml");
     if config_path.exists() {
-        let _ = debouncer
+        debouncer
             .watcher()
-            .watch(&config_path, notify::RecursiveMode::NonRecursive);
+            .watch(&config_path, notify::RecursiveMode::NonRecursive)?;
     }
 
     // Blocking thread to bridge std::sync::mpsc -> tokio::sync::mpsc

@@ -15,7 +15,4 @@ def run(argv: list[str] | None = None) -> None:
 
 def main() -> None:
     """CLI entry point."""
-    try:
-        run()
-    except KeyboardInterrupt:
-        sys.exit(0)
+    run()

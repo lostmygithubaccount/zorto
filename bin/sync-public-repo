@@ -72,3 +72,22 @@ info "pushing to origin/main..."
 git push -u origin main
 
 info "done — https://github.com/lostmygithubaccount/zorto"
+
+# ──────────────────────────────────────
+# optionally tag a release
+# ──────────────────────────────────────
+
+if [[ "${1:-}" == "--release" ]]; then
+    VERSION=$(grep '^version' "$ZORTO_DIR/zorto/Cargo.toml" | head -1 | sed 's/.*"\(.*\)"/\1/')
+    TAG="v${VERSION}"
+
+    if git -C "$CLONE_DIR" rev-parse "$TAG" >/dev/null 2>&1; then
+        err "tag $TAG already exists — bump version in zorto/Cargo.toml first"
+        exit 1
+    fi
+
+    info "tagging $TAG..."
+    git -C "$CLONE_DIR" tag "$TAG"
+    git -C "$CLONE_DIR" push origin "$TAG"
+    info "release tag pushed — workflow will build binaries"
+fi

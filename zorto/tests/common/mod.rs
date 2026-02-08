@@ -138,31 +138,6 @@ name = "tags"
     root
 }
 
-/// Create a test site with SASS
-pub fn make_test_site_with_sass(tmp: &TempDir) -> PathBuf {
-    let root = make_test_site(tmp);
-    let sass_dir = root.join("sass");
-    std::fs::create_dir_all(&sass_dir).unwrap();
-
-    // Overwrite config with compile_sass = true
-    std::fs::write(
-        root.join("config.toml"),
-        r#"base_url = "https://example.com"
-title = "SASS Test Site"
-compile_sass = true
-"#,
-    )
-    .unwrap();
-
-    std::fs::write(
-        sass_dir.join("style.scss"),
-        "body { color: red; .container { max-width: 800px; } }",
-    )
-    .unwrap();
-
-    root
-}
-
 /// Create a test site with pagination configured
 pub fn make_test_site_with_pagination(tmp: &TempDir) -> PathBuf {
     let root = make_test_site(tmp);

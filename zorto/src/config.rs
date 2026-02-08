@@ -1,33 +1,24 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
     pub base_url: String,
     #[serde(default)]
     pub title: String,
-    pub default_language: Option<String>,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_en")]
+    pub default_language: String,
+    #[serde(default = "default_true", skip_serializing)]
     pub compile_sass: bool,
     #[serde(default)]
-    pub build_search_index: bool,
-    #[serde(default)]
-    pub slugify: SlugifyConfig,
-    #[serde(default)]
     pub markdown: MarkdownConfig,
-    #[serde(default = "default_toml_table")]
+    #[serde(default = "default_toml_table", serialize_with = "serialize_extra")]
     pub extra: toml::Value,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub taxonomies: Vec<TaxonomyConfig>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct SlugifyConfig {
-    #[serde(default = "default_safe")]
-    pub paths: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MarkdownConfig {
     #[serde(default = "default_true")]
     pub highlight_code: bool,
@@ -35,10 +26,6 @@ pub struct MarkdownConfig {
     pub insert_anchor_links: String,
     #[serde(default)]
     pub highlight_theme: Option<String>,
-    #[serde(default)]
-    pub highlight_themes_css: Vec<HighlightThemeCss>,
-    #[serde(default)]
-    pub render_emoji: bool,
     #[serde(default)]
     pub external_links_target_blank: bool,
     #[serde(default)]
@@ -55,8 +42,6 @@ impl Default for MarkdownConfig {
             highlight_code: true,
             insert_anchor_links: "none".to_string(),
             highlight_theme: None,
-            highlight_themes_css: vec![],
-            render_emoji: false,
             external_links_target_blank: false,
             external_links_no_follow: false,
             external_links_no_referrer: false,
@@ -66,32 +51,28 @@ impl Default for MarkdownConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct HighlightThemeCss {
-    pub theme: String,
-    pub filename: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
 pub struct TaxonomyConfig {
     pub name: String,
-    #[serde(default)]
-    pub feed: bool,
 }
 
 fn default_true() -> bool {
     true
 }
 
-fn default_safe() -> String {
-    "safe".to_string()
+fn default_en() -> String {
+    "en".to_string()
 }
 
 fn default_none_str() -> String {
     "none".to_string()
 }
 
-fn default_toml_table() -> toml::Value {
+pub(crate) fn default_toml_table() -> toml::Value {
     toml::Value::Table(toml::map::Map::new())
+}
+
+fn serialize_extra<S: serde::Serializer>(v: &toml::Value, s: S) -> Result<S::Ok, S::Error> {
+    crate::content::toml_to_json(v).serialize(s)
 }
 
 impl Config {
@@ -105,7 +86,6 @@ impl Config {
         if config.taxonomies.is_empty() {
             config.taxonomies.push(TaxonomyConfig {
                 name: "tags".to_string(),
-                feed: false,
             });
         }
 
@@ -115,9 +95,6 @@ impl Config {
         Ok(config)
     }
 
-    pub fn default_language(&self) -> &str {
-        self.default_language.as_deref().unwrap_or("en")
-    }
 }
 
 #[cfg(test)]
@@ -137,8 +114,6 @@ mod tests {
         assert_eq!(config.base_url, "https://example.com");
         assert_eq!(config.title, "");
         assert!(config.compile_sass);
-        assert!(!config.build_search_index);
-        assert_eq!(config.slugify.paths, ""); // Default derive gives empty string
         assert_eq!(config.markdown.insert_anchor_links, "none");
         assert!(config.markdown.highlight_code);
         // Default taxonomy is "tags"
@@ -156,12 +131,10 @@ base_url = "https://example.com"
 title = "My Site"
 default_language = "fr"
 compile_sass = false
-build_search_index = true
 
 [markdown]
 highlight_code = false
 insert_anchor_links = "right"
-render_emoji = true
 external_links_target_blank = true
 
 [[taxonomies]]
@@ -171,16 +144,13 @@ feed = true
         );
         let config = Config::load(tmp.path()).unwrap();
         assert_eq!(config.title, "My Site");
-        assert_eq!(config.default_language.as_deref(), Some("fr"));
+        assert_eq!(config.default_language, "fr");
         assert!(!config.compile_sass);
-        assert!(config.build_search_index);
         assert!(!config.markdown.highlight_code);
         assert_eq!(config.markdown.insert_anchor_links, "right");
-        assert!(config.markdown.render_emoji);
         assert!(config.markdown.external_links_target_blank);
         assert_eq!(config.taxonomies.len(), 1);
         assert_eq!(config.taxonomies[0].name, "categories");
-        assert!(config.taxonomies[0].feed);
     }
 
     #[test]
@@ -196,7 +166,7 @@ feed = true
         let tmp = TempDir::new().unwrap();
         write_config(&tmp, r#"base_url = "https://example.com""#);
         let config = Config::load(tmp.path()).unwrap();
-        assert_eq!(config.default_language(), "en");
+        assert_eq!(config.default_language, "en");
     }
 
     #[test]
@@ -210,7 +180,7 @@ default_language = "ja"
 "#,
         );
         let config = Config::load(tmp.path()).unwrap();
-        assert_eq!(config.default_language(), "ja");
+        assert_eq!(config.default_language, "ja");
     }
 
     #[test]

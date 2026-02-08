@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+use crate::config::default_toml_table;
+
 /// TOML frontmatter parsed from +++ delimiters
 #[derive(Debug, Deserialize)]
 pub struct Frontmatter {
@@ -19,13 +21,8 @@ pub struct Frontmatter {
     pub tags: Vec<String>,
     pub sort_by: Option<String>,
     pub paginate_by: Option<usize>,
-    pub weight: Option<i32>,
     #[serde(default = "default_toml_table")]
     pub extra: toml::Value,
-    #[serde(default)]
-    pub template: Option<String>,
-    #[serde(default)]
-    pub transparent: bool,
 }
 
 /// A rendered page (non-_index.md file)
@@ -48,7 +45,6 @@ pub struct Page {
     pub word_count: usize,
     pub reading_time: usize,
     pub relative_path: String,
-    pub colocated_path: Option<String>,
 }
 
 /// A section (_index.md file)
@@ -61,22 +57,17 @@ pub struct Section {
     pub content: String,
     pub raw_content: String,
     pub pages: Vec<Page>,
-    pub subsections: Vec<String>,
     pub sort_by: Option<String>,
     pub paginate_by: Option<usize>,
     pub extra: serde_json::Value,
     pub relative_path: String,
 }
 
-fn default_toml_table() -> toml::Value {
-    toml::Value::Table(toml::map::Map::new())
-}
-
 impl Default for Frontmatter {
     fn default() -> Self {
         Self {
             title: None,
-            date: None::<toml::Value>,
+            date: None,
             author: None,
             description: None,
             draft: false,
@@ -85,10 +76,7 @@ impl Default for Frontmatter {
             tags: vec![],
             sort_by: None,
             paginate_by: None,
-            weight: None,
             extra: default_toml_table(),
-            template: None,
-            transparent: false,
         }
     }
 }
@@ -128,7 +116,6 @@ pub fn build_page(
     raw_content: String,
     relative_path: &str,
     base_url: &str,
-    colocated_path: Option<&str>,
 ) -> Page {
     let title = fm.title.unwrap_or_default();
 
@@ -188,7 +175,6 @@ pub fn build_page(
         word_count,
         reading_time,
         relative_path: relative_path.to_string(),
-        colocated_path: colocated_path.map(|s| s.to_string()),
     }
 }
 
@@ -225,7 +211,6 @@ pub fn build_section(
         content: String::new(),
         raw_content,
         pages: vec![],
-        subsections: vec![],
         sort_by: fm.sort_by,
         paginate_by: fm.paginate_by,
         extra,
@@ -268,36 +253,7 @@ pub fn load_content(content_dir: &Path, base_url: &str) -> anyhow::Result<Loaded
         } else if filename.ends_with(".md") {
             let content = std::fs::read_to_string(path)?;
             let (fm, body) = parse_frontmatter(&content)?;
-
-            // Check if this is a page bundle (md file in its own directory)
-            let colocated = if path.parent().unwrap().join("_index.md").exists() {
-                None
-            } else {
-                // Check if the page's directory contains non-md files
-                let parent = path.parent().unwrap();
-                let has_assets = std::fs::read_dir(parent)
-                    .ok()
-                    .map(|entries| {
-                        entries.filter_map(|e| e.ok()).any(|e| {
-                            let n = e.file_name().to_string_lossy().to_string();
-                            !n.ends_with(".md") && !n.starts_with('.')
-                        })
-                    })
-                    .unwrap_or(false);
-                if has_assets {
-                    Some(
-                        parent
-                            .strip_prefix(content_dir)
-                            .unwrap()
-                            .to_string_lossy()
-                            .to_string(),
-                    )
-                } else {
-                    None
-                }
-            };
-
-            let page = build_page(fm, body, &relative, base_url, colocated.as_deref());
+            let page = build_page(fm, body, &relative, base_url);
             pages.insert(relative, page);
         } else {
             // Static asset co-located with content
@@ -306,6 +262,15 @@ pub fn load_content(content_dir: &Path, base_url: &str) -> anyhow::Result<Loaded
     }
 
     Ok((sections, pages, assets))
+}
+
+/// Sort pages by date in reverse chronological order
+pub fn sort_pages_by_date(pages: &mut [Page]) {
+    pages.sort_by(|a, b| {
+        let da = a.date.as_deref().unwrap_or("");
+        let db = b.date.as_deref().unwrap_or("");
+        db.cmp(da)
+    });
 }
 
 /// Assign pages to their parent sections
@@ -336,60 +301,15 @@ pub fn assign_pages_to_sections(
     for section in sections.values_mut() {
         let sort_by = section.sort_by.as_deref().unwrap_or("date");
         match sort_by {
-            "date" => {
-                section.pages.sort_by(|a, b| {
-                    let da = a.date.as_deref().unwrap_or("");
-                    let db = b.date.as_deref().unwrap_or("");
-                    db.cmp(da) // reverse chronological
-                });
-            }
-            "title" => {
-                section.pages.sort_by(|a, b| a.title.cmp(&b.title));
-            }
-            "weight" => {
-                // weight would need to be on Page, skip for now
-            }
+            "date" => sort_pages_by_date(&mut section.pages),
+            "title" => section.pages.sort_by(|a, b| a.title.cmp(&b.title)),
             _ => {}
-        }
-    }
-
-    // Build subsections
-    let section_keys: Vec<String> = sections.keys().cloned().collect();
-    for key in &section_keys {
-        let dir = Path::new(key)
-            .parent()
-            .unwrap_or(Path::new(""))
-            .to_string_lossy()
-            .to_string();
-
-        let parent_key = if dir.is_empty() {
-            "_index.md".to_string()
-        } else {
-            let grandparent = Path::new(&dir)
-                .parent()
-                .unwrap_or(Path::new(""))
-                .to_string_lossy()
-                .to_string();
-            if grandparent.is_empty() {
-                "_index.md".to_string()
-            } else {
-                format!("{grandparent}/_index.md")
-            }
-        };
-
-        if key != &parent_key
-            && let Some(section) = sections.get(key)
-        {
-            let section_path = section.path.clone();
-            if let Some(parent) = sections.get_mut(&parent_key) {
-                parent.subsections.push(section_path);
-            }
         }
     }
 }
 
 /// Convert a `toml::Value` to `serde_json::Value`
-pub fn toml_to_json(v: &toml::Value) -> serde_json::Value {
+pub(crate) fn toml_to_json(v: &toml::Value) -> serde_json::Value {
     match v {
         toml::Value::String(s) => serde_json::Value::String(s.clone()),
         toml::Value::Integer(i) => serde_json::json!(*i),
@@ -443,9 +363,6 @@ aliases = ["/old-url/"]
 tags = ["rust", "test"]
 sort_by = "date"
 paginate_by = 5
-weight = 10
-template = "custom.html"
-transparent = true
 
 [extra]
 foo = "bar"
@@ -461,9 +378,6 @@ Content goes here"#;
         assert_eq!(fm.tags, vec!["rust", "test"]);
         assert_eq!(fm.sort_by.as_deref(), Some("date"));
         assert_eq!(fm.paginate_by, Some(5));
-        assert_eq!(fm.weight, Some(10));
-        assert_eq!(fm.template.as_deref(), Some("custom.html"));
-        assert!(fm.transparent);
         assert_eq!(body, "Content goes here");
     }
 
@@ -499,7 +413,6 @@ Content goes here"#;
             "body".into(),
             "hello-world.md",
             "https://example.com",
-            None,
         );
         assert_eq!(page.slug, "hello-world");
     }
@@ -515,7 +428,6 @@ Content goes here"#;
             "body".into(),
             "hello-world.md",
             "https://example.com",
-            None,
         );
         assert_eq!(page.slug, "custom");
     }
@@ -528,7 +440,6 @@ Content goes here"#;
             "body".into(),
             "posts/hello.md",
             "https://example.com",
-            None,
         );
         assert_eq!(page.path, "/posts/hello/");
     }
@@ -536,7 +447,7 @@ Content goes here"#;
     #[test]
     fn test_build_page_path_root() {
         let fm = Frontmatter::default();
-        let page = build_page(fm, "body".into(), "hello.md", "https://example.com", None);
+        let page = build_page(fm, "body".into(), "hello.md", "https://example.com");
         assert_eq!(page.path, "/hello/");
     }
 
@@ -548,7 +459,6 @@ Content goes here"#;
             "body".into(),
             "posts/hello.md",
             "https://example.com",
-            None,
         );
         assert_eq!(page.permalink, "https://example.com/posts/hello/");
     }
@@ -557,7 +467,7 @@ Content goes here"#;
     fn test_build_page_word_count() {
         let fm = Frontmatter::default();
         let body = "one two three four five six seven eight nine ten";
-        let page = build_page(fm, body.into(), "test.md", "https://example.com", None);
+        let page = build_page(fm, body.into(), "test.md", "https://example.com");
         assert_eq!(page.word_count, 10);
         assert_eq!(page.reading_time, 1); // 10/200 = 0, max(1) = 1
     }
@@ -568,7 +478,7 @@ Content goes here"#;
             tags: vec!["rust".into(), "test".into()],
             ..Default::default()
         };
-        let page = build_page(fm, "body".into(), "test.md", "https://example.com", None);
+        let page = build_page(fm, "body".into(), "test.md", "https://example.com");
         assert_eq!(
             page.taxonomies.get("tags").unwrap(),
             &vec!["rust".to_string(), "test".to_string()]

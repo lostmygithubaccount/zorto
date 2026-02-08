@@ -1,11 +1,17 @@
 use pulldown_cmark::{CodeBlockKind, CowStr, Event, Options, Parser, Tag, TagEnd};
 use regex::Regex;
+use std::sync::LazyLock;
 use syntect::highlighting::ThemeSet;
 use syntect::html::highlighted_html_for_string;
 use syntect::parsing::SyntaxSet;
 
 use crate::config::MarkdownConfig;
 use crate::execute::ExecutableBlock;
+
+static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
+static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
+static FILE_ATTR_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"file="([^"]+)""#).unwrap());
 
 /// Render markdown to HTML with all processing steps.
 pub fn render_markdown(
@@ -23,16 +29,12 @@ pub fn render_markdown(
         options.insert(Options::ENABLE_SMART_PUNCTUATION);
     }
 
-    let ss = SyntaxSet::load_defaults_newlines();
-    let ts = ThemeSet::load_defaults();
-
     let parser = Parser::new_ext(content, options);
     let mut events: Vec<Event> = Vec::new();
 
     let mut in_code_block = false;
     let mut code_lang = String::new();
     let mut code_content = String::new();
-    let mut _heading_level = 0u8;
     let mut heading_text = String::new();
     let mut in_heading = false;
 
@@ -69,16 +71,15 @@ pub fn render_markdown(
                     events.push(Event::Html(CowStr::from(placeholder)));
                 } else {
                     // Regular code block with syntax highlighting
-                    let html = highlight_code(&code_content, &code_lang, config, &ss, &ts);
+                    let html = highlight_code(&code_content, &code_lang, config);
                     events.push(Event::Html(CowStr::from(html)));
                 }
             }
             Event::Text(text) if in_code_block => {
                 code_content.push_str(&text);
             }
-            Event::Start(Tag::Heading { level, .. }) => {
+            Event::Start(Tag::Heading { .. }) => {
                 in_heading = true;
-                _heading_level = level as u8;
                 heading_text.clear();
                 events.push(event);
             }
@@ -109,22 +110,16 @@ pub fn render_markdown(
             }) => {
                 // Rewrite external links
                 if is_external_url(&dest_url, base_url) && config.external_links_target_blank {
-                    let mut attrs = Vec::new();
-                    attrs.push(r#"target="_blank""#.to_string());
+                    let mut attrs = vec![r#"target="_blank""#.to_string()];
+                    let mut rel_parts = Vec::new();
                     if config.external_links_no_follow {
-                        attrs.push(r#"rel="nofollow"#.to_string());
+                        rel_parts.push("nofollow");
                     }
                     if config.external_links_no_referrer {
-                        if attrs.last().is_some_and(|a| a.starts_with("rel=")) {
-                            let last = attrs.last_mut().unwrap();
-                            *last = format!("{} noreferrer\"", &last[..last.len() - 1]);
-                        } else {
-                            attrs.push(r#"rel="noreferrer""#.to_string());
-                        }
-                    } else if config.external_links_no_follow {
-                        // Close the rel attribute
-                        let last = attrs.last_mut().unwrap();
-                        last.push('"');
+                        rel_parts.push("noreferrer");
+                    }
+                    if !rel_parts.is_empty() {
+                        attrs.push(format!(r#"rel="{}""#, rel_parts.join(" ")));
                     }
                     let attrs_str = attrs.join(" ");
                     let html = format!(r#"<a href="{dest_url}" title="{title}" {attrs_str}>"#);
@@ -148,23 +143,13 @@ pub fn render_markdown(
     let mut html = String::new();
     pulldown_cmark::html::push_html(&mut html, events.into_iter());
 
-    // Render emoji if configured
-    if config.render_emoji {
-        html = render_emoji(&html);
-    }
-
     html
 }
 
 /// Extract summary from content at <!-- more --> marker
-pub fn extract_summary(content: &str) -> Option<(String, String)> {
+pub fn extract_summary(content: &str) -> Option<String> {
     let marker = "<!-- more -->";
-    if let Some(pos) = content.find(marker) {
-        let before = &content[..pos];
-        Some((before.to_string(), content.to_string()))
-    } else {
-        None
-    }
+    content.find(marker).map(|pos| content[..pos].to_string())
 }
 
 /// Replace executable block placeholders with rendered output
@@ -173,14 +158,12 @@ pub fn replace_exec_placeholders(
     blocks: &[ExecutableBlock],
     config: &MarkdownConfig,
 ) -> String {
-    let ss = SyntaxSet::load_defaults_newlines();
-    let ts = ThemeSet::load_defaults();
     let mut result = html.to_string();
 
     for (i, block) in blocks.iter().enumerate() {
         let placeholder = format!("<!-- EXEC_BLOCK_{i} -->");
         if result.contains(&placeholder) {
-            let source_html = highlight_code(&block.source, &block.language, config, &ss, &ts);
+            let source_html = highlight_code(&block.source, &block.language, config);
             let mut block_html = format!(r#"<div class="code-block-executed">{source_html}"#,);
 
             if let Some(ref output) = block.output
@@ -208,56 +191,33 @@ pub fn replace_exec_placeholders(
 }
 
 /// Highlight a code block with syntect
-fn highlight_code(
-    code: &str,
-    lang: &str,
-    config: &MarkdownConfig,
-    ss: &SyntaxSet,
-    ts: &ThemeSet,
-) -> String {
-    if !config.highlight_code || lang.is_empty() {
-        return format!(
+fn highlight_code(code: &str, lang: &str, config: &MarkdownConfig) -> String {
+    let ss = &*SYNTAX_SET;
+    let ts = &*THEME_SET;
+    let fallback = || {
+        format!(
             "<pre><code class=\"language-{lang}\">{}</code></pre>",
             html_escape(code)
-        );
+        )
+    };
+
+    if !config.highlight_code || lang.is_empty() {
+        return fallback();
     }
 
-    // CSS-based highlighting
-    if config.highlight_theme.as_deref() == Some("css") {
-        let syntax = ss
-            .find_syntax_by_token(lang)
-            .unwrap_or_else(|| ss.find_syntax_plain_text());
+    let theme_name = config
+        .highlight_theme
+        .as_deref()
+        .unwrap_or("base16-ocean.dark");
+    let syntax = ss
+        .find_syntax_by_token(lang)
+        .unwrap_or_else(|| ss.find_syntax_plain_text());
+    let theme = ts
+        .themes
+        .get(theme_name)
+        .unwrap_or(&ts.themes["base16-ocean.dark"]);
 
-        // Use a base theme for class-based highlighting
-        let theme = &ts.themes["base16-ocean.dark"];
-        match highlighted_html_for_string(code, ss, syntax, theme) {
-            Ok(html) => html,
-            Err(_) => format!(
-                "<pre><code class=\"language-{lang}\">{}</code></pre>",
-                html_escape(code)
-            ),
-        }
-    } else {
-        let theme_name = config
-            .highlight_theme
-            .as_deref()
-            .unwrap_or("base16-ocean.dark");
-        let syntax = ss
-            .find_syntax_by_token(lang)
-            .unwrap_or_else(|| ss.find_syntax_plain_text());
-        let theme = ts
-            .themes
-            .get(theme_name)
-            .unwrap_or(&ts.themes["base16-ocean.dark"]);
-
-        match highlighted_html_for_string(code, ss, syntax, theme) {
-            Ok(html) => html,
-            Err(_) => format!(
-                "<pre><code class=\"language-{lang}\">{}</code></pre>",
-                html_escape(code)
-            ),
-        }
-    }
+    highlighted_html_for_string(code, ss, syntax, theme).unwrap_or_else(|_| fallback())
 }
 
 /// Parse code block attributes like {python file="script.py"}
@@ -266,8 +226,7 @@ fn parse_code_attrs(lang: &str) -> (&str, Option<String>) {
     let actual_lang = parts[0];
 
     let file_ref = if parts.len() > 1 {
-        let re = Regex::new(r#"file="([^"]+)""#).unwrap();
-        re.captures(parts[1]).map(|c| c[1].to_string())
+        FILE_ATTR_RE.captures(parts[1]).map(|c| c[1].to_string())
     } else {
         None
     };
@@ -284,41 +243,6 @@ fn html_escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
-}
-
-fn render_emoji(html: &str) -> String {
-    // Simple emoji rendering for common shortcodes
-    let re = Regex::new(r":(\w+):").unwrap();
-    re.replace_all(html, |caps: &regex::Captures| {
-        let name = &caps[1];
-        match emojify(name) {
-            Some(emoji) => emoji.to_string(),
-            None => caps[0].to_string(),
-        }
-    })
-    .to_string()
-}
-
-fn emojify(name: &str) -> Option<&'static str> {
-    match name {
-        "smile" => Some("\u{1f604}"),
-        "laughing" => Some("\u{1f606}"),
-        "heart" => Some("\u{2764}\u{fe0f}"),
-        "thumbsup" | "+1" => Some("\u{1f44d}"),
-        "thumbsdown" | "-1" => Some("\u{1f44e}"),
-        "rocket" => Some("\u{1f680}"),
-        "fire" => Some("\u{1f525}"),
-        "star" => Some("\u{2b50}"),
-        "warning" => Some("\u{26a0}\u{fe0f}"),
-        "check" | "white_check_mark" => Some("\u{2705}"),
-        "x" => Some("\u{274c}"),
-        "wave" => Some("\u{1f44b}"),
-        "tada" => Some("\u{1f389}"),
-        "thinking" => Some("\u{1f914}"),
-        "eyes" => Some("\u{1f440}"),
-        "100" => Some("\u{1f4af}"),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
@@ -423,28 +347,11 @@ mod tests {
     }
 
     #[test]
-    fn test_render_emoji() {
-        let mut config = default_config();
-        config.render_emoji = true;
-        let mut blocks = Vec::new();
-        let html = render_markdown(
-            "Hello :rocket:",
-            &config,
-            &mut blocks,
-            "https://example.com",
-        );
-        assert!(html.contains("\u{1f680}"));
-        assert!(!html.contains(":rocket:"));
-    }
-
-    #[test]
     fn test_extract_summary_present() {
         let content = "First part\n<!-- more -->\nRest of content";
         let result = extract_summary(content);
         assert!(result.is_some());
-        let (summary, full) = result.unwrap();
-        assert_eq!(summary, "First part\n");
-        assert_eq!(full, content);
+        assert_eq!(result.unwrap(), "First part\n");
     }
 
     #[test]

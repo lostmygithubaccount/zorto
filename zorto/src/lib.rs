@@ -1,13 +1,15 @@
 pub mod config;
 pub mod content;
-pub mod execute;
-pub mod links;
-pub mod markdown;
-pub mod sass;
-pub mod serve;
-pub mod shortcodes;
 pub mod site;
-pub mod templates;
+
+pub(crate) mod execute;
+pub(crate) mod links;
+pub(crate) mod markdown;
+pub(crate) mod sass;
+pub(crate) mod shortcodes;
+pub(crate) mod templates;
+
+pub(crate) mod serve;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;

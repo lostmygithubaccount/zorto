@@ -190,8 +190,8 @@ fn execute_bash(block: &ExecutableBlock, working_dir: &Path) -> anyhow::Result<(
         .current_dir(working_dir)
         .output()?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
     Ok((stdout, stderr))
 }

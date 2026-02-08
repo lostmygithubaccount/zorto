@@ -2,7 +2,7 @@
 
 [package]
 name = "zorto"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["Cody <cody@dkdc.dev>"]
 description = "A fast static site generator with executable code blocks"
@@ -59,7 +59,7 @@ pyo3 = { version = "0.28", optional = true }
 
 # Utilities
 anyhow = "1"
-chrono = { version = "0.4", features = ["serde"] }
+chrono = "0.4"
 slug = "0.1"
 regex = "1"
 open = "5"

@@ -1,8 +1,9 @@
 [project]
 name = "zorto"
-version = "0.1.0"
+version = "0.1.1"
 description = "A fast static site generator with executable code blocks"
 requires-python = ">=3.11"
+dependencies = []
 
 [project.scripts]
 zorto = "zorto:main"

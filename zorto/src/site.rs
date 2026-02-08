@@ -58,14 +58,11 @@ impl Site {
             self.pages.retain(|_, p| !p.draft);
         }
 
-        // Phase 2: RESOLVE — assign pages to sections, build taxonomy
-        content::assign_pages_to_sections(&mut self.sections, &self.pages);
-
-        // Phase 3: RENDER MARKDOWN
+        // Phase 2: RENDER MARKDOWN
         self.render_all_markdown()?;
 
-        // Re-assign pages after rendering (content is now filled)
-        self.reassign_rendered_pages();
+        // Phase 3: ASSIGN pages to sections (after rendering so content is filled)
+        content::assign_pages_to_sections(&mut self.sections, &self.pages);
 
         // Phase 4: TEMPLATE RENDERING
         let templates_dir = self.root.join("templates");
@@ -94,33 +91,38 @@ impl Site {
 
     /// Render markdown for all pages and sections
     fn render_all_markdown(&mut self) -> anyhow::Result<()> {
-        let templates_dir = self.root.join("templates");
-        let shortcode_dir = templates_dir.join("shortcodes");
-        let tera = tera::Tera::default(); // minimal tera for shortcodes
+        let shortcode_dir = self.root.join("templates/shortcodes");
+        let has_shortcodes = shortcode_dir.exists();
+        let content_dir = self.root.join("content");
 
-        // Render pages
+        // Resolve all internal links first (needs full pages + sections maps)
         let page_keys: Vec<String> = self.pages.keys().cloned().collect();
-        for key in page_keys {
-            let page = self.pages.get(&key).unwrap();
-            let mut raw = page.raw_content.clone();
+        for key in &page_keys {
+            let raw = self.pages[key].raw_content.clone();
+            let resolved = links::resolve_internal_links(&raw, &self.pages, &self.sections)?;
+            self.pages.get_mut(key).unwrap().raw_content = resolved;
+        }
 
-            // Resolve internal links
-            raw = links::resolve_internal_links(
-                &raw,
-                &self.pages,
-                &self.sections,
-                &self.config.base_url,
-            );
+        let section_keys: Vec<String> = self.sections.keys().cloned().collect();
+        for key in &section_keys {
+            let raw = self.sections[key].raw_content.clone();
+            if !raw.trim().is_empty() {
+                let resolved = links::resolve_internal_links(&raw, &self.pages, &self.sections)?;
+                self.sections.get_mut(key).unwrap().raw_content = resolved;
+            }
+        }
 
-            // Process shortcodes
-            if shortcode_dir.exists() {
-                raw = shortcodes::process_shortcodes(&raw, &shortcode_dir, &tera)?;
+        // Now drain and render pages (links already resolved)
+        let pages: Vec<(String, Page)> = self.pages.drain().collect();
+        for (key, mut page) in pages {
+            let mut raw = std::mem::take(&mut page.raw_content);
+
+            if has_shortcodes {
+                raw = shortcodes::process_shortcodes(&raw, &shortcode_dir)?;
             }
 
-            // Extract summary before full render
             let summary_raw = markdown::extract_summary(&raw);
 
-            // Render markdown with code block detection
             let mut exec_blocks = Vec::new();
             let html = markdown::render_markdown(
                 &raw,
@@ -129,76 +131,60 @@ impl Site {
                 &self.config.base_url,
             );
 
-            // Execute code blocks
             if !exec_blocks.is_empty() {
-                let content_dir = self.root.join("content");
                 let page_dir = Path::new(&key)
                     .parent()
                     .map(|p| content_dir.join(p))
-                    .unwrap_or(content_dir.clone());
+                    .unwrap_or_else(|| content_dir.clone());
                 execute::execute_blocks(&mut exec_blocks, &page_dir, &self.root);
             }
 
-            // Replace execution placeholders
             let html =
                 markdown::replace_exec_placeholders(&html, &exec_blocks, &self.config.markdown);
 
-            // Render summary separately
-            let base_url = self.config.base_url.clone();
-            let summary = summary_raw.map(|(summary_md, _)| {
+            let summary = summary_raw.map(|summary_md| {
                 let mut dummy_blocks = Vec::new();
                 markdown::render_markdown(
                     &summary_md,
                     &self.config.markdown,
                     &mut dummy_blocks,
-                    &base_url,
+                    &self.config.base_url,
                 )
             });
 
-            let page = self.pages.get_mut(&key).unwrap();
+            page.raw_content = raw;
             page.content = html;
             page.summary = summary;
+            self.pages.insert(key, page);
         }
 
-        // Render section content
-        let section_keys: Vec<String> = self.sections.keys().cloned().collect();
-        for key in section_keys {
-            let section = self.sections.get(&key).unwrap();
-            let mut raw = section.raw_content.clone();
+        // Render section content (links already resolved)
+        let sections: Vec<(String, Section)> = self.sections.drain().collect();
+        for (key, mut section) in sections {
+            let raw = std::mem::take(&mut section.raw_content);
 
             if !raw.trim().is_empty() {
-                raw = links::resolve_internal_links(
-                    &raw,
-                    &self.pages,
-                    &self.sections,
-                    &self.config.base_url,
-                );
-                if shortcode_dir.exists() {
-                    raw = shortcodes::process_shortcodes(&raw, &shortcode_dir, &tera)?;
-                }
+                let processed = if has_shortcodes {
+                    shortcodes::process_shortcodes(&raw, &shortcode_dir)?
+                } else {
+                    raw.clone()
+                };
                 let mut exec_blocks = Vec::new();
                 let html = markdown::render_markdown(
-                    &raw,
+                    &processed,
                     &self.config.markdown,
                     &mut exec_blocks,
                     &self.config.base_url,
                 );
-                let html =
+                section.content =
                     markdown::replace_exec_placeholders(&html, &exec_blocks, &self.config.markdown);
-                self.sections.get_mut(&key).unwrap().content = html;
             }
+
+            section.raw_content = raw;
+            self.sections.insert(key, section);
         }
 
         Ok(())
-    }
-
-    /// Re-assign rendered pages to sections (since we modified page content in-place)
-    fn reassign_rendered_pages(&mut self) {
-        // Clear existing pages from sections
-        for section in self.sections.values_mut() {
-            section.pages.clear();
-        }
-        content::assign_pages_to_sections(&mut self.sections, &self.pages);
     }
 
     /// Render all templates and write output
@@ -241,8 +227,7 @@ impl Site {
             // Render base page (or paginated pages)
             if let Some(paginate_by) = section.paginate_by {
                 let total_pages = section.pages.len();
-                let num_pagers = total_pages.div_ceil(paginate_by);
-                let num_pagers = num_pagers.max(1);
+                let num_pagers = total_pages.div_ceil(paginate_by).max(1);
 
                 for pager_idx in 0..num_pagers {
                     let start = pager_idx * paginate_by;
@@ -333,11 +318,7 @@ impl Site {
 
             // Sort pages within each term by date (reverse chronological)
             for pages in term_map.values_mut() {
-                pages.sort_by(|a, b| {
-                    let da = a.date.as_deref().unwrap_or("");
-                    let db = b.date.as_deref().unwrap_or("");
-                    db.cmp(da)
-                });
+                content::sort_pages_by_date(pages);
             }
 
             // Build TaxonomyTerm structs

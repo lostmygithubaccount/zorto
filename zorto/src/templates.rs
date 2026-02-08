@@ -277,43 +277,14 @@ pub fn taxonomy_single_context(term: &TaxonomyTerm, config: &Config) -> tera::Co
 
 /// Convert Config to a Tera-compatible Value
 pub fn config_to_value(config: &Config) -> serde_json::Value {
-    let mut map = serde_json::Map::new();
-    map.insert("base_url".into(), serde_json::json!(config.base_url));
-    map.insert("title".into(), serde_json::json!(config.title));
-    map.insert(
-        "default_language".into(),
-        serde_json::json!(config.default_language()),
-    );
-
-    // Markdown config
-    let md = &config.markdown;
-    let mut md_map = serde_json::Map::new();
-    md_map.insert(
-        "highlight_code".into(),
-        serde_json::json!(md.highlight_code),
-    );
-    md_map.insert(
-        "highlight_theme".into(),
-        serde_json::json!(md.highlight_theme),
-    );
-    md_map.insert(
-        "insert_anchor_links".into(),
-        serde_json::json!(md.insert_anchor_links),
-    );
-    map.insert("markdown".into(), serde_json::Value::Object(md_map));
-
-    // Extra config (preserve as-is)
-    let extra = crate::content::toml_to_json(&config.extra);
-    map.insert("extra".into(), extra);
-
-    serde_json::Value::Object(map)
+    serde_json::to_value(config).unwrap_or_default()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::content::{Frontmatter, Page, Section, build_page, build_section};
+    use crate::content::{Frontmatter, build_page, build_section};
     use tempfile::TempDir;
 
     fn minimal_config() -> Config {
@@ -341,7 +312,6 @@ author = "Tester"
             "Hello world".into(),
             "posts/test.md",
             "https://example.com",
-            None,
         )
     }
 

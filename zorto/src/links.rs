@@ -1,38 +1,49 @@
 use regex::Regex;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use crate::content::{Page, Section};
+
+static INTERNAL_LINK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"@/([^)#\s]+\.md)(#[^)\s]+)?").unwrap());
 
 /// Resolve @/ internal links in raw markdown content.
 /// @/path/to/file.md -> /resolved/url/
 /// @/path/to/_index.md -> /section/url/
+///
+/// Returns an error if any internal links cannot be resolved.
 pub fn resolve_internal_links(
     content: &str,
     pages: &HashMap<String, Page>,
     sections: &HashMap<String, Section>,
-    base_url: &str,
-) -> String {
-    let re = Regex::new(r"@/([^)#\s]+\.md)(#[^)\s]+)?").unwrap();
+) -> anyhow::Result<String> {
+    let mut errors = Vec::new();
 
-    re.replace_all(content, |caps: &regex::Captures| {
-        let path = &caps[1];
-        let anchor = caps.get(2).map_or("", |m| m.as_str());
+    let result = INTERNAL_LINK_RE
+        .replace_all(content, |caps: &regex::Captures| {
+            let path = &caps[1];
+            let anchor = caps.get(2).map_or("", |m| m.as_str());
 
-        // Try pages first
-        if let Some(page) = pages.get(path) {
-            return format!("{}{anchor}", page.permalink);
-        }
+            // Try pages first
+            if let Some(page) = pages.get(path) {
+                return format!("{}{anchor}", page.permalink);
+            }
 
-        // Try sections
-        if let Some(section) = sections.get(path) {
-            return format!("{}{anchor}", section.permalink);
-        }
+            // Try sections
+            if let Some(section) = sections.get(path) {
+                return format!("{}{anchor}", section.permalink);
+            }
 
-        // Warn and keep original
-        eprintln!("WARNING: unresolved internal link: @/{path}");
-        format!("{base_url}/@/{path}{anchor}")
-    })
-    .to_string()
+            errors.push(format!("unresolved internal link: @/{path}"));
+            format!("@/{path}{anchor}")
+        })
+        .to_string();
+
+    if !errors.is_empty() {
+        anyhow::bail!("{}", errors.join("; "));
+    }
+
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -47,7 +58,6 @@ mod tests {
             "body".into(),
             relative_path,
             base_url,
-            None,
         )
     }
 
@@ -69,7 +79,7 @@ mod tests {
         );
         let sections = HashMap::new();
         let input = "Check out [this post](@/posts/hello.md)";
-        let result = resolve_internal_links(input, &pages, &sections, "https://example.com");
+        let result = resolve_internal_links(input, &pages, &sections).unwrap();
         assert!(result.contains("https://example.com/posts/hello/"));
         assert!(!result.contains("@/"));
     }
@@ -83,7 +93,7 @@ mod tests {
             make_section("posts/_index.md", "https://example.com"),
         );
         let input = "See [blog](@/posts/_index.md)";
-        let result = resolve_internal_links(input, &pages, &sections, "https://example.com");
+        let result = resolve_internal_links(input, &pages, &sections).unwrap();
         assert!(result.contains("https://example.com/posts/"));
         assert!(!result.contains("@/"));
     }
@@ -97,7 +107,7 @@ mod tests {
         );
         let sections = HashMap::new();
         let input = "[heading](@/posts/hello.md#section)";
-        let result = resolve_internal_links(input, &pages, &sections, "https://example.com");
+        let result = resolve_internal_links(input, &pages, &sections).unwrap();
         assert!(result.contains("https://example.com/posts/hello/#section"));
     }
 
@@ -106,7 +116,20 @@ mod tests {
         let pages = HashMap::new();
         let sections = HashMap::new();
         let input = "No [links](https://example.com) here";
-        let result = resolve_internal_links(input, &pages, &sections, "https://example.com");
+        let result = resolve_internal_links(input, &pages, &sections).unwrap();
         assert_eq!(result, input);
+    }
+
+    #[test]
+    fn test_unresolved_link_errors() {
+        let pages = HashMap::new();
+        let sections = HashMap::new();
+        let input = "See [missing](@/posts/missing.md)";
+        let result = resolve_internal_links(input, &pages, &sections);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("unresolved internal link"));
     }
 }
