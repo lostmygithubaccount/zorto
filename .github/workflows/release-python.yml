@@ -14,15 +14,7 @@ permissions:
 
 jobs:
   check:
-    name: Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - run: bin/setup
-      - run: bin/check
+    uses: ./.github/workflows/check.yml
 
   build:
     name: Build (${{ matrix.target }})
@@ -45,6 +37,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            zorto/target
+          key: rust-wheel-${{ matrix.target }}-${{ hashFiles('zorto/**/Cargo.lock') }}
+          restore-keys: rust-wheel-${{ matrix.target }}-
       - run: bin/setup
       - run: rustup target add ${{ matrix.target }}
       - run: bin/build-wheels --target ${{ matrix.target }} --out dist
