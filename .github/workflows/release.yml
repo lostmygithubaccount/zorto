@@ -70,30 +70,6 @@ jobs:
           path: zorto-*.tar.gz
           if-no-files-found: error
 
-  publish-crate:
-    name: Publish to crates.io
-    needs: check
-    runs-on: ubuntu-latest
-    environment: crates-io
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - name: Exchange OIDC token for crates.io API token
-        id: publish-token
-        run: |
-          oidc_jwt=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=crates.io" | jq -r '.value')
-          token=$(curl -sS -X POST https://crates.io/api/v1/trusted_publishing/tokens \
-            -H "Content-Type: application/json" \
-            -d "{\"jwt\": \"$oidc_jwt\"}" | jq -r '.token')
-          echo "::add-mask::$token"
-          echo "token=$token" >> "$GITHUB_OUTPUT"
-      - run: cargo publish --manifest-path zorto/Cargo.toml
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.publish-token.outputs.token }}
-
   release:
     name: Create Release
     needs: build
