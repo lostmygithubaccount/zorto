@@ -42,9 +42,11 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cache/uv
+            ~/Library/Caches/uv
             zorto/target
-          key: rust-build-${{ matrix.target }}-${{ hashFiles('zorto/**/Cargo.lock') }}
-          restore-keys: rust-build-${{ matrix.target }}-
+          key: build-${{ matrix.target }}-${{ hashFiles('zorto/**/Cargo.lock', 'uv.lock') }}
+          restore-keys: build-${{ matrix.target }}-
       - run: bin/setup
       - run: rustup target add ${{ matrix.target }}
       - run: bin/build-rs --release --target ${{ matrix.target }}

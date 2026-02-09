@@ -42,9 +42,11 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cache/uv
+            ~/Library/Caches/uv
             zorto/target
-          key: rust-wheel-${{ matrix.target }}-${{ hashFiles('zorto/**/Cargo.lock') }}
-          restore-keys: rust-wheel-${{ matrix.target }}-
+          key: wheel-${{ matrix.target }}-${{ hashFiles('zorto/**/Cargo.lock', 'uv.lock') }}
+          restore-keys: wheel-${{ matrix.target }}-
       - run: bin/setup
       - run: rustup target add ${{ matrix.target }}
       - run: bin/build-wheels --target ${{ matrix.target }} --out dist
@@ -63,6 +65,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: sdist-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: sdist-${{ runner.os }}-
       - run: bin/setup
       - run: bin/build-sdist
       - uses: actions/upload-artifact@v4

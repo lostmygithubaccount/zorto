@@ -16,8 +16,9 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cache/uv
             zorto/target
-          key: rust-check-${{ runner.os }}-${{ hashFiles('zorto/**/Cargo.lock') }}
-          restore-keys: rust-check-${{ runner.os }}-
+          key: check-${{ runner.os }}-${{ hashFiles('zorto/**/Cargo.lock', 'uv.lock') }}
+          restore-keys: check-${{ runner.os }}-
       - run: bin/setup
       - run: bin/check
