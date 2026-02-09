@@ -2,11 +2,13 @@
 
 [package]
 name = "zorto"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 authors = ["Cody <cody@dkdc.dev>"]
 description = "A fast static site generator with executable code blocks"
 license = "MIT"
+repository = "https://github.com/lostmygithubaccount/zorto"
+homepage = "https://github.com/lostmygithubaccount/zorto"
 
 [lib]
 name = "zorto"

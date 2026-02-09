@@ -57,12 +57,28 @@ jobs:
             echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           fi
       - name: Package
-        run: tar -czf zorto-${{ steps.tag.outputs.version }}-${{ matrix.target }}.tar.gz -C zorto/target/${{ matrix.target }}/release zorto
+        run: |
+          staging=$(mktemp -d)
+          cp zorto/target/${{ matrix.target }}/release/zorto "$staging/"
+          cp LICENSE "$staging/"
+          tar -czf zorto-${{ steps.tag.outputs.version }}-${{ matrix.target }}.tar.gz -C "$staging" .
       - uses: actions/upload-artifact@v4
         with:
           name: zorto-${{ matrix.target }}
           path: zorto-*.tar.gz
           if-no-files-found: error
+
+  publish-crate:
+    name: Publish to crates.io
+    needs: check
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo publish --manifest-path zorto/Cargo.toml
 
   release:
     name: Create Release
