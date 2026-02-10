@@ -20,12 +20,28 @@ pub struct Config {
     pub taxonomies: Vec<TaxonomyConfig>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnchorLinks {
+    #[default]
+    None,
+    Right,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SortBy {
+    #[default]
+    Date,
+    Title,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MarkdownConfig {
     #[serde(default = "default_true")]
     pub highlight_code: bool,
-    #[serde(default = "default_none_str")]
-    pub insert_anchor_links: String,
+    #[serde(default)]
+    pub insert_anchor_links: AnchorLinks,
     #[serde(default)]
     pub highlight_theme: Option<String>,
     #[serde(default)]
@@ -42,7 +58,7 @@ impl Default for MarkdownConfig {
     fn default() -> Self {
         Self {
             highlight_code: true,
-            insert_anchor_links: "none".to_string(),
+            insert_anchor_links: AnchorLinks::None,
             highlight_theme: None,
             external_links_target_blank: false,
             external_links_no_follow: false,
@@ -63,10 +79,6 @@ fn default_true() -> bool {
 
 fn default_en() -> String {
     "en".to_string()
-}
-
-fn default_none_str() -> String {
-    "none".to_string()
 }
 
 pub(crate) fn default_toml_table() -> toml::Value {
@@ -115,7 +127,7 @@ mod tests {
         assert_eq!(config.base_url, "https://example.com");
         assert_eq!(config.title, "");
         assert!(config.compile_sass);
-        assert_eq!(config.markdown.insert_anchor_links, "none");
+        assert_eq!(config.markdown.insert_anchor_links, AnchorLinks::None);
         assert!(config.markdown.highlight_code);
         // Default taxonomy is "tags"
         assert_eq!(config.taxonomies.len(), 1);
@@ -148,7 +160,7 @@ feed = true
         assert_eq!(config.default_language, "fr");
         assert!(!config.compile_sass);
         assert!(!config.markdown.highlight_code);
-        assert_eq!(config.markdown.insert_anchor_links, "right");
+        assert_eq!(config.markdown.insert_anchor_links, AnchorLinks::Right);
         assert!(config.markdown.external_links_target_blank);
         assert_eq!(config.taxonomies.len(), 1);
         assert_eq!(config.taxonomies[0].name, "categories");

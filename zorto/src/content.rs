@@ -3,7 +3,52 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-use crate::config::default_toml_table;
+use crate::config::{SortBy, default_toml_table};
+
+/// Compute the URL path for a page given its parent directory and slug.
+/// e.g. ("posts", "hello") -> "/posts/hello/"
+///      ("", "hello") -> "/hello/"
+pub(crate) fn page_url_path(parent_dir: &str, slug: &str) -> String {
+    if parent_dir.is_empty() {
+        format!("/{slug}/")
+    } else {
+        format!("/{parent_dir}/{slug}/")
+    }
+}
+
+/// Compute the URL path for a section given the directory of its _index.md.
+/// e.g. "posts" -> "/posts/"
+///      "" -> "/"
+pub(crate) fn section_url_path(dir: &str) -> String {
+    if dir.is_empty() {
+        "/".to_string()
+    } else {
+        format!("/{dir}/")
+    }
+}
+
+/// Compute the parent directory string from a relative path.
+/// e.g. "posts/hello.md" -> "posts"
+///      "hello.md" -> ""
+pub(crate) fn parent_dir(relative_path: &str) -> String {
+    Path::new(relative_path)
+        .parent()
+        .unwrap_or(Path::new(""))
+        .to_string_lossy()
+        .to_string()
+}
+
+/// Compute the section key (_index.md path) for a given content relative path.
+/// e.g. "posts/hello.md" -> "posts/_index.md"
+///      "hello.md" -> "_index.md"
+pub(crate) fn section_key_for(relative_path: &str) -> String {
+    let dir = parent_dir(relative_path);
+    if dir.is_empty() {
+        "_index.md".to_string()
+    } else {
+        format!("{dir}/_index.md")
+    }
+}
 
 /// TOML frontmatter parsed from +++ delimiters
 #[derive(Debug, Deserialize)]
@@ -19,7 +64,7 @@ pub struct Frontmatter {
     pub aliases: Vec<String>,
     #[serde(default)]
     pub tags: Vec<String>,
-    pub sort_by: Option<String>,
+    pub sort_by: Option<SortBy>,
     pub paginate_by: Option<usize>,
     #[serde(default = "default_toml_table")]
     pub extra: toml::Value,
@@ -57,7 +102,7 @@ pub struct Section {
     pub content: String,
     pub raw_content: String,
     pub pages: Vec<Page>,
-    pub sort_by: Option<String>,
+    pub sort_by: Option<SortBy>,
     pub paginate_by: Option<usize>,
     pub extra: serde_json::Value,
     pub relative_path: String,
@@ -129,19 +174,7 @@ pub fn build_page(
         slug::slugify(&filename)
     });
 
-    // Compute URL path
-    let parent = Path::new(relative_path)
-        .parent()
-        .unwrap_or(Path::new(""))
-        .to_string_lossy()
-        .to_string();
-
-    let path = if parent.is_empty() {
-        format!("/{slug}/")
-    } else {
-        format!("/{parent}/{slug}/")
-    };
-
+    let path = page_url_path(&parent_dir(relative_path), &slug);
     let permalink = format!("{base_url}{path}");
 
     let date = fm.date.as_ref().map(value_to_date_string);
@@ -187,19 +220,7 @@ pub fn build_section(
 ) -> Section {
     let title = fm.title.unwrap_or_default();
 
-    // Section path is the directory of the _index.md
-    let dir = Path::new(relative_path)
-        .parent()
-        .unwrap_or(Path::new(""))
-        .to_string_lossy()
-        .to_string();
-
-    let path = if dir.is_empty() {
-        "/".to_string()
-    } else {
-        format!("/{dir}/")
-    };
-
+    let path = section_url_path(&parent_dir(relative_path));
     let permalink = format!("{base_url}{path}");
     let extra = toml_to_json(&fm.extra);
 
@@ -279,33 +300,28 @@ pub fn assign_pages_to_sections(
     pages: &HashMap<String, Page>,
 ) {
     for (rel_path, page) in pages {
-        // Find the parent section
-        let parent_dir = Path::new(rel_path)
-            .parent()
-            .unwrap_or(Path::new(""))
-            .to_string_lossy()
-            .to_string();
-
-        let section_key = if parent_dir.is_empty() {
-            "_index.md".to_string()
-        } else {
-            format!("{parent_dir}/_index.md")
-        };
-
-        if let Some(section) = sections.get_mut(&section_key) {
+        let key = section_key_for(rel_path);
+        if let Some(section) = sections.get_mut(&key) {
             section.pages.push(page.clone());
         }
     }
 
     // Sort pages in each section
     for section in sections.values_mut() {
-        let sort_by = section.sort_by.as_deref().unwrap_or("date");
-        match sort_by {
-            "date" => sort_pages_by_date(&mut section.pages),
-            "title" => section.pages.sort_by(|a, b| a.title.cmp(&b.title)),
-            _ => {}
+        match section.sort_by.unwrap_or_default() {
+            SortBy::Date => sort_pages_by_date(&mut section.pages),
+            SortBy::Title => section.pages.sort_by(|a, b| a.title.cmp(&b.title)),
         }
     }
+}
+
+/// Escape special characters for XML/HTML output
+pub(crate) fn escape_xml(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
 }
 
 /// Convert a `toml::Value` to `serde_json::Value`
@@ -376,7 +392,7 @@ Content goes here"#;
         assert_eq!(fm.slug.as_deref(), Some("custom-slug"));
         assert_eq!(fm.aliases, vec!["/old-url/"]);
         assert_eq!(fm.tags, vec!["rust", "test"]);
-        assert_eq!(fm.sort_by.as_deref(), Some("date"));
+        assert_eq!(fm.sort_by, Some(SortBy::Date));
         assert_eq!(fm.paginate_by, Some(5));
         assert_eq!(body, "Content goes here");
     }

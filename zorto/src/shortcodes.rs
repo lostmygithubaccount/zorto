@@ -4,10 +4,12 @@ use std::path::Path;
 use std::sync::LazyLock;
 
 static BODY_SHORTCODE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?s)\{%\s*(\w+)\s*\(([^)]*)\)\s*%\}(.*?)\{%\s*end\s*%\}").unwrap()
+    Regex::new(r#"(?s)\{%\s*(\w+)\s*\(((?:[^)"']|"[^"]*"|'[^']*')*)\)\s*%\}(.*?)\{%\s*end\s*%\}"#)
+        .unwrap()
 });
-static INLINE_SHORTCODE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\{\{\s*(\w+)\s*\(([^)]*)\)\s*\}\}").unwrap());
+static INLINE_SHORTCODE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"\{\{\s*(\w+)\s*\(((?:[^)"']|"[^"]*"|'[^']*')*)\)\s*\}\}"#).unwrap()
+});
 static ARGS_DOUBLE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"(\w+)\s*=\s*"([^"]*)""#).unwrap());
 static ARGS_SINGLE_RE: LazyLock<Regex> =

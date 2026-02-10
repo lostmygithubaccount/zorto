@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::config::Config;
-use crate::content::{Page, Section};
+use crate::content::{self, Page, Section};
 
 /// A taxonomy term for template rendering
 #[derive(Debug, Clone, serde::Serialize)]
@@ -57,35 +57,19 @@ fn register_functions(tera: &mut tera::Tera, config: &Config, sections: &HashMap
                 .ok_or_else(|| tera::Error::msg("get_url requires a 'path' argument"))?;
 
             if let Some(content_path) = path.strip_prefix("@/") {
-                // Check if it's a section
-                if content_path.ends_with("_index.md") {
-                    let dir = std::path::Path::new(content_path)
-                        .parent()
-                        .unwrap_or(std::path::Path::new(""))
-                        .to_string_lossy()
-                        .to_string();
-                    let url = if dir.is_empty() {
-                        format!("{}/", base_url)
-                    } else {
-                        format!("{}/{dir}/", base_url)
-                    };
-                    return Ok(tera::Value::String(url));
-                }
-                // Regular page
-                let stem = std::path::Path::new(content_path)
-                    .file_stem()
-                    .unwrap_or_default()
-                    .to_string_lossy();
-                let parent = std::path::Path::new(content_path)
-                    .parent()
-                    .unwrap_or(std::path::Path::new(""))
-                    .to_string_lossy()
-                    .to_string();
-                let slug = slug::slugify(stem.as_ref());
-                let url = if parent.is_empty() {
-                    format!("{}/{slug}/", base_url)
+                let url = if content_path.ends_with("_index.md") {
+                    let section_path =
+                        content::section_url_path(&content::parent_dir(content_path));
+                    format!("{base_url}{section_path}")
                 } else {
-                    format!("{}/{parent}/{slug}/", base_url)
+                    let stem = std::path::Path::new(content_path)
+                        .file_stem()
+                        .unwrap_or_default()
+                        .to_string_lossy();
+                    let slug = slug::slugify(stem.as_ref());
+                    let page_path =
+                        content::page_url_path(&content::parent_dir(content_path), &slug);
+                    format!("{base_url}{page_path}")
                 };
                 Ok(tera::Value::String(url))
             } else {

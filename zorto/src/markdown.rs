@@ -5,7 +5,8 @@ use syntect::highlighting::ThemeSet;
 use syntect::html::highlighted_html_for_string;
 use syntect::parsing::SyntaxSet;
 
-use crate::config::MarkdownConfig;
+use crate::config::{AnchorLinks, MarkdownConfig};
+use crate::content::escape_xml;
 use crate::execute::ExecutableBlock;
 
 static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
@@ -86,15 +87,14 @@ pub fn render_markdown(
                 in_heading = false;
 
                 // Insert anchor link if configured
-                if config.insert_anchor_links != "none" {
+                if config.insert_anchor_links != AnchorLinks::None {
                     let id = slug::slugify(&heading_text);
                     let anchor_html = format!(
                         "<a class=\"zola-anchor\" href=\"#{}\" aria-label=\"Anchor link for: {}\">#</a>",
                         id, heading_text
                     );
 
-                    if config.insert_anchor_links == "right" {
-                        // Insert anchor after heading text
+                    if config.insert_anchor_links == AnchorLinks::Right {
                         events.push(Event::Html(CowStr::from(format!(" {anchor_html}"))));
                     }
                 }
@@ -170,7 +170,7 @@ pub fn replace_exec_placeholders(
             {
                 block_html.push_str(&format!(
                     r#"<div class="code-output"><pre><code>{}</code></pre></div>"#,
-                    html_escape(output)
+                    escape_xml(output)
                 ));
             }
             if let Some(ref error) = block.error
@@ -178,7 +178,7 @@ pub fn replace_exec_placeholders(
             {
                 block_html.push_str(&format!(
                     r#"<div class="code-error"><pre><code>{}</code></pre></div>"#,
-                    html_escape(error)
+                    escape_xml(error)
                 ));
             }
             block_html.push_str("</div>");
@@ -196,7 +196,7 @@ fn highlight_code(code: &str, lang: &str, config: &MarkdownConfig) -> String {
     let fallback = || {
         format!(
             "<pre><code class=\"language-{lang}\">{}</code></pre>",
-            html_escape(code)
+            escape_xml(code)
         )
     };
 
@@ -235,13 +235,6 @@ fn parse_code_attrs(lang: &str) -> (&str, Option<String>) {
 
 fn is_external_url(url: &str, base_url: &str) -> bool {
     (url.starts_with("http://") || url.starts_with("https://")) && !url.starts_with(base_url)
-}
-
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
 }
 
 #[cfg(test)]
@@ -300,7 +293,7 @@ mod tests {
     #[test]
     fn test_render_heading_anchor_right() {
         let mut config = default_config();
-        config.insert_anchor_links = "right".to_string();
+        config.insert_anchor_links = AnchorLinks::Right;
         let mut blocks = Vec::new();
         let html = render_markdown(
             "## Hello World",

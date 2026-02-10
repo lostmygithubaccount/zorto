@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
-use crate::content::{self, Page, Section};
+use crate::content::{self, Page, Section, escape_xml};
 use crate::execute;
 use crate::links;
 use crate::markdown;
@@ -103,26 +103,44 @@ impl Site {
         let has_shortcodes = shortcode_dir.exists();
         let content_dir = self.root.join("content");
 
-        // Resolve all internal links first (needs full pages + sections maps)
-        let page_keys: Vec<String> = self.pages.keys().cloned().collect();
-        for key in &page_keys {
-            let raw = self.pages[key].raw_content.clone();
-            let resolved = links::resolve_internal_links(&raw, &self.pages, &self.sections)?;
-            self.pages.get_mut(key).unwrap().raw_content = resolved;
+        // Resolve all internal links first (needs full pages + sections maps).
+        // Collect resolved content before applying, since resolve_internal_links
+        // borrows the full maps immutably.
+        let resolved_pages: Vec<(String, String)> = self
+            .pages
+            .iter()
+            .map(|(key, page)| {
+                let resolved =
+                    links::resolve_internal_links(&page.raw_content, &self.pages, &self.sections)?;
+                Ok((key.clone(), resolved))
+            })
+            .collect::<anyhow::Result<_>>()?;
+        for (key, content) in resolved_pages {
+            self.pages.get_mut(&key).unwrap().raw_content = content;
         }
 
-        let section_keys: Vec<String> = self.sections.keys().cloned().collect();
-        for key in &section_keys {
-            let raw = self.sections[key].raw_content.clone();
-            if !raw.trim().is_empty() {
-                let resolved = links::resolve_internal_links(&raw, &self.pages, &self.sections)?;
-                self.sections.get_mut(key).unwrap().raw_content = resolved;
-            }
+        let resolved_sections: Vec<(String, String)> = self
+            .sections
+            .iter()
+            .filter(|(_, s)| !s.raw_content.trim().is_empty())
+            .map(|(key, section)| {
+                let resolved = links::resolve_internal_links(
+                    &section.raw_content,
+                    &self.pages,
+                    &self.sections,
+                )?;
+                Ok((key.clone(), resolved))
+            })
+            .collect::<anyhow::Result<_>>()?;
+        for (key, content) in resolved_sections {
+            self.sections.get_mut(&key).unwrap().raw_content = content;
         }
 
-        // Now drain and render pages (links already resolved)
-        let pages: Vec<(String, Page)> = self.pages.drain().collect();
-        for (key, mut page) in pages {
+        // Render pages — field-level borrows let us access config/root while
+        // iterating pages mutably.
+        let config = &self.config;
+        let root = &self.root;
+        for (key, page) in self.pages.iter_mut() {
             let mut raw = std::mem::take(&mut page.raw_content);
 
             if has_shortcodes {
@@ -134,41 +152,38 @@ impl Site {
             let mut exec_blocks = Vec::new();
             let html = markdown::render_markdown(
                 &raw,
-                &self.config.markdown,
+                &config.markdown,
                 &mut exec_blocks,
-                &self.config.base_url,
+                &config.base_url,
             );
 
             if !exec_blocks.is_empty() {
-                let page_dir = Path::new(&key)
+                let page_dir = Path::new(key.as_str())
                     .parent()
                     .map(|p| content_dir.join(p))
                     .unwrap_or_else(|| content_dir.clone());
-                execute::execute_blocks(&mut exec_blocks, &page_dir, &self.root);
+                execute::execute_blocks(&mut exec_blocks, &page_dir, root);
             }
 
-            let html =
-                markdown::replace_exec_placeholders(&html, &exec_blocks, &self.config.markdown);
+            let html = markdown::replace_exec_placeholders(&html, &exec_blocks, &config.markdown);
 
             let summary = summary_raw.map(|summary_md| {
                 let mut dummy_blocks = Vec::new();
                 markdown::render_markdown(
                     &summary_md,
-                    &self.config.markdown,
+                    &config.markdown,
                     &mut dummy_blocks,
-                    &self.config.base_url,
+                    &config.base_url,
                 )
             });
 
             page.raw_content = raw;
             page.content = html;
             page.summary = summary;
-            self.pages.insert(key, page);
         }
 
-        // Render section content (links already resolved)
-        let sections: Vec<(String, Section)> = self.sections.drain().collect();
-        for (key, mut section) in sections {
+        // Render section content
+        for section in self.sections.values_mut() {
             let raw = std::mem::take(&mut section.raw_content);
 
             if !raw.trim().is_empty() {
@@ -180,16 +195,15 @@ impl Site {
                 let mut exec_blocks = Vec::new();
                 let html = markdown::render_markdown(
                     &processed,
-                    &self.config.markdown,
+                    &config.markdown,
                     &mut exec_blocks,
-                    &self.config.base_url,
+                    &config.base_url,
                 );
                 section.content =
-                    markdown::replace_exec_placeholders(&html, &exec_blocks, &self.config.markdown);
+                    markdown::replace_exec_placeholders(&html, &exec_blocks, &config.markdown);
             }
 
             section.raw_content = raw;
-            self.sections.insert(key, section);
         }
 
         Ok(())
@@ -515,15 +529,6 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
         }
     }
     Ok(())
-}
-
-/// Escape special characters for XML
-fn escape_xml(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
 }
 
 /// Normalize a date string to RFC 3339 (append T00:00:00Z if date-only)
