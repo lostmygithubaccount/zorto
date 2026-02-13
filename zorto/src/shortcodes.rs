@@ -19,16 +19,27 @@ static ARGS_SINGLE_RE: LazyLock<Regex> =
 ///
 /// Inline shortcodes: {{ name(key="value", key2="value2") }}
 /// Body shortcodes: {% name(key="value") %}...body...{% end %}
-pub fn process_shortcodes(content: &str, shortcode_dir: &Path) -> anyhow::Result<String> {
+///
+/// Built-in shortcodes (no template needed):
+/// - `include(path="...")`: Read and inject file contents relative to site root
+pub fn process_shortcodes(
+    content: &str,
+    shortcode_dir: &Path,
+    site_root: &Path,
+) -> anyhow::Result<String> {
     // Process body shortcodes first (they can contain inline shortcodes)
-    let result = process_body_shortcodes(content, shortcode_dir)?;
+    let result = process_body_shortcodes(content, shortcode_dir, site_root)?;
 
     // Then process inline shortcodes
-    process_inline_shortcodes(&result, shortcode_dir)
+    process_inline_shortcodes(&result, shortcode_dir, site_root)
 }
 
 /// Process body shortcodes: {% name(args) %}...{% end %}
-fn process_body_shortcodes(content: &str, shortcode_dir: &Path) -> anyhow::Result<String> {
+fn process_body_shortcodes(
+    content: &str,
+    shortcode_dir: &Path,
+    site_root: &Path,
+) -> anyhow::Result<String> {
     let mut result = content.to_string();
     let mut iterations = 0;
 
@@ -40,7 +51,7 @@ fn process_body_shortcodes(content: &str, shortcode_dir: &Path) -> anyhow::Resul
             let args_str = &caps[2];
             let body = &caps[3];
 
-            match render_shortcode(name, args_str, Some(body.trim()), shortcode_dir) {
+            match resolve_shortcode(name, args_str, Some(body.trim()), shortcode_dir, site_root) {
                 Ok(rendered) => rendered,
                 Err(e) => {
                     error = Some(anyhow::anyhow!("shortcode error in {name}: {e}"));
@@ -59,13 +70,17 @@ fn process_body_shortcodes(content: &str, shortcode_dir: &Path) -> anyhow::Resul
 }
 
 /// Process inline shortcodes: {{ name(args) }}
-fn process_inline_shortcodes(content: &str, shortcode_dir: &Path) -> anyhow::Result<String> {
+fn process_inline_shortcodes(
+    content: &str,
+    shortcode_dir: &Path,
+    site_root: &Path,
+) -> anyhow::Result<String> {
     let mut error: Option<anyhow::Error> = None;
     let result = INLINE_SHORTCODE_RE.replace_all(content, |caps: &regex::Captures| {
         let name = &caps[1];
         let args_str = &caps[2];
 
-        match render_shortcode(name, args_str, None, shortcode_dir) {
+        match resolve_shortcode(name, args_str, None, shortcode_dir, site_root) {
             Ok(rendered) => rendered,
             Err(e) => {
                 error = Some(anyhow::anyhow!("shortcode error in {name}: {e}"));
@@ -96,6 +111,53 @@ fn parse_args(args_str: &str) -> HashMap<String, String> {
     }
 
     args
+}
+
+/// Dispatch a shortcode: handle built-ins first, fall back to template rendering.
+fn resolve_shortcode(
+    name: &str,
+    args_str: &str,
+    body: Option<&str>,
+    shortcode_dir: &Path,
+    site_root: &Path,
+) -> anyhow::Result<String> {
+    match name {
+        "include" => builtin_include(args_str, site_root),
+        _ => render_shortcode(name, args_str, body, shortcode_dir),
+    }
+}
+
+/// Built-in `include` shortcode: read file contents relative to site root.
+///
+/// Arguments:
+/// - `path` (required): file path relative to site root
+/// - `strip_frontmatter` (optional): "true" to strip `+++`-delimited TOML frontmatter
+fn builtin_include(args_str: &str, site_root: &Path) -> anyhow::Result<String> {
+    let args = parse_args(args_str);
+    let path = args
+        .get("path")
+        .ok_or_else(|| anyhow::anyhow!("include shortcode requires a `path` argument"))?;
+    let file_path = site_root.join(path);
+    let content = std::fs::read_to_string(&file_path)
+        .map_err(|e| anyhow::anyhow!("include shortcode: cannot read {}: {e}", file_path.display()))?;
+
+    let strip = args.get("strip_frontmatter").is_some_and(|v| v == "true");
+    if strip {
+        Ok(strip_toml_frontmatter(&content))
+    } else {
+        Ok(content)
+    }
+}
+
+/// Strip `+++`-delimited TOML frontmatter from content.
+fn strip_toml_frontmatter(content: &str) -> String {
+    let trimmed = content.trim_start();
+    if let Some(rest) = trimmed.strip_prefix("+++") {
+        if let Some(after) = rest.find("+++") {
+            return rest[after + 3..].to_string();
+        }
+    }
+    content.to_string()
 }
 
 /// Render a single shortcode
@@ -147,8 +209,12 @@ mod tests {
     fn test_inline_shortcode() {
         let tmp = TempDir::new().unwrap();
         let dir = setup_shortcode_dir(&tmp, "greeting", "<b>Hello {{ name }}</b>");
-        let result =
-            process_shortcodes(r#"Before {{ greeting(name="World") }} after"#, &dir).unwrap();
+        let result = process_shortcodes(
+            r#"Before {{ greeting(name="World") }} after"#,
+            &dir,
+            tmp.path(),
+        )
+        .unwrap();
         assert!(result.contains("<b>Hello World</b>"));
         assert!(result.starts_with("Before "));
         assert!(result.ends_with(" after"));
@@ -158,8 +224,12 @@ mod tests {
     fn test_body_shortcode() {
         let tmp = TempDir::new().unwrap();
         let dir = setup_shortcode_dir(&tmp, "note", r#"<div class="{{ kind }}">{{ body }}</div>"#);
-        let result =
-            process_shortcodes(r#"{% note(kind="warning") %}Be careful!{% end %}"#, &dir).unwrap();
+        let result = process_shortcodes(
+            r#"{% note(kind="warning") %}Be careful!{% end %}"#,
+            &dir,
+            tmp.path(),
+        )
+        .unwrap();
         assert!(result.contains(r#"<div class="warning">Be careful!</div>"#));
     }
 
@@ -169,7 +239,7 @@ mod tests {
         let dir = tmp.path().join("shortcodes");
         std::fs::create_dir_all(&dir).unwrap();
         let input = "Plain markdown with no shortcodes";
-        let result = process_shortcodes(input, &dir).unwrap();
+        let result = process_shortcodes(input, &dir, tmp.path()).unwrap();
         assert_eq!(result, input);
     }
 
@@ -192,7 +262,36 @@ mod tests {
         let dir = tmp.path().join("shortcodes");
         std::fs::create_dir_all(&dir).unwrap();
         let input = r#"{{ missing(key="value") }}"#;
-        let result = process_shortcodes(input, &dir);
+        let result = process_shortcodes(input, &dir, tmp.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_include_shortcode() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(tmp.path().join("readme.md"), "# Hello\n\nWorld").unwrap();
+        let result =
+            process_shortcodes(r#"{{ include(path="readme.md") }}"#, &dir, tmp.path()).unwrap();
+        assert_eq!(result, "# Hello\n\nWorld");
+    }
+
+    #[test]
+    fn test_include_missing_path_errors() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = process_shortcodes(r#"{{ include(path="nope.md") }}"#, &dir, tmp.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_include_missing_arg_errors() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = process_shortcodes(r#"{{ include() }}"#, &dir, tmp.path());
         assert!(result.is_err());
     }
 }

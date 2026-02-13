@@ -100,7 +100,6 @@ impl Site {
     /// Render markdown for all pages and sections
     fn render_all_markdown(&mut self) -> anyhow::Result<()> {
         let shortcode_dir = self.root.join("templates/shortcodes");
-        let has_shortcodes = shortcode_dir.exists();
         let content_dir = self.root.join("content");
 
         // Resolve all internal links first (needs full pages + sections maps).
@@ -143,9 +142,7 @@ impl Site {
         for (key, page) in self.pages.iter_mut() {
             let mut raw = std::mem::take(&mut page.raw_content);
 
-            if has_shortcodes {
-                raw = shortcodes::process_shortcodes(&raw, &shortcode_dir)?;
-            }
+            raw = shortcodes::process_shortcodes(&raw, &shortcode_dir, root)?;
 
             let summary_raw = markdown::extract_summary(&raw);
 
@@ -187,11 +184,8 @@ impl Site {
             let raw = std::mem::take(&mut section.raw_content);
 
             if !raw.trim().is_empty() {
-                let processed = if has_shortcodes {
-                    shortcodes::process_shortcodes(&raw, &shortcode_dir)?
-                } else {
-                    raw.clone()
-                };
+                let processed =
+                    shortcodes::process_shortcodes(&raw, &shortcode_dir, root)?;
                 let mut exec_blocks = Vec::new();
                 let html = markdown::render_markdown(
                     &processed,
