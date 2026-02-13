@@ -138,8 +138,12 @@ fn builtin_include(args_str: &str, site_root: &Path) -> anyhow::Result<String> {
         .get("path")
         .ok_or_else(|| anyhow::anyhow!("include shortcode requires a `path` argument"))?;
     let file_path = site_root.join(path);
-    let content = std::fs::read_to_string(&file_path)
-        .map_err(|e| anyhow::anyhow!("include shortcode: cannot read {}: {e}", file_path.display()))?;
+    let content = std::fs::read_to_string(&file_path).map_err(|e| {
+        anyhow::anyhow!(
+            "include shortcode: cannot read {}: {e}",
+            file_path.display()
+        )
+    })?;
 
     let strip = args.get("strip_frontmatter").is_some_and(|v| v == "true");
     if strip {
@@ -152,10 +156,10 @@ fn builtin_include(args_str: &str, site_root: &Path) -> anyhow::Result<String> {
 /// Strip `+++`-delimited TOML frontmatter from content.
 fn strip_toml_frontmatter(content: &str) -> String {
     let trimmed = content.trim_start();
-    if let Some(rest) = trimmed.strip_prefix("+++") {
-        if let Some(after) = rest.find("+++") {
-            return rest[after + 3..].to_string();
-        }
+    if let Some(rest) = trimmed.strip_prefix("+++")
+        && let Some(after) = rest.find("+++")
+    {
+        return rest[after + 3..].to_string();
     }
     content.to_string()
 }

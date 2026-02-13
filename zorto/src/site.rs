@@ -184,8 +184,7 @@ impl Site {
             let raw = std::mem::take(&mut section.raw_content);
 
             if !raw.trim().is_empty() {
-                let processed =
-                    shortcodes::process_shortcodes(&raw, &shortcode_dir, root)?;
+                let processed = shortcodes::process_shortcodes(&raw, &shortcode_dir, root)?;
                 let mut exec_blocks = Vec::new();
                 let html = markdown::render_markdown(
                     &processed,
