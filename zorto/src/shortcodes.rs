@@ -22,6 +22,7 @@ static ARGS_SINGLE_RE: LazyLock<Regex> =
 ///
 /// Built-in shortcodes (no template needed):
 /// - `include(path="...")`: Read and inject file contents relative to site root
+/// - `tabs(labels="A|B")`: Tabbed content panels, body split on `<!-- tab -->`
 pub fn process_shortcodes(
     content: &str,
     shortcode_dir: &Path,
@@ -123,6 +124,7 @@ fn resolve_shortcode(
 ) -> anyhow::Result<String> {
     match name {
         "include" => builtin_include(args_str, site_root),
+        "tabs" => builtin_tabs(args_str, body),
         _ => render_shortcode(name, args_str, body, shortcode_dir),
     }
 }
@@ -162,6 +164,65 @@ fn strip_toml_frontmatter(content: &str) -> String {
         return rest[after + 3..].to_string();
     }
     content.to_string()
+}
+
+/// Built-in `tabs` shortcode: tabbed content panels.
+///
+/// Arguments:
+/// - `labels` (required): pipe-delimited tab labels, e.g. `labels="Python|Bash"`
+///
+/// Body is split on `<!-- tab -->` markers. Each part becomes a tab panel.
+fn builtin_tabs(args_str: &str, body: Option<&str>) -> anyhow::Result<String> {
+    let args = parse_args(args_str);
+    let labels_str = args
+        .get("labels")
+        .ok_or_else(|| anyhow::anyhow!("tabs shortcode requires a `labels` argument"))?;
+    let labels: Vec<&str> = labels_str.split('|').collect();
+    let body = body.ok_or_else(|| anyhow::anyhow!("tabs shortcode requires a body"))?;
+    let parts: Vec<&str> = body.split("<!-- tab -->").collect();
+
+    if labels.len() != parts.len() {
+        return Err(anyhow::anyhow!(
+            "tabs shortcode: {} labels but {} tab panels",
+            labels.len(),
+            parts.len()
+        ));
+    }
+
+    let mut html = String::from("<div class=\"tabs\" data-tabs>\n<div class=\"tabs__nav\">\n");
+    for (i, label) in labels.iter().enumerate() {
+        let active = if i == 0 { " tabs__btn--active" } else { "" };
+        html.push_str(&format!(
+            "<button class=\"tabs__btn{active}\" data-tab-idx=\"{i}\">{}</button>",
+            label.trim()
+        ));
+    }
+    html.push_str("\n</div>\n");
+
+    for (i, part) in parts.iter().enumerate() {
+        let active = if i == 0 { " tabs__panel--active" } else { "" };
+        html.push_str(&format!(
+            "<div class=\"tabs__panel{active}\" data-tab-idx=\"{i}\">\n\n{}\n\n</div>\n",
+            part.trim()
+        ));
+    }
+
+    html.push_str(concat!(
+        "</div>\n",
+        "<script>\n",
+        "document.currentScript.previousElementSibling.querySelectorAll('.tabs__btn').forEach(btn => {\n",
+        "  btn.addEventListener('click', () => {\n",
+        "    const t = btn.closest('[data-tabs]'), i = btn.dataset.tabIdx;\n",
+        "    t.querySelectorAll('.tabs__btn').forEach(b => b.classList.remove('tabs__btn--active'));\n",
+        "    t.querySelectorAll('.tabs__panel').forEach(p => p.classList.remove('tabs__panel--active'));\n",
+        "    btn.classList.add('tabs__btn--active');\n",
+        "    t.querySelector('.tabs__panel[data-tab-idx=\"' + i + '\"]').classList.add('tabs__panel--active');\n",
+        "  });\n",
+        "});\n",
+        "</script>\n",
+    ));
+
+    Ok(html)
 }
 
 /// Render a single shortcode
@@ -296,6 +357,45 @@ mod tests {
         let dir = tmp.path().join("shortcodes");
         std::fs::create_dir_all(&dir).unwrap();
         let result = process_shortcodes(r#"{{ include() }}"#, &dir, tmp.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_tabs_shortcode() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input =
+            r#"{% tabs(labels="Python|Bash") %}print("hello")<!-- tab -->echo hello{% end %}"#;
+        let result = process_shortcodes(input, &dir, tmp.path()).unwrap();
+        assert!(result.contains("data-tabs"));
+        assert!(result.contains(r#"data-tab-idx="0""#));
+        assert!(result.contains(r#"data-tab-idx="1""#));
+        assert!(result.contains(">Python</button>"));
+        assert!(result.contains(">Bash</button>"));
+        assert!(result.contains("tabs__btn--active"));
+        assert!(result.contains("tabs__panel--active"));
+        assert!(result.contains("print(\"hello\")"));
+        assert!(result.contains("echo hello"));
+    }
+
+    #[test]
+    fn test_tabs_missing_labels_errors() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = r#"{% tabs() %}content{% end %}"#;
+        let result = process_shortcodes(input, &dir, tmp.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_tabs_mismatched_count_errors() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = r#"{% tabs(labels="A|B|C") %}only one{% end %}"#;
+        let result = process_shortcodes(input, &dir, tmp.path());
         assert!(result.is_err());
     }
 }

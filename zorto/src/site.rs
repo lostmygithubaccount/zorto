@@ -180,7 +180,7 @@ impl Site {
         }
 
         // Render section content
-        for section in self.sections.values_mut() {
+        for (key, section) in self.sections.iter_mut() {
             let raw = std::mem::take(&mut section.raw_content);
 
             if !raw.trim().is_empty() {
@@ -192,6 +192,15 @@ impl Site {
                     &mut exec_blocks,
                     &config.base_url,
                 );
+
+                if !exec_blocks.is_empty() {
+                    let section_dir = Path::new(key.as_str())
+                        .parent()
+                        .map(|p| content_dir.join(p))
+                        .unwrap_or_else(|| content_dir.clone());
+                    execute::execute_blocks(&mut exec_blocks, &section_dir, root);
+                }
+
                 section.content =
                     markdown::replace_exec_placeholders(&html, &exec_blocks, &config.markdown);
             }

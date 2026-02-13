@@ -6,6 +6,7 @@ use crate::{serve, site};
 #[derive(Parser)]
 #[command(
     name = "zorto",
+    version,
     about = "A fast static site generator with executable code blocks"
 )]
 struct Cli {

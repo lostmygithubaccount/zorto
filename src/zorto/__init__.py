@@ -10,7 +10,7 @@ def run(argv: list[str] | None = None) -> None:
     try:
         _run(argv)
     except KeyboardInterrupt:
-        sys.exit(0)
+        sys.exit(130)
 
 
 def main() -> None:

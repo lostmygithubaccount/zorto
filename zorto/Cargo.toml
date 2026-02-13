@@ -2,7 +2,7 @@
 
 [package]
 name = "zorto"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 authors = ["Cody <cody@dkdc.dev>"]
 description = "A fast static site generator with executable code blocks"
