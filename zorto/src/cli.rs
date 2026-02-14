@@ -105,9 +105,10 @@ where
             };
             let mut site = site::Site::load(&root, &output, drafts)?;
             site.no_exec = cli.no_exec;
-            site.sandbox = cli.sandbox.as_ref().map(|p| {
-                std::fs::canonicalize(p).unwrap_or_else(|_| p.clone())
-            });
+            site.sandbox = cli
+                .sandbox
+                .as_ref()
+                .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()));
             if let Some(url) = base_url {
                 site.set_base_url(url);
             }
@@ -122,12 +123,20 @@ where
         } => {
             let output = root.join("public");
             let no_exec = cli.no_exec;
-            let sandbox = cli.sandbox.as_ref().map(|p| {
-                std::fs::canonicalize(p).unwrap_or_else(|_| p.clone())
-            });
+            let sandbox = cli
+                .sandbox
+                .as_ref()
+                .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()));
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(serve::serve(
-                &root, &output, drafts, no_exec, sandbox.as_deref(), &interface, port, open,
+                &root,
+                &output,
+                drafts,
+                no_exec,
+                sandbox.as_deref(),
+                &interface,
+                port,
+                open,
             ))?;
         }
         Commands::Clean { output } => {
@@ -152,9 +161,10 @@ where
             let output = root.join("public");
             let mut site = site::Site::load(&root, &output, drafts)?;
             site.no_exec = cli.no_exec;
-            site.sandbox = cli.sandbox.as_ref().map(|p| {
-                std::fs::canonicalize(p).unwrap_or_else(|_| p.clone())
-            });
+            site.sandbox = cli
+                .sandbox
+                .as_ref()
+                .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()));
             site.check()?;
             println!("Site check passed.");
         }

@@ -18,13 +18,14 @@ err()   { printf '\033[1;31m[sync]\033[0m %s\n' "$*" >&2; }
 
 rm -rf "$CLONE_DIR"
 info "cloning public repo..."
-gh repo clone "$PUBLIC_REPO" "$CLONE_DIR" 2>/dev/null || {
-    # empty repo — initialize locally
+if ! git clone "https://github.com/${PUBLIC_REPO}.git" "$CLONE_DIR" 2>/dev/null; then
+    # empty/new repo — initialize locally
+    info "clone failed (new repo?), initializing..."
     mkdir -p "$CLONE_DIR"
     git -C "$CLONE_DIR" init
     git -C "$CLONE_DIR" remote add origin "https://github.com/${PUBLIC_REPO}.git"
     git -C "$CLONE_DIR" checkout -b main
-}
+fi
 
 # ──────────────────────────────────────
 # sync files

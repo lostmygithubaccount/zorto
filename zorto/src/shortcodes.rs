@@ -23,6 +23,7 @@ static ARGS_SINGLE_RE: LazyLock<Regex> =
 /// Built-in shortcodes (no template needed):
 /// - `include(path="...")`: Read and inject file contents relative to site root
 /// - `tabs(labels="A|B")`: Tabbed content panels, body split on `<!-- tab -->`
+///
 /// Process shortcodes in content.
 ///
 /// `sandbox_root` is the outermost directory that file operations (like the
@@ -150,7 +151,11 @@ fn resolve_shortcode(
 /// Arguments:
 /// - `path` (required): file path relative to site root
 /// - `strip_frontmatter` (optional): "true" to strip `+++`-delimited TOML frontmatter
-fn builtin_include(args_str: &str, site_root: &Path, sandbox_root: &Path) -> anyhow::Result<String> {
+fn builtin_include(
+    args_str: &str,
+    site_root: &Path,
+    sandbox_root: &Path,
+) -> anyhow::Result<String> {
     let args = parse_args(args_str);
     let path = args
         .get("path")
@@ -166,14 +171,11 @@ fn builtin_include(args_str: &str, site_root: &Path, sandbox_root: &Path) -> any
             file_path.display()
         )
     })?;
-    let canonical_sandbox = sandbox_root.canonicalize().map_err(|e| {
-        anyhow::anyhow!("include shortcode: cannot resolve sandbox root: {e}")
-    })?;
+    let canonical_sandbox = sandbox_root
+        .canonicalize()
+        .map_err(|e| anyhow::anyhow!("include shortcode: cannot resolve sandbox root: {e}"))?;
     if !canonical.starts_with(&canonical_sandbox) {
-        anyhow::bail!(
-            "include shortcode: path escapes sandbox boundary: {}",
-            path
-        );
+        anyhow::bail!("include shortcode: path escapes sandbox boundary: {}", path);
     }
 
     let content = std::fs::read_to_string(&canonical).map_err(|e| {
@@ -375,8 +377,13 @@ mod tests {
         let dir = tmp.path().join("shortcodes");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(tmp.path().join("readme.md"), "# Hello\n\nWorld").unwrap();
-        let result =
-            process_shortcodes(r#"{{ include(path="readme.md") }}"#, &dir, tmp.path(), tmp.path()).unwrap();
+        let result = process_shortcodes(
+            r#"{{ include(path="readme.md") }}"#,
+            &dir,
+            tmp.path(),
+            tmp.path(),
+        )
+        .unwrap();
         assert_eq!(result, "# Hello\n\nWorld");
     }
 
@@ -385,7 +392,12 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let dir = tmp.path().join("shortcodes");
         std::fs::create_dir_all(&dir).unwrap();
-        let result = process_shortcodes(r#"{{ include(path="nope.md") }}"#, &dir, tmp.path(), tmp.path());
+        let result = process_shortcodes(
+            r#"{{ include(path="nope.md") }}"#,
+            &dir,
+            tmp.path(),
+            tmp.path(),
+        );
         assert!(result.is_err());
     }
 
@@ -445,12 +457,8 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         // Create a file outside the sandbox
         std::fs::write(tmp.path().join("secret.txt"), "top secret").unwrap();
-        let result = process_shortcodes(
-            r#"{{ include(path="../secret.txt") }}"#,
-            &dir,
-            &site,
-            &site,
-        );
+        let result =
+            process_shortcodes(r#"{{ include(path="../secret.txt") }}"#, &dir, &site, &site);
         assert!(result.is_err());
     }
 

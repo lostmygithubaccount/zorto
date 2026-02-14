@@ -33,6 +33,7 @@ struct AppState {
     output_dir: PathBuf,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn serve(
     root: &Path,
     output_dir: &Path,
@@ -256,6 +257,7 @@ fn inject_livereload(html: &str) -> String {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn watch_and_rebuild(
     root: PathBuf,
     output: PathBuf,
