@@ -37,6 +37,8 @@ pub async fn serve(
     root: &Path,
     output_dir: &Path,
     drafts: bool,
+    no_exec: bool,
+    sandbox: Option<&Path>,
     interface: &str,
     port: u16,
     open_browser: bool,
@@ -58,6 +60,8 @@ pub async fn serve(
     // Initial build
     println!("Building site...");
     let mut site = crate::site::Site::load(root, output_dir, drafts)?;
+    site.no_exec = no_exec;
+    site.sandbox = sandbox.map(|p| p.to_path_buf());
     site.set_base_url(base_url.clone());
     site.build()?;
     println!("Site built successfully.");
@@ -114,11 +118,14 @@ pub async fn serve(
     // Spawn the async watcher
     let root_clone = root.to_path_buf();
     let output_clone = output_dir.to_path_buf();
+    let sandbox_clone = sandbox.map(|p| p.to_path_buf());
     let watcher_handle = tokio::spawn(async move {
         watch_and_rebuild(
             root_clone,
             output_clone,
             drafts,
+            no_exec,
+            sandbox_clone,
             reload_tx,
             base_url,
             watch_rx,
@@ -253,6 +260,8 @@ async fn watch_and_rebuild(
     root: PathBuf,
     output: PathBuf,
     drafts: bool,
+    no_exec: bool,
+    sandbox: Option<PathBuf>,
     reload_tx: broadcast::Sender<()>,
     base_url: String,
     mut watch_rx: tokio::sync::mpsc::Receiver<
@@ -269,6 +278,8 @@ async fn watch_and_rebuild(
                 println!("Change detected, rebuilding...");
                 match crate::site::Site::load(&root, &output, drafts) {
                     Ok(mut site) => {
+                        site.no_exec = no_exec;
+                        site.sandbox = sandbox.clone();
                         site.set_base_url(base_url.clone());
                         if let Err(e) = site.build() {
                             eprintln!("Build error: {e}");

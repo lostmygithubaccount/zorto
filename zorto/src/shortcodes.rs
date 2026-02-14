@@ -23,16 +23,22 @@ static ARGS_SINGLE_RE: LazyLock<Regex> =
 /// Built-in shortcodes (no template needed):
 /// - `include(path="...")`: Read and inject file contents relative to site root
 /// - `tabs(labels="A|B")`: Tabbed content panels, body split on `<!-- tab -->`
+/// Process shortcodes in content.
+///
+/// `sandbox_root` is the outermost directory that file operations (like the
+/// `include` shortcode) are allowed to access. Paths that resolve outside this
+/// boundary are rejected. Pass `site_root` if no wider sandbox is needed.
 pub fn process_shortcodes(
     content: &str,
     shortcode_dir: &Path,
     site_root: &Path,
+    sandbox_root: &Path,
 ) -> anyhow::Result<String> {
     // Process body shortcodes first (they can contain inline shortcodes)
-    let result = process_body_shortcodes(content, shortcode_dir, site_root)?;
+    let result = process_body_shortcodes(content, shortcode_dir, site_root, sandbox_root)?;
 
     // Then process inline shortcodes
-    process_inline_shortcodes(&result, shortcode_dir, site_root)
+    process_inline_shortcodes(&result, shortcode_dir, site_root, sandbox_root)
 }
 
 /// Process body shortcodes: {% name(args) %}...{% end %}
@@ -40,6 +46,7 @@ fn process_body_shortcodes(
     content: &str,
     shortcode_dir: &Path,
     site_root: &Path,
+    sandbox_root: &Path,
 ) -> anyhow::Result<String> {
     let mut result = content.to_string();
     let mut iterations = 0;
@@ -52,7 +59,14 @@ fn process_body_shortcodes(
             let args_str = &caps[2];
             let body = &caps[3];
 
-            match resolve_shortcode(name, args_str, Some(body.trim()), shortcode_dir, site_root) {
+            match resolve_shortcode(
+                name,
+                args_str,
+                Some(body.trim()),
+                shortcode_dir,
+                site_root,
+                sandbox_root,
+            ) {
                 Ok(rendered) => rendered,
                 Err(e) => {
                     error = Some(anyhow::anyhow!("shortcode error in {name}: {e}"));
@@ -75,13 +89,14 @@ fn process_inline_shortcodes(
     content: &str,
     shortcode_dir: &Path,
     site_root: &Path,
+    sandbox_root: &Path,
 ) -> anyhow::Result<String> {
     let mut error: Option<anyhow::Error> = None;
     let result = INLINE_SHORTCODE_RE.replace_all(content, |caps: &regex::Captures| {
         let name = &caps[1];
         let args_str = &caps[2];
 
-        match resolve_shortcode(name, args_str, None, shortcode_dir, site_root) {
+        match resolve_shortcode(name, args_str, None, shortcode_dir, site_root, sandbox_root) {
             Ok(rendered) => rendered,
             Err(e) => {
                 error = Some(anyhow::anyhow!("shortcode error in {name}: {e}"));
@@ -121,9 +136,10 @@ fn resolve_shortcode(
     body: Option<&str>,
     shortcode_dir: &Path,
     site_root: &Path,
+    sandbox_root: &Path,
 ) -> anyhow::Result<String> {
     match name {
-        "include" => builtin_include(args_str, site_root),
+        "include" => builtin_include(args_str, site_root, sandbox_root),
         "tabs" => builtin_tabs(args_str, body),
         _ => render_shortcode(name, args_str, body, shortcode_dir),
     }
@@ -134,13 +150,33 @@ fn resolve_shortcode(
 /// Arguments:
 /// - `path` (required): file path relative to site root
 /// - `strip_frontmatter` (optional): "true" to strip `+++`-delimited TOML frontmatter
-fn builtin_include(args_str: &str, site_root: &Path) -> anyhow::Result<String> {
+fn builtin_include(args_str: &str, site_root: &Path, sandbox_root: &Path) -> anyhow::Result<String> {
     let args = parse_args(args_str);
     let path = args
         .get("path")
         .ok_or_else(|| anyhow::anyhow!("include shortcode requires a `path` argument"))?;
     let file_path = site_root.join(path);
-    let content = std::fs::read_to_string(&file_path).map_err(|e| {
+
+    // Ensure the resolved path stays within the sandbox boundary (allow
+    // relative traversal like "../../shared/foo.md" as long as it doesn't
+    // escape the sandbox root).
+    let canonical = file_path.canonicalize().map_err(|e| {
+        anyhow::anyhow!(
+            "include shortcode: cannot resolve {}: {e}",
+            file_path.display()
+        )
+    })?;
+    let canonical_sandbox = sandbox_root.canonicalize().map_err(|e| {
+        anyhow::anyhow!("include shortcode: cannot resolve sandbox root: {e}")
+    })?;
+    if !canonical.starts_with(&canonical_sandbox) {
+        anyhow::bail!(
+            "include shortcode: path escapes sandbox boundary: {}",
+            path
+        );
+    }
+
+    let content = std::fs::read_to_string(&canonical).map_err(|e| {
         anyhow::anyhow!(
             "include shortcode: cannot read {}: {e}",
             file_path.display()
@@ -278,6 +314,7 @@ mod tests {
             r#"Before {{ greeting(name="World") }} after"#,
             &dir,
             tmp.path(),
+            tmp.path(),
         )
         .unwrap();
         assert!(result.contains("<b>Hello World</b>"));
@@ -293,6 +330,7 @@ mod tests {
             r#"{% note(kind="warning") %}Be careful!{% end %}"#,
             &dir,
             tmp.path(),
+            tmp.path(),
         )
         .unwrap();
         assert!(result.contains(r#"<div class="warning">Be careful!</div>"#));
@@ -304,7 +342,7 @@ mod tests {
         let dir = tmp.path().join("shortcodes");
         std::fs::create_dir_all(&dir).unwrap();
         let input = "Plain markdown with no shortcodes";
-        let result = process_shortcodes(input, &dir, tmp.path()).unwrap();
+        let result = process_shortcodes(input, &dir, tmp.path(), tmp.path()).unwrap();
         assert_eq!(result, input);
     }
 
@@ -327,7 +365,7 @@ mod tests {
         let dir = tmp.path().join("shortcodes");
         std::fs::create_dir_all(&dir).unwrap();
         let input = r#"{{ missing(key="value") }}"#;
-        let result = process_shortcodes(input, &dir, tmp.path());
+        let result = process_shortcodes(input, &dir, tmp.path(), tmp.path());
         assert!(result.is_err());
     }
 
@@ -338,7 +376,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(tmp.path().join("readme.md"), "# Hello\n\nWorld").unwrap();
         let result =
-            process_shortcodes(r#"{{ include(path="readme.md") }}"#, &dir, tmp.path()).unwrap();
+            process_shortcodes(r#"{{ include(path="readme.md") }}"#, &dir, tmp.path(), tmp.path()).unwrap();
         assert_eq!(result, "# Hello\n\nWorld");
     }
 
@@ -347,7 +385,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let dir = tmp.path().join("shortcodes");
         std::fs::create_dir_all(&dir).unwrap();
-        let result = process_shortcodes(r#"{{ include(path="nope.md") }}"#, &dir, tmp.path());
+        let result = process_shortcodes(r#"{{ include(path="nope.md") }}"#, &dir, tmp.path(), tmp.path());
         assert!(result.is_err());
     }
 
@@ -356,7 +394,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let dir = tmp.path().join("shortcodes");
         std::fs::create_dir_all(&dir).unwrap();
-        let result = process_shortcodes(r#"{{ include() }}"#, &dir, tmp.path());
+        let result = process_shortcodes(r#"{{ include() }}"#, &dir, tmp.path(), tmp.path());
         assert!(result.is_err());
     }
 
@@ -367,7 +405,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let input =
             r#"{% tabs(labels="Python|Bash") %}print("hello")<!-- tab -->echo hello{% end %}"#;
-        let result = process_shortcodes(input, &dir, tmp.path()).unwrap();
+        let result = process_shortcodes(input, &dir, tmp.path(), tmp.path()).unwrap();
         assert!(result.contains("data-tabs"));
         assert!(result.contains(r#"data-tab-idx="0""#));
         assert!(result.contains(r#"data-tab-idx="1""#));
@@ -385,7 +423,7 @@ mod tests {
         let dir = tmp.path().join("shortcodes");
         std::fs::create_dir_all(&dir).unwrap();
         let input = r#"{% tabs() %}content{% end %}"#;
-        let result = process_shortcodes(input, &dir, tmp.path());
+        let result = process_shortcodes(input, &dir, tmp.path(), tmp.path());
         assert!(result.is_err());
     }
 
@@ -395,7 +433,44 @@ mod tests {
         let dir = tmp.path().join("shortcodes");
         std::fs::create_dir_all(&dir).unwrap();
         let input = r#"{% tabs(labels="A|B|C") %}only one{% end %}"#;
-        let result = process_shortcodes(input, &dir, tmp.path());
+        let result = process_shortcodes(input, &dir, tmp.path(), tmp.path());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_include_path_traversal_rejected() {
+        let tmp = TempDir::new().unwrap();
+        let site = tmp.path().join("site");
+        let dir = site.join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        // Create a file outside the sandbox
+        std::fs::write(tmp.path().join("secret.txt"), "top secret").unwrap();
+        let result = process_shortcodes(
+            r#"{{ include(path="../secret.txt") }}"#,
+            &dir,
+            &site,
+            &site,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_include_within_sandbox_allowed() {
+        let tmp = TempDir::new().unwrap();
+        // sandbox = tmp, site = tmp/site, shared file = tmp/shared/data.md
+        let site = tmp.path().join("site");
+        let shared = tmp.path().join("shared");
+        let dir = site.join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(&shared).unwrap();
+        std::fs::write(shared.join("data.md"), "shared content").unwrap();
+        let result = process_shortcodes(
+            r#"{{ include(path="../shared/data.md") }}"#,
+            &dir,
+            &site,
+            tmp.path(),
+        )
+        .unwrap();
+        assert_eq!(result, "shared content");
     }
 }

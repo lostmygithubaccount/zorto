@@ -16,6 +16,15 @@ struct Cli {
     /// Site root directory
     #[arg(short, long, default_value = ".")]
     root: PathBuf,
+
+    /// Disable execution of code blocks ({python}, {bash}, {sh})
+    #[arg(short = 'N', long)]
+    no_exec: bool,
+
+    /// Sandbox boundary for file operations (include shortcode, etc.).
+    /// Paths cannot escape this directory. Defaults to --root.
+    #[arg(long)]
+    sandbox: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -95,6 +104,10 @@ where
                 output
             };
             let mut site = site::Site::load(&root, &output, drafts)?;
+            site.no_exec = cli.no_exec;
+            site.sandbox = cli.sandbox.as_ref().map(|p| {
+                std::fs::canonicalize(p).unwrap_or_else(|_| p.clone())
+            });
             if let Some(url) = base_url {
                 site.set_base_url(url);
             }
@@ -108,8 +121,14 @@ where
             interface,
         } => {
             let output = root.join("public");
+            let no_exec = cli.no_exec;
+            let sandbox = cli.sandbox.as_ref().map(|p| {
+                std::fs::canonicalize(p).unwrap_or_else(|_| p.clone())
+            });
             let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(serve::serve(&root, &output, drafts, &interface, port, open))?;
+            rt.block_on(serve::serve(
+                &root, &output, drafts, no_exec, sandbox.as_deref(), &interface, port, open,
+            ))?;
         }
         Commands::Clean { output } => {
             let output = if output.is_relative() {
@@ -132,6 +151,10 @@ where
         Commands::Check { drafts } => {
             let output = root.join("public");
             let mut site = site::Site::load(&root, &output, drafts)?;
+            site.no_exec = cli.no_exec;
+            site.sandbox = cli.sandbox.as_ref().map(|p| {
+                std::fs::canonicalize(p).unwrap_or_else(|_| p.clone())
+            });
             site.check()?;
             println!("Site check passed.");
         }

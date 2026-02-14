@@ -18,6 +18,12 @@ pub struct Site {
     pub root: PathBuf,
     pub output_dir: PathBuf,
     pub drafts: bool,
+    /// When true, {python}/{bash}/{sh} code blocks are rendered as static
+    /// syntax-highlighted code instead of being executed.
+    pub no_exec: bool,
+    /// Sandbox boundary for file operations (include shortcode, etc.).
+    /// Defaults to `root` if not set.
+    pub sandbox: Option<PathBuf>,
 }
 
 impl Site {
@@ -36,6 +42,8 @@ impl Site {
             root: root.to_path_buf(),
             output_dir: output_dir.to_path_buf(),
             drafts,
+            no_exec: false,
+            sandbox: None,
         })
     }
 
@@ -139,10 +147,11 @@ impl Site {
         // iterating pages mutably.
         let config = &self.config;
         let root = &self.root;
+        let sandbox = self.sandbox.as_deref().unwrap_or(root);
         for (key, page) in self.pages.iter_mut() {
             let mut raw = std::mem::take(&mut page.raw_content);
 
-            raw = shortcodes::process_shortcodes(&raw, &shortcode_dir, root)?;
+            raw = shortcodes::process_shortcodes(&raw, &shortcode_dir, root, sandbox)?;
 
             let summary_raw = markdown::extract_summary(&raw);
 
@@ -154,7 +163,7 @@ impl Site {
                 &config.base_url,
             );
 
-            if !exec_blocks.is_empty() {
+            if !exec_blocks.is_empty() && !self.no_exec {
                 let page_dir = Path::new(key.as_str())
                     .parent()
                     .map(|p| content_dir.join(p))
@@ -184,7 +193,7 @@ impl Site {
             let raw = std::mem::take(&mut section.raw_content);
 
             if !raw.trim().is_empty() {
-                let processed = shortcodes::process_shortcodes(&raw, &shortcode_dir, root)?;
+                let processed = shortcodes::process_shortcodes(&raw, &shortcode_dir, root, sandbox)?;
                 let mut exec_blocks = Vec::new();
                 let html = markdown::render_markdown(
                     &processed,
@@ -193,7 +202,7 @@ impl Site {
                     &config.base_url,
                 );
 
-                if !exec_blocks.is_empty() {
+                if !exec_blocks.is_empty() && !self.no_exec {
                     let section_dir = Path::new(key.as_str())
                         .parent()
                         .map(|p| content_dir.join(p))
