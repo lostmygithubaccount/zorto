@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::sync::broadcast;
 
-const LIVERELOAD_JS: &str = r#"
+const LIVERELOAD_JS: &str = "
 <script>
 (function() {
     var ws = new WebSocket('ws://' + location.host + '/__livereload');
@@ -25,7 +25,7 @@ const LIVERELOAD_JS: &str = r#"
     };
 })();
 </script>
-"#;
+";
 
 #[derive(Clone)]
 struct AppState {
@@ -33,24 +33,29 @@ struct AppState {
     output_dir: PathBuf,
 }
 
-#[allow(clippy::too_many_arguments)]
-pub async fn serve(
-    root: &Path,
-    output_dir: &Path,
-    drafts: bool,
-    no_exec: bool,
-    sandbox: Option<&Path>,
-    interface: &str,
-    port: u16,
-    open_browser: bool,
-) -> anyhow::Result<()> {
+/// Configuration for the preview server.
+pub struct ServeConfig<'a> {
+    pub root: &'a Path,
+    pub output_dir: &'a Path,
+    pub drafts: bool,
+    pub no_exec: bool,
+    pub sandbox: Option<&'a Path>,
+    pub interface: &'a str,
+    pub port: u16,
+    pub open_browser: bool,
+}
+
+pub async fn serve(cfg: &ServeConfig<'_>) -> anyhow::Result<()> {
     // Bind listener first so we know the actual port before building
-    let requested: SocketAddr = format!("{interface}:{port}").parse()?;
+    let requested: SocketAddr = format!("{}:{}", cfg.interface, cfg.port).parse()?;
     let listener = match tokio::net::TcpListener::bind(requested).await {
         Ok(l) => l,
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
-            eprintln!("Port {port} is in use, using a random available port...");
-            let fallback: SocketAddr = format!("{interface}:0").parse()?;
+            eprintln!(
+                "Port {} is in use, using a random available port...",
+                cfg.port
+            );
+            let fallback: SocketAddr = format!("{}:0", cfg.interface).parse()?;
             tokio::net::TcpListener::bind(fallback).await?
         }
         Err(e) => return Err(e.into()),
@@ -60,9 +65,9 @@ pub async fn serve(
 
     // Initial build
     println!("Building site...");
-    let mut site = crate::site::Site::load(root, output_dir, drafts)?;
-    site.no_exec = no_exec;
-    site.sandbox = sandbox.map(|p| p.to_path_buf());
+    let mut site = crate::site::Site::load(cfg.root, cfg.output_dir, cfg.drafts)?;
+    site.no_exec = cfg.no_exec;
+    site.sandbox = cfg.sandbox.map(|p| p.to_path_buf());
     site.set_base_url(base_url.clone());
     site.build()?;
     println!("Site built successfully.");
@@ -71,7 +76,7 @@ pub async fn serve(
     let (reload_tx, _) = broadcast::channel::<()>(16);
     let state = AppState {
         reload_tx: reload_tx.clone(),
-        output_dir: output_dir.to_path_buf(),
+        output_dir: cfg.output_dir.to_path_buf(),
     };
 
     let app = Router::new()
@@ -81,7 +86,7 @@ pub async fn serve(
 
     println!("Serving at http://{addr}");
 
-    if open_browser {
+    if cfg.open_browser {
         let url = format!("http://{addr}");
         let _ = open::that(&url);
     }
@@ -93,14 +98,14 @@ pub async fn serve(
     let mut debouncer = new_debouncer(Duration::from_millis(300), notify_tx)?;
     let watch_dirs = ["content", "templates", "sass", "static"];
     for dir in &watch_dirs {
-        let path = root.join(dir);
+        let path = cfg.root.join(dir);
         if path.exists() {
             debouncer
                 .watcher()
                 .watch(&path, notify::RecursiveMode::Recursive)?;
         }
     }
-    let config_path = root.join("config.toml");
+    let config_path = cfg.root.join("config.toml");
     if config_path.exists() {
         debouncer
             .watcher()
@@ -117,21 +122,16 @@ pub async fn serve(
     });
 
     // Spawn the async watcher
-    let root_clone = root.to_path_buf();
-    let output_clone = output_dir.to_path_buf();
-    let sandbox_clone = sandbox.map(|p| p.to_path_buf());
+    let rebuild_cfg = RebuildConfig {
+        root: cfg.root.to_path_buf(),
+        output: cfg.output_dir.to_path_buf(),
+        drafts: cfg.drafts,
+        no_exec: cfg.no_exec,
+        sandbox: cfg.sandbox.map(|p| p.to_path_buf()),
+        base_url,
+    };
     let watcher_handle = tokio::spawn(async move {
-        watch_and_rebuild(
-            root_clone,
-            output_clone,
-            drafts,
-            no_exec,
-            sandbox_clone,
-            reload_tx,
-            base_url,
-            watch_rx,
-        )
-        .await;
+        watch_and_rebuild(rebuild_cfg, reload_tx, watch_rx).await;
     });
 
     // Start server — ctrl+c cancels everything
@@ -174,42 +174,14 @@ async fn serve_file(State(state): State<AppState>, req: Request<Body>) -> Respon
     let path = req.uri().path();
     let output_dir = &state.output_dir;
 
-    // Determine file path
-    let file_path = if path == "/" {
-        output_dir.join("index.html")
-    } else {
-        let stripped = path.trim_start_matches('/');
-        let candidate = output_dir.join(stripped);
-        if candidate.is_dir() {
-            candidate.join("index.html")
-        } else if candidate.exists() {
-            candidate
-        } else {
-            let with_index = output_dir.join(stripped).join("index.html");
-            if with_index.exists() {
-                with_index
-            } else {
-                // 404
-                let not_found = output_dir.join("404.html");
-                if not_found.exists() {
-                    let content = tokio::fs::read_to_string(&not_found)
-                        .await
-                        .unwrap_or_default();
-                    let content = inject_livereload(&content);
-                    return (
-                        StatusCode::NOT_FOUND,
-                        [(header::CONTENT_TYPE, "text/html")],
-                        content,
-                    )
-                        .into_response();
-                }
-                return (StatusCode::NOT_FOUND, "Not Found").into_response();
-            }
-        }
+    // Resolve the requested file path, guarding against directory traversal.
+    let file_path = match resolve_serve_path(output_dir, path) {
+        Some(p) => p,
+        None => return serve_404(output_dir).await,
     };
 
     if !file_path.exists() {
-        return (StatusCode::NOT_FOUND, "Not Found").into_response();
+        return serve_404(output_dir).await;
     }
 
     let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
@@ -227,6 +199,7 @@ async fn serve_file(State(state): State<AppState>, req: Request<Body>) -> Respon
         "woff2" => "font/woff2",
         "pdf" => "application/pdf",
         "xml" => "application/xml",
+        "txt" => "text/plain",
         _ => "application/octet-stream",
     };
 
@@ -245,6 +218,64 @@ async fn serve_file(State(state): State<AppState>, req: Request<Body>) -> Respon
     }
 }
 
+/// Resolve a request path to a file inside `output_dir`, returning `None` if the
+/// resolved path escapes the output directory (directory traversal guard).
+fn resolve_serve_path(output_dir: &Path, request_path: &str) -> Option<PathBuf> {
+    if request_path == "/" {
+        return Some(output_dir.join("index.html"));
+    }
+
+    let stripped = request_path.trim_start_matches('/');
+    // Percent-decode is already handled by axum/hyper, but reject obviously
+    // suspicious components to be safe.
+    if stripped.split('/').any(|seg| seg == ".." || seg == ".") {
+        return None;
+    }
+
+    let candidate = output_dir.join(stripped);
+
+    // Verify the resolved path stays within output_dir. This catches symlink
+    // escapes and any edge cases the component check above might miss.
+    if candidate.exists() {
+        let canonical = candidate.canonicalize().ok()?;
+        let canonical_root = output_dir.canonicalize().ok()?;
+        if !canonical.starts_with(&canonical_root) {
+            return None;
+        }
+    }
+
+    if candidate.is_dir() {
+        Some(candidate.join("index.html"))
+    } else if candidate.exists() {
+        Some(candidate)
+    } else {
+        let with_index = candidate.join("index.html");
+        if with_index.exists() {
+            Some(with_index)
+        } else {
+            None
+        }
+    }
+}
+
+/// Serve a 404 response, using the custom 404.html template if available.
+async fn serve_404(output_dir: &Path) -> Response {
+    let not_found = output_dir.join("404.html");
+    if not_found.exists() {
+        let content = tokio::fs::read_to_string(&not_found)
+            .await
+            .unwrap_or_default();
+        let content = inject_livereload(&content);
+        return (
+            StatusCode::NOT_FOUND,
+            [(header::CONTENT_TYPE, "text/html")],
+            content,
+        )
+            .into_response();
+    }
+    (StatusCode::NOT_FOUND, "Not Found").into_response()
+}
+
 fn inject_livereload(html: &str) -> String {
     if let Some(pos) = html.rfind("</body>") {
         let mut result = String::with_capacity(html.len() + LIVERELOAD_JS.len());
@@ -257,15 +288,19 @@ fn inject_livereload(html: &str) -> String {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn watch_and_rebuild(
+/// Owned configuration for the file watcher rebuild loop.
+struct RebuildConfig {
     root: PathBuf,
     output: PathBuf,
     drafts: bool,
     no_exec: bool,
     sandbox: Option<PathBuf>,
-    reload_tx: broadcast::Sender<()>,
     base_url: String,
+}
+
+async fn watch_and_rebuild(
+    cfg: RebuildConfig,
+    reload_tx: broadcast::Sender<()>,
     mut watch_rx: tokio::sync::mpsc::Receiver<
         Result<Vec<notify_debouncer_mini::DebouncedEvent>, notify::Error>,
     >,
@@ -278,11 +313,11 @@ async fn watch_and_rebuild(
 
             if has_changes {
                 println!("Change detected, rebuilding...");
-                match crate::site::Site::load(&root, &output, drafts) {
+                match crate::site::Site::load(&cfg.root, &cfg.output, cfg.drafts) {
                     Ok(mut site) => {
-                        site.no_exec = no_exec;
-                        site.sandbox = sandbox.clone();
-                        site.set_base_url(base_url.clone());
+                        site.no_exec = cfg.no_exec;
+                        site.sandbox = cfg.sandbox.clone();
+                        site.set_base_url(cfg.base_url.clone());
                         if let Err(e) = site.build() {
                             eprintln!("Build error: {e}");
                         } else {
@@ -296,5 +331,61 @@ async fn watch_and_rebuild(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_resolve_serve_path_root() {
+        let tmp = TempDir::new().unwrap();
+        let out = tmp.path().join("public");
+        std::fs::create_dir_all(&out).unwrap();
+        std::fs::write(out.join("index.html"), "home").unwrap();
+        let result = resolve_serve_path(&out, "/");
+        assert_eq!(result.unwrap(), out.join("index.html"));
+    }
+
+    #[test]
+    fn test_resolve_serve_path_normal_file() {
+        let tmp = TempDir::new().unwrap();
+        let out = tmp.path().join("public");
+        std::fs::create_dir_all(&out).unwrap();
+        std::fs::write(out.join("style.css"), "body{}").unwrap();
+        let result = resolve_serve_path(&out, "/style.css");
+        assert_eq!(result.unwrap(), out.join("style.css"));
+    }
+
+    #[test]
+    fn test_resolve_serve_path_directory_traversal_rejected() {
+        let tmp = TempDir::new().unwrap();
+        let out = tmp.path().join("public");
+        std::fs::create_dir_all(&out).unwrap();
+        // Attempt to escape output directory
+        assert!(resolve_serve_path(&out, "/../../../etc/passwd").is_none());
+        assert!(resolve_serve_path(&out, "/..").is_none());
+        assert!(resolve_serve_path(&out, "/foo/../../..").is_none());
+    }
+
+    #[test]
+    fn test_resolve_serve_path_dir_index() {
+        let tmp = TempDir::new().unwrap();
+        let out = tmp.path().join("public");
+        let sub = out.join("posts");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(sub.join("index.html"), "posts").unwrap();
+        let result = resolve_serve_path(&out, "/posts");
+        assert_eq!(result.unwrap(), sub.join("index.html"));
+    }
+
+    #[test]
+    fn test_resolve_serve_path_nonexistent_returns_none() {
+        let tmp = TempDir::new().unwrap();
+        let out = tmp.path().join("public");
+        std::fs::create_dir_all(&out).unwrap();
+        assert!(resolve_serve_path(&out, "/nope.html").is_none());
     }
 }

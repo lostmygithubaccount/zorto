@@ -46,6 +46,10 @@ enum Commands {
 
     /// Start preview server with live reload
     Preview {
+        /// Output directory
+        #[arg(short, long, default_value = "public")]
+        output: PathBuf,
+
         /// Port number
         #[arg(short, long, default_value = "1111")]
         port: u16,
@@ -84,6 +88,10 @@ enum Commands {
     },
 }
 
+/// Run the zorto CLI with the given arguments.
+///
+/// This is the main entry point, equivalent to calling `zorto` on the command line.
+/// Pass `std::env::args()` for normal use, or synthetic args for testing.
 pub fn run<I, T>(args: I) -> anyhow::Result<()>
 where
     I: IntoIterator<Item = T>,
@@ -91,6 +99,7 @@ where
 {
     let cli = Cli::parse_from(args);
     let root = std::fs::canonicalize(&cli.root)?;
+    let sandbox = resolve_sandbox(&cli.sandbox)?;
 
     match cli.command {
         Commands::Build {
@@ -98,17 +107,10 @@ where
             drafts,
             base_url,
         } => {
-            let output = if output.is_relative() {
-                root.join(output)
-            } else {
-                output
-            };
+            let output = resolve_output(&root, output);
             let mut site = site::Site::load(&root, &output, drafts)?;
             site.no_exec = cli.no_exec;
-            site.sandbox = cli
-                .sandbox
-                .as_ref()
-                .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()));
+            site.sandbox = sandbox;
             if let Some(url) = base_url {
                 site.set_base_url(url);
             }
@@ -116,35 +118,28 @@ where
             println!("Site built to {}", output.display());
         }
         Commands::Preview {
+            output,
             port,
             drafts,
             open,
             interface,
         } => {
-            let output = root.join("public");
-            let no_exec = cli.no_exec;
-            let sandbox = cli
-                .sandbox
-                .as_ref()
-                .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()));
-            let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(serve::serve(
-                &root,
-                &output,
+            let output = resolve_output(&root, output);
+            let cfg = serve::ServeConfig {
+                root: &root,
+                output_dir: &output,
                 drafts,
-                no_exec,
-                sandbox.as_deref(),
-                &interface,
+                no_exec: cli.no_exec,
+                sandbox: sandbox.as_deref(),
+                interface: &interface,
                 port,
-                open,
-            ))?;
+                open_browser: open,
+            };
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(serve::serve(&cfg))?;
         }
         Commands::Clean { output } => {
-            let output = if output.is_relative() {
-                root.join(output)
-            } else {
-                output
-            };
+            let output = resolve_output(&root, output);
             if output.exists() {
                 std::fs::remove_dir_all(&output)?;
                 println!("Removed {}", output.display());
@@ -161,16 +156,34 @@ where
             let output = root.join("public");
             let mut site = site::Site::load(&root, &output, drafts)?;
             site.no_exec = cli.no_exec;
-            site.sandbox = cli
-                .sandbox
-                .as_ref()
-                .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()));
+            site.sandbox = sandbox;
             site.check()?;
             println!("Site check passed.");
         }
     }
 
     Ok(())
+}
+
+/// Resolve an output path relative to the site root.
+fn resolve_output(root: &std::path::Path, output: PathBuf) -> PathBuf {
+    if output.is_relative() {
+        root.join(output)
+    } else {
+        output
+    }
+}
+
+/// Canonicalize the sandbox path, returning an error if it doesn't exist.
+fn resolve_sandbox(sandbox: &Option<PathBuf>) -> anyhow::Result<Option<PathBuf>> {
+    match sandbox {
+        Some(p) => {
+            let canonical = std::fs::canonicalize(p)
+                .map_err(|e| anyhow::anyhow!("cannot resolve sandbox path {}: {e}", p.display()))?;
+            Ok(Some(canonical))
+        }
+        None => Ok(None),
+    }
 }
 
 fn init_site(target: &std::path::Path) -> anyhow::Result<()> {
@@ -221,7 +234,7 @@ date = "2025-01-01"
 description = "My first post"
 tags = ["hello"]
 +++
-Welcome to my new site built with [zorto](https://github.com/lostmygithubaccount/dkdc)!
+Welcome to my new site built with [zorto](https://github.com/lostmygithubaccount/zorto)!
 "#,
     )?;
 

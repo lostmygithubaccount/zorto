@@ -41,8 +41,21 @@ pub(crate) fn parent_dir(relative_path: &str) -> String {
 /// Compute the section key (_index.md path) for a given content relative path.
 /// e.g. "posts/hello.md" -> "posts/_index.md"
 ///      "hello.md" -> "_index.md"
+///      "posts/vibe-coding/index.md" -> "posts/_index.md" (co-located content)
 pub(crate) fn section_key_for(relative_path: &str) -> String {
-    let dir = parent_dir(relative_path);
+    let p = Path::new(relative_path);
+    // Co-located content: "dir/index.md" belongs to the grandparent section
+    let is_colocated = p.file_name().is_some_and(|f| f == "index.md");
+    let dir = if is_colocated {
+        // Go up two levels: posts/vibe-coding/index.md -> posts
+        p.parent()
+            .and_then(|d| d.parent())
+            .unwrap_or(Path::new(""))
+            .to_string_lossy()
+            .to_string()
+    } else {
+        parent_dir(relative_path)
+    };
     if dir.is_empty() {
         "_index.md".to_string()
     } else {
@@ -50,7 +63,10 @@ pub(crate) fn section_key_for(relative_path: &str) -> String {
     }
 }
 
-/// TOML frontmatter parsed from +++ delimiters
+/// TOML frontmatter parsed from `+++` delimiters.
+///
+/// Unknown top-level keys (e.g. `tags`, `categories`) are captured in [`rest`](Self::rest)
+/// and interpreted as taxonomy values if they are arrays of strings.
 #[derive(Debug, Deserialize)]
 pub struct Frontmatter {
     pub title: Option<String>,
@@ -62,49 +78,78 @@ pub struct Frontmatter {
     pub slug: Option<String>,
     #[serde(default)]
     pub aliases: Vec<String>,
-    #[serde(default)]
-    pub tags: Vec<String>,
     pub sort_by: Option<SortBy>,
     pub paginate_by: Option<usize>,
     #[serde(default = "default_toml_table")]
     pub extra: toml::Value,
+    /// Catch-all for unknown top-level keys (taxonomy values like tags, categories, etc.)
+    #[serde(flatten)]
+    pub rest: HashMap<String, toml::Value>,
 }
 
-/// A rendered page (non-_index.md file)
+/// A rendered page (any `.md` file that is not `_index.md`).
 #[derive(Debug, Clone, Serialize)]
 pub struct Page {
+    /// Page title from frontmatter (empty string if unset).
     pub title: String,
+    /// Publication date as a string (e.g. `"2025-01-15"`).
     pub date: Option<String>,
+    /// Author name from frontmatter.
     pub author: Option<String>,
+    /// Short description from frontmatter.
     pub description: Option<String>,
+    /// Whether this page is a draft (excluded from non-draft builds).
     pub draft: bool,
+    /// URL slug, derived from frontmatter `slug` field or the filename.
     pub slug: String,
+    /// URL path relative to the site root (e.g. `"/posts/hello/"`).
     pub path: String,
+    /// Full permalink including base URL.
     pub permalink: String,
+    /// Rendered HTML content (populated during build).
     pub content: String,
+    /// Rendered HTML summary (content before `<!-- more -->` marker).
     pub summary: Option<String>,
+    /// Raw markdown content (after frontmatter extraction).
     pub raw_content: String,
+    /// Taxonomy values keyed by taxonomy name (e.g. `{"tags": ["rust", "web"]}`).
     pub taxonomies: HashMap<String, Vec<String>>,
+    /// Extra frontmatter values as JSON, accessible in templates as `page.extra`.
     pub extra: serde_json::Value,
+    /// Redirect aliases — additional URL paths that redirect to this page.
     pub aliases: Vec<String>,
+    /// Approximate word count of the raw content.
     pub word_count: usize,
+    /// Estimated reading time in minutes (word_count / 200, minimum 1).
     pub reading_time: usize,
+    /// Path of the source file relative to the content directory.
     pub relative_path: String,
 }
 
-/// A section (_index.md file)
+/// A section defined by an `_index.md` file.
 #[derive(Debug, Clone, Serialize)]
 pub struct Section {
+    /// Section title from frontmatter.
     pub title: String,
+    /// Short description from frontmatter.
     pub description: Option<String>,
+    /// URL path relative to the site root (e.g. `"/posts/"`).
     pub path: String,
+    /// Full permalink including base URL.
     pub permalink: String,
+    /// Rendered HTML content of the section's `_index.md` body.
     pub content: String,
+    /// Raw markdown content (after frontmatter extraction).
     pub raw_content: String,
+    /// Pages belonging to this section (populated by [`assign_pages_to_sections`]).
     pub pages: Vec<Page>,
+    /// Sort order for pages in this section.
     pub sort_by: Option<SortBy>,
+    /// If set, paginate the section with this many pages per page.
     pub paginate_by: Option<usize>,
+    /// Extra frontmatter values as JSON, accessible in templates as `section.extra`.
     pub extra: serde_json::Value,
+    /// Path of the source `_index.md` relative to the content directory.
     pub relative_path: String,
 }
 
@@ -118,15 +163,22 @@ impl Default for Frontmatter {
             draft: false,
             slug: None,
             aliases: vec![],
-            tags: vec![],
             sort_by: None,
             paginate_by: None,
             extra: default_toml_table(),
+            rest: HashMap::new(),
         }
     }
 }
 
-/// Parse TOML frontmatter from +++ delimiters
+/// Parse TOML frontmatter from `+++` delimiters.
+///
+/// Returns the parsed frontmatter and the remaining body text. If the content
+/// does not start with `+++`, returns a default frontmatter and the full content.
+///
+/// # Errors
+///
+/// Returns an error if the frontmatter is unclosed or contains invalid TOML.
 pub fn parse_frontmatter(content: &str) -> anyhow::Result<(Frontmatter, String)> {
     let content = content.trim_start_matches('\u{feff}'); // strip BOM
     if !content.starts_with("+++") {
@@ -155,7 +207,7 @@ fn value_to_date_string(v: &toml::Value) -> String {
     }
 }
 
-/// Build a Page from a frontmatter + raw body
+/// Build a [`Page`] from parsed frontmatter, raw body text, and site context.
 pub fn build_page(
     fm: Frontmatter,
     raw_content: String,
@@ -164,25 +216,57 @@ pub fn build_page(
 ) -> Page {
     let title = fm.title.unwrap_or_default();
 
-    // Compute slug from frontmatter or filename
+    // Co-located content: "dir/index.md" derives slug from the directory name
+    let p = Path::new(relative_path);
+    let is_colocated = p.file_name().is_some_and(|f| f == "index.md");
+
     let slug = fm.slug.unwrap_or_else(|| {
-        let filename = Path::new(relative_path)
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
-        slug::slugify(&filename)
+        if is_colocated {
+            // posts/my-post/index.md -> slug "my-post"
+            let dir_name = p
+                .parent()
+                .and_then(|d| d.file_name())
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            slug::slugify(&dir_name)
+        } else {
+            let filename = p
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            slug::slugify(&filename)
+        }
     });
 
-    let path = page_url_path(&parent_dir(relative_path), &slug);
+    // Co-located pages use grandparent as the section directory
+    let parent = if is_colocated {
+        p.parent()
+            .and_then(|d| d.parent())
+            .unwrap_or(Path::new(""))
+            .to_string_lossy()
+            .to_string()
+    } else {
+        parent_dir(relative_path)
+    };
+    let path = page_url_path(&parent, &slug);
     let permalink = format!("{base_url}{path}");
 
     let date = fm.date.as_ref().map(value_to_date_string);
 
-    // Build taxonomies
+    // Build taxonomies from any top-level array-of-strings fields
     let mut taxonomies = HashMap::new();
-    if !fm.tags.is_empty() {
-        taxonomies.insert("tags".to_string(), fm.tags);
+    for (key, value) in &fm.rest {
+        if let toml::Value::Array(arr) = value {
+            let strings: Vec<String> = arr
+                .iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect();
+            if !strings.is_empty() {
+                taxonomies.insert(key.clone(), strings);
+            }
+        }
     }
 
     let word_count = raw_content.split_whitespace().count();
@@ -211,7 +295,7 @@ pub fn build_page(
     }
 }
 
-/// Build a Section from a frontmatter + raw body
+/// Build a [`Section`] from parsed frontmatter, raw body text, and site context.
 pub fn build_section(
     fm: Frontmatter,
     raw_content: String,
@@ -239,24 +323,36 @@ pub fn build_section(
     }
 }
 
-/// Content loaded from disk
-pub type LoadedContent = (
-    HashMap<String, Section>,
-    HashMap<String, Page>,
-    Vec<PathBuf>,
-);
+/// Content loaded from disk: sections, pages, and co-located asset paths.
+pub struct LoadedContent {
+    /// Sections keyed by their relative `_index.md` path (e.g. `"posts/_index.md"`).
+    pub sections: HashMap<String, Section>,
+    /// Pages keyed by their relative `.md` path (e.g. `"posts/hello.md"`).
+    pub pages: HashMap<String, Page>,
+    /// Absolute paths to non-markdown files co-located with content.
+    pub assets: Vec<PathBuf>,
+}
 
-/// Walk the content directory and return (sections, pages, assets)
+/// Walk the content directory and return all sections, pages, and co-located assets.
+///
+/// # Errors
+///
+/// Returns an error if the content directory cannot be walked or any markdown
+/// file has invalid frontmatter.
 pub fn load_content(content_dir: &Path, base_url: &str) -> anyhow::Result<LoadedContent> {
     let mut sections = HashMap::new();
     let mut pages = HashMap::new();
     let mut assets = Vec::new();
 
-    for entry in WalkDir::new(content_dir).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(content_dir)
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| anyhow::anyhow!("failed to walk content directory: {e}"))?
+    {
         let path = entry.path();
         let relative = path
             .strip_prefix(content_dir)
-            .unwrap()
+            .expect("walkdir entry is under content_dir")
             .to_string_lossy()
             .to_string();
 
@@ -264,7 +360,10 @@ pub fn load_content(content_dir: &Path, base_url: &str) -> anyhow::Result<Loaded
             continue;
         }
 
-        let filename = path.file_name().unwrap().to_string_lossy();
+        let filename = path
+            .file_name()
+            .expect("non-directory entry has a filename")
+            .to_string_lossy();
 
         if filename == "_index.md" {
             let content = std::fs::read_to_string(path)?;
@@ -282,19 +381,29 @@ pub fn load_content(content_dir: &Path, base_url: &str) -> anyhow::Result<Loaded
         }
     }
 
-    Ok((sections, pages, assets))
+    Ok(LoadedContent {
+        sections,
+        pages,
+        assets,
+    })
 }
 
-/// Sort pages by date in reverse chronological order
+/// Sort key: extract date string for reverse chronological ordering (undated sort last).
+fn page_date_key(p: &Page) -> &str {
+    p.date.as_deref().unwrap_or("")
+}
+
+/// Sort pages by date in reverse chronological order. Pages without dates sort last.
 pub fn sort_pages_by_date(pages: &mut [Page]) {
-    pages.sort_by(|a, b| {
-        let da = a.date.as_deref().unwrap_or("");
-        let db = b.date.as_deref().unwrap_or("");
-        db.cmp(da)
-    });
+    pages.sort_by(|a, b| page_date_key(b).cmp(page_date_key(a)));
 }
 
-/// Assign pages to their parent sections
+/// Sort page references by date (reverse chronological). Pages without dates sort last.
+pub fn sort_pages_by_date_ref(pages: &mut [&Page]) {
+    pages.sort_by(|a, b| page_date_key(b).cmp(page_date_key(a)));
+}
+
+/// Assign pages to their parent sections and sort each section's pages.
 pub fn assign_pages_to_sections(
     sections: &mut HashMap<String, Section>,
     pages: &HashMap<String, Page>,
@@ -315,7 +424,10 @@ pub fn assign_pages_to_sections(
     }
 }
 
-/// Escape special characters for XML/HTML output
+/// Escape special characters for XML/HTML output.
+///
+/// Escapes `&`, `<`, `>`, `"`, and `'`. Safe for use in element content,
+/// attribute values, and XML (Atom, sitemap) output.
 pub(crate) fn escape_xml(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -391,7 +503,15 @@ Content goes here"#;
         assert!(fm.draft);
         assert_eq!(fm.slug.as_deref(), Some("custom-slug"));
         assert_eq!(fm.aliases, vec!["/old-url/"]);
-        assert_eq!(fm.tags, vec!["rust", "test"]);
+        // tags are now captured in rest as a generic taxonomy
+        let tags = fm.rest.get("tags").unwrap();
+        assert_eq!(
+            tags,
+            &toml::Value::Array(vec![
+                toml::Value::String("rust".into()),
+                toml::Value::String("test".into()),
+            ])
+        );
         assert_eq!(fm.sort_by, Some(SortBy::Date));
         assert_eq!(fm.paginate_by, Some(5));
         assert_eq!(body, "Content goes here");
@@ -460,6 +580,36 @@ Content goes here"#;
     }
 
     #[test]
+    fn test_build_page_colocated_index() {
+        let fm = Frontmatter::default();
+        let page = build_page(
+            fm,
+            "body".into(),
+            "posts/my-post/index.md",
+            "https://example.com",
+        );
+        assert_eq!(page.slug, "my-post");
+        assert_eq!(page.path, "/posts/my-post/");
+        assert_eq!(page.permalink, "https://example.com/posts/my-post/");
+    }
+
+    #[test]
+    fn test_build_page_colocated_with_custom_slug() {
+        let fm = Frontmatter {
+            slug: Some("custom".into()),
+            ..Default::default()
+        };
+        let page = build_page(
+            fm,
+            "body".into(),
+            "posts/my-post/index.md",
+            "https://example.com",
+        );
+        assert_eq!(page.slug, "custom");
+        assert_eq!(page.path, "/posts/custom/");
+    }
+
+    #[test]
     fn test_build_page_word_count() {
         let fm = Frontmatter::default();
         let body = "one two three four five six seven eight nine ten";
@@ -470,14 +620,40 @@ Content goes here"#;
 
     #[test]
     fn test_build_page_tags() {
+        let mut rest = HashMap::new();
+        rest.insert(
+            "tags".to_string(),
+            toml::Value::Array(vec![
+                toml::Value::String("rust".into()),
+                toml::Value::String("test".into()),
+            ]),
+        );
         let fm = Frontmatter {
-            tags: vec!["rust".into(), "test".into()],
+            rest,
             ..Default::default()
         };
         let page = build_page(fm, "body".into(), "test.md", "https://example.com");
         assert_eq!(
             page.taxonomies.get("tags").unwrap(),
             &vec!["rust".to_string(), "test".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_build_page_custom_taxonomy() {
+        let mut rest = HashMap::new();
+        rest.insert(
+            "categories".to_string(),
+            toml::Value::Array(vec![toml::Value::String("tutorial".into())]),
+        );
+        let fm = Frontmatter {
+            rest,
+            ..Default::default()
+        };
+        let page = build_page(fm, "body".into(), "test.md", "https://example.com");
+        assert_eq!(
+            page.taxonomies.get("categories").unwrap(),
+            &vec!["tutorial".to_string()]
         );
     }
 
@@ -523,8 +699,8 @@ Content goes here"#;
             serde_json::json!(true)
         );
         assert_eq!(
-            toml_to_json(&toml::Value::Float(3.14)),
-            serde_json::json!(3.14)
+            toml_to_json(&toml::Value::Float(1.23)),
+            serde_json::json!(1.23)
         );
     }
 

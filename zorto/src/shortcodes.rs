@@ -54,7 +54,7 @@ fn process_body_shortcodes(
 
     // Loop to handle nested shortcodes
     while BODY_SHORTCODE_RE.is_match(&result) && iterations < 10 {
-        let mut error: Option<anyhow::Error> = None;
+        let mut first_error: Option<anyhow::Error> = None;
         let new_result = BODY_SHORTCODE_RE.replace_all(&result, |caps: &regex::Captures| {
             let name = &caps[1];
             let args_str = &caps[2];
@@ -70,12 +70,14 @@ fn process_body_shortcodes(
             ) {
                 Ok(rendered) => rendered,
                 Err(e) => {
-                    error = Some(anyhow::anyhow!("shortcode error in {name}: {e}"));
+                    if first_error.is_none() {
+                        first_error = Some(anyhow::anyhow!("shortcode error in {name}: {e}"));
+                    }
                     caps[0].to_string()
                 }
             }
         });
-        if let Some(e) = error {
+        if let Some(e) = first_error {
             return Err(e);
         }
         result = new_result.into_owned();
@@ -92,7 +94,7 @@ fn process_inline_shortcodes(
     site_root: &Path,
     sandbox_root: &Path,
 ) -> anyhow::Result<String> {
-    let mut error: Option<anyhow::Error> = None;
+    let mut first_error: Option<anyhow::Error> = None;
     let result = INLINE_SHORTCODE_RE.replace_all(content, |caps: &regex::Captures| {
         let name = &caps[1];
         let args_str = &caps[2];
@@ -100,13 +102,15 @@ fn process_inline_shortcodes(
         match resolve_shortcode(name, args_str, None, shortcode_dir, site_root, sandbox_root) {
             Ok(rendered) => rendered,
             Err(e) => {
-                error = Some(anyhow::anyhow!("shortcode error in {name}: {e}"));
+                if first_error.is_none() {
+                    first_error = Some(anyhow::anyhow!("shortcode error in {name}: {e}"));
+                }
                 caps[0].to_string()
             }
         }
     });
 
-    if let Some(e) = error {
+    if let Some(e) = first_error {
         return Err(e);
     }
 
@@ -194,12 +198,16 @@ fn builtin_include(
 }
 
 /// Strip `+++`-delimited TOML frontmatter from content.
+///
+/// Matches the closing `+++` only at the start of a line (after a newline),
+/// consistent with how [`parse_frontmatter`](crate::content::parse_frontmatter)
+/// detects frontmatter boundaries.
 fn strip_toml_frontmatter(content: &str) -> String {
     let trimmed = content.trim_start();
     if let Some(rest) = trimmed.strip_prefix("+++")
-        && let Some(after) = rest.find("+++")
+        && let Some(after) = rest.find("\n+++")
     {
-        return rest[after + 3..].to_string();
+        return rest[after + 4..].to_string();
     }
     content.to_string()
 }
@@ -460,6 +468,27 @@ mod tests {
         let result =
             process_shortcodes(r#"{{ include(path="../secret.txt") }}"#, &dir, &site, &site);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_include_strip_frontmatter_with_plus_in_value() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        // The TOML value contains "+++" which must NOT be treated as a delimiter.
+        std::fs::write(
+            tmp.path().join("data.md"),
+            "+++\ntitle = \"has +++ inside\"\n+++\nActual body",
+        )
+        .unwrap();
+        let result = process_shortcodes(
+            r#"{{ include(path="data.md", strip_frontmatter="true") }}"#,
+            &dir,
+            tmp.path(),
+            tmp.path(),
+        )
+        .unwrap();
+        assert_eq!(result.trim(), "Actual body");
     }
 
     #[test]

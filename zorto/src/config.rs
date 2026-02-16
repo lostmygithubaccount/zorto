@@ -1,55 +1,87 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+/// Top-level site configuration, loaded from `config.toml`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
+    /// Site base URL without trailing slash (e.g. `"https://example.com"`).
     pub base_url: String,
+    /// Site title, used in feeds, templates, and `llms.txt`.
     #[serde(default)]
     pub title: String,
+    /// Site description, used in feeds and `llms.txt`.
+    #[serde(default)]
+    pub description: String,
+    /// Default language code (default: `"en"`).
     #[serde(default = "default_en")]
     pub default_language: String,
+    /// Compile SCSS files from `sass/` directory (default: `true`).
     #[serde(default = "default_true", skip_serializing)]
     pub compile_sass: bool,
+    /// Generate an Atom feed at `/atom.xml` (default: `false`).
     #[serde(default)]
     pub generate_feed: bool,
+    /// Generate a sitemap at `/sitemap.xml` (default: `true`).
+    #[serde(default = "default_true", skip_serializing)]
+    pub generate_sitemap: bool,
+    /// Generate `llms.txt` and `llms-full.txt` (default: `true`).
+    #[serde(default = "default_true", skip_serializing)]
+    pub generate_llms_txt: bool,
+    /// Markdown rendering options.
     #[serde(default)]
     pub markdown: MarkdownConfig,
+    /// Arbitrary extra values accessible in templates as `config.extra`.
     #[serde(default = "default_toml_table", serialize_with = "serialize_extra")]
     pub extra: toml::Value,
+    /// Taxonomy definitions (default: a single `"tags"` taxonomy).
     #[serde(default, skip_serializing)]
     pub taxonomies: Vec<TaxonomyConfig>,
 }
 
+/// Where to insert anchor links on headings.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AnchorLinks {
+    /// No anchor links.
     #[default]
     None,
+    /// Anchor link appended after heading text.
     Right,
 }
 
+/// How pages in a section are sorted.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SortBy {
+    /// Reverse chronological (newest first). Pages without dates sort last.
     #[default]
     Date,
+    /// Alphabetical by title.
     Title,
 }
 
+/// Configuration for the Markdown rendering pipeline.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MarkdownConfig {
+    /// Enable syntax highlighting for fenced code blocks (default: `true`).
     #[serde(default = "default_true")]
     pub highlight_code: bool,
+    /// Insert anchor links on headings.
     #[serde(default)]
     pub insert_anchor_links: AnchorLinks,
+    /// Syntect theme name (default: `"base16-ocean.dark"`).
     #[serde(default)]
     pub highlight_theme: Option<String>,
+    /// Open external links in a new tab.
     #[serde(default)]
     pub external_links_target_blank: bool,
+    /// Add `rel="nofollow"` to external links.
     #[serde(default)]
     pub external_links_no_follow: bool,
+    /// Add `rel="noreferrer"` to external links.
     #[serde(default)]
     pub external_links_no_referrer: bool,
+    /// Enable smart punctuation (curly quotes, em dashes, etc.).
     #[serde(default)]
     pub smart_punctuation: bool,
 }
@@ -68,8 +100,10 @@ impl Default for MarkdownConfig {
     }
 }
 
+/// A taxonomy definition from `[[taxonomies]]` in `config.toml`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct TaxonomyConfig {
+    /// Taxonomy name (e.g. `"tags"`, `"categories"`).
     pub name: String,
 }
 
@@ -90,6 +124,12 @@ fn serialize_extra<S: serde::Serializer>(v: &toml::Value, s: S) -> Result<S::Ok,
 }
 
 impl Config {
+    /// Load and validate configuration from `config.toml` in the given root directory.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `config.toml` is missing, unreadable, or contains
+    /// invalid TOML.
     pub fn load(root: &Path) -> anyhow::Result<Self> {
         let config_path = root.join("config.toml");
         let content = std::fs::read_to_string(&config_path)
@@ -126,7 +166,10 @@ mod tests {
         let config = Config::load(tmp.path()).unwrap();
         assert_eq!(config.base_url, "https://example.com");
         assert_eq!(config.title, "");
+        assert_eq!(config.description, "");
         assert!(config.compile_sass);
+        assert!(config.generate_sitemap);
+        assert!(config.generate_llms_txt);
         assert_eq!(config.markdown.insert_anchor_links, AnchorLinks::None);
         assert!(config.markdown.highlight_code);
         // Default taxonomy is "tags"

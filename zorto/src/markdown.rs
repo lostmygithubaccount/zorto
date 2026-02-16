@@ -78,26 +78,38 @@ pub fn render_markdown(
             Event::Text(text) if in_code_block => {
                 code_content.push_str(&text);
             }
-            Event::Start(Tag::Heading { .. }) => {
+            Event::Start(Tag::Heading { level, .. }) => {
                 in_heading = true;
                 heading_text.clear();
-                events.push(event);
+                // Remember where we'll patch in the id later
+                events.push(Event::Start(Tag::Heading {
+                    level,
+                    id: None,
+                    classes: vec![],
+                    attrs: vec![],
+                }));
             }
             Event::End(TagEnd::Heading(_level)) => {
                 in_heading = false;
+                let id = slug::slugify(&heading_text);
 
-                // Insert anchor link if configured
-                if config.insert_anchor_links != AnchorLinks::None {
-                    let id = slug::slugify(&heading_text);
-                    let anchor_html = format!(
-                        "<a class=\"zola-anchor\" href=\"#{}\" aria-label=\"Anchor link for: {}\">#</a>",
-                        id, heading_text
-                    );
-
-                    if config.insert_anchor_links == AnchorLinks::Right {
-                        events.push(Event::Html(CowStr::from(format!(" {anchor_html}"))));
+                // Patch the heading start event with the computed id
+                for ev in events.iter_mut().rev() {
+                    if let Event::Start(Tag::Heading { id: h_id, .. }) = ev {
+                        *h_id = Some(CowStr::from(id.clone()));
+                        break;
                     }
                 }
+
+                // Insert anchor link if configured
+                if config.insert_anchor_links == AnchorLinks::Right {
+                    let anchor_html = format!(
+                        " <a class=\"zorto-anchor\" href=\"#{}\" aria-label=\"Anchor link for: {}\">#</a>",
+                        id, heading_text
+                    );
+                    events.push(Event::Html(CowStr::from(anchor_html)));
+                }
+
                 events.push(event);
             }
             Event::Text(ref text) if in_heading => {
@@ -121,7 +133,11 @@ pub fn render_markdown(
                         attrs.push(format!(r#"rel="{}""#, rel_parts.join(" ")));
                     }
                     let attrs_str = attrs.join(" ");
-                    let html = format!(r#"<a href="{dest_url}" title="{title}" {attrs_str}>"#);
+                    let html = format!(
+                        r#"<a href="{}" title="{}" {attrs_str}>"#,
+                        escape_xml(&dest_url),
+                        escape_xml(&title),
+                    );
                     events.push(Event::Html(CowStr::from(html)));
                 } else {
                     events.push(Event::Start(Tag::Link {
@@ -301,12 +317,13 @@ mod tests {
             &mut blocks,
             "https://example.com",
         );
-        assert!(html.contains("zola-anchor"));
+        assert!(html.contains("zorto-anchor"));
         assert!(html.contains("href=\"#hello-world\""));
+        assert!(html.contains("id=\"hello-world\""));
     }
 
     #[test]
-    fn test_render_heading_anchor_none() {
+    fn test_render_heading_id_always_present() {
         let config = default_config(); // insert_anchor_links = "none"
         let mut blocks = Vec::new();
         let html = render_markdown(
@@ -315,7 +332,9 @@ mod tests {
             &mut blocks,
             "https://example.com",
         );
-        assert!(!html.contains("zola-anchor"));
+        assert!(!html.contains("zorto-anchor"));
+        // Heading id should always be present even without anchor links
+        assert!(html.contains("id=\"hello-world\""));
     }
 
     #[test]
@@ -382,6 +401,17 @@ mod tests {
         let result = replace_exec_placeholders(html, &blocks, &default_config());
         assert!(result.contains("code-error"));
         assert!(result.contains("NameError"));
+    }
+
+    #[test]
+    fn test_render_external_link_escapes_attributes() {
+        let mut config = default_config();
+        config.external_links_target_blank = true;
+        let mut blocks = Vec::new();
+        let input = r#"[xss](https://evil.com/"><script>alert(1)</script>)"#;
+        let html = render_markdown(input, &config, &mut blocks, "https://example.com");
+        assert!(!html.contains("<script>"));
+        assert!(html.contains("&lt;script&gt;"));
     }
 
     #[test]

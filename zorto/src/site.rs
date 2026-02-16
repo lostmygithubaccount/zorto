@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
@@ -10,35 +11,52 @@ use crate::sass;
 use crate::shortcodes;
 use crate::templates::{self, Paginator, TaxonomyTerm};
 
+/// The main entry point for building a zorto site.
+///
+/// A `Site` is loaded from disk with [`Site::load`], optionally configured
+/// (e.g. [`set_base_url`](Self::set_base_url), `no_exec`, `sandbox`), and then
+/// built with [`Site::build`].
 pub struct Site {
+    /// Parsed `config.toml`.
     pub config: Config,
+    /// Sections keyed by their relative `_index.md` path.
     pub sections: HashMap<String, Section>,
+    /// Pages keyed by their relative `.md` path.
     pub pages: HashMap<String, Page>,
+    /// Absolute paths to co-located assets (non-markdown content files).
     pub assets: Vec<PathBuf>,
+    /// Absolute path to the site root directory.
     pub root: PathBuf,
+    /// Absolute path to the output directory (e.g. `public/`).
     pub output_dir: PathBuf,
+    /// Include draft pages in the build.
     pub drafts: bool,
-    /// When true, {python}/{bash}/{sh} code blocks are rendered as static
+    /// When true, `{python}`/`{bash}`/`{sh}` code blocks are rendered as static
     /// syntax-highlighted code instead of being executed.
     pub no_exec: bool,
     /// Sandbox boundary for file operations (include shortcode, etc.).
-    /// Defaults to `root` if not set.
+    /// Paths cannot escape this directory. Defaults to [`root`](Self::root) if `None`.
     pub sandbox: Option<PathBuf>,
 }
 
 impl Site {
-    /// Load site from disk
+    /// Load site from disk.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `config.toml` is missing or invalid, or the
+    /// content directory cannot be walked.
     pub fn load(root: &Path, output_dir: &Path, drafts: bool) -> anyhow::Result<Self> {
         let config = Config::load(root)?;
         let content_dir = root.join("content");
 
-        let (sections, pages, assets) = content::load_content(&content_dir, &config.base_url)?;
+        let loaded = content::load_content(&content_dir, &config.base_url)?;
 
         Ok(Site {
             config,
-            sections,
-            pages,
-            assets,
+            sections: loaded.sections,
+            pages: loaded.pages,
+            assets: loaded.assets,
             root: root.to_path_buf(),
             output_dir: output_dir.to_path_buf(),
             drafts,
@@ -59,7 +77,12 @@ impl Site {
         self.config.base_url = new_base_url;
     }
 
-    /// Full build pipeline
+    /// Full build pipeline.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if markdown rendering, template rendering, SCSS
+    /// compilation, or file I/O fails.
     pub fn build(&mut self) -> anyhow::Result<()> {
         // Filter drafts
         if !self.drafts {
@@ -92,11 +115,19 @@ impl Site {
         }
 
         // Generate sitemap
-        self.generate_sitemap()?;
+        if self.config.generate_sitemap {
+            self.generate_sitemap()?;
+        }
 
         // Generate feed
         if self.config.generate_feed {
             self.generate_feed()?;
+        }
+
+        // Generate llms.txt and llms-full.txt
+        if self.config.generate_llms_txt {
+            self.generate_llms_txt()?;
+            self.generate_llms_full_txt()?;
         }
 
         // Copy co-located assets
@@ -123,7 +154,10 @@ impl Site {
             })
             .collect::<anyhow::Result<_>>()?;
         for (key, content) in resolved_pages {
-            self.pages.get_mut(&key).unwrap().raw_content = content;
+            self.pages
+                .get_mut(&key)
+                .expect("page key was just iterated")
+                .raw_content = content;
         }
 
         let resolved_sections: Vec<(String, String)> = self
@@ -140,7 +174,10 @@ impl Site {
             })
             .collect::<anyhow::Result<_>>()?;
         for (key, content) in resolved_sections {
-            self.sections.get_mut(&key).unwrap().raw_content = content;
+            self.sections
+                .get_mut(&key)
+                .expect("section key was just iterated")
+                .raw_content = content;
         }
 
         // Render pages — field-level borrows let us access config/root while
@@ -148,73 +185,29 @@ impl Site {
         let config = &self.config;
         let root = &self.root;
         let sandbox = self.sandbox.as_deref().unwrap_or(root);
+        let no_exec = self.no_exec;
+
         for (key, page) in self.pages.iter_mut() {
             let mut raw = std::mem::take(&mut page.raw_content);
-
             raw = shortcodes::process_shortcodes(&raw, &shortcode_dir, root, sandbox)?;
 
             let summary_raw = markdown::extract_summary(&raw);
-
-            let mut exec_blocks = Vec::new();
-            let html = markdown::render_markdown(
-                &raw,
-                &config.markdown,
-                &mut exec_blocks,
-                &config.base_url,
-            );
-
-            if !exec_blocks.is_empty() && !self.no_exec {
-                let page_dir = Path::new(key.as_str())
-                    .parent()
-                    .map(|p| content_dir.join(p))
-                    .unwrap_or_else(|| content_dir.clone());
-                execute::execute_blocks(&mut exec_blocks, &page_dir, root);
-            }
-
-            let html = markdown::replace_exec_placeholders(&html, &exec_blocks, &config.markdown);
-
-            let summary = summary_raw.map(|summary_md| {
-                let mut dummy_blocks = Vec::new();
-                markdown::render_markdown(
-                    &summary_md,
-                    &config.markdown,
-                    &mut dummy_blocks,
-                    &config.base_url,
-                )
+            page.content = render_markdown_content(&raw, key, config, root, &content_dir, no_exec)?;
+            page.summary = summary_raw.map(|md| {
+                let mut dummy = Vec::new();
+                markdown::render_markdown(&md, &config.markdown, &mut dummy, &config.base_url)
             });
-
             page.raw_content = raw;
-            page.content = html;
-            page.summary = summary;
         }
 
-        // Render section content
         for (key, section) in self.sections.iter_mut() {
             let raw = std::mem::take(&mut section.raw_content);
-
             if !raw.trim().is_empty() {
                 let processed =
                     shortcodes::process_shortcodes(&raw, &shortcode_dir, root, sandbox)?;
-                let mut exec_blocks = Vec::new();
-                let html = markdown::render_markdown(
-                    &processed,
-                    &config.markdown,
-                    &mut exec_blocks,
-                    &config.base_url,
-                );
-
-                if !exec_blocks.is_empty() && !self.no_exec {
-                    let section_dir = Path::new(key.as_str())
-                        .parent()
-                        .map(|p| content_dir.join(p))
-                        .unwrap_or_else(|| content_dir.clone());
-                    execute::execute_blocks(&mut exec_blocks, &section_dir, root);
-                }
-
                 section.content =
-                    markdown::replace_exec_placeholders(&html, &exec_blocks, &config.markdown);
+                    render_markdown_content(&processed, key, config, root, &content_dir, no_exec)?;
             }
-
             section.raw_content = raw;
         }
 
@@ -244,7 +237,7 @@ impl Site {
                 std::fs::create_dir_all(&alias_path)?;
                 let redirect_html = format!(
                     r#"<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url={}"></head><body></body></html>"#,
-                    page.permalink
+                    escape_xml(&page.permalink)
                 );
                 std::fs::write(alias_path.join("index.html"), redirect_html)?;
             }
@@ -414,52 +407,50 @@ impl Site {
     /// Generate Atom feed
     fn generate_feed(&self) -> anyhow::Result<()> {
         let mut pages: Vec<&Page> = self.pages.values().filter(|p| p.date.is_some()).collect();
-        pages.sort_by(|a, b| {
-            let da = a.date.as_deref().unwrap_or("");
-            let db = b.date.as_deref().unwrap_or("");
-            db.cmp(da)
-        });
+        content::sort_pages_by_date_ref(&mut pages);
 
         let updated = pages
             .first()
             .and_then(|p| p.date.as_deref())
             .unwrap_or("1970-01-01");
         let updated = normalize_date(updated);
+        let base = &self.config.base_url;
+        let title = escape_xml(&self.config.title);
 
         let mut xml = String::new();
-        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
-        xml.push('\n');
-        xml.push_str(r#"<feed xmlns="http://www.w3.org/2005/Atom">"#);
-        xml.push('\n');
-        xml.push_str(&format!(
-            "  <title>{}</title>\n",
-            escape_xml(&self.config.title)
-        ));
-        xml.push_str(&format!(
-            "  <link href=\"{}/atom.xml\" rel=\"self\"/>\n",
-            self.config.base_url
-        ));
-        xml.push_str(&format!("  <link href=\"{}/\"/>\n", self.config.base_url));
-        xml.push_str(&format!("  <updated>{updated}</updated>\n"));
-        xml.push_str(&format!("  <id>{}/</id>\n", self.config.base_url));
+        xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        xml.push_str("<feed xmlns=\"http://www.w3.org/2005/Atom\">\n");
+        let _ = writeln!(xml, "  <title>{title}</title>");
+        let _ = writeln!(xml, "  <link href=\"{base}/atom.xml\" rel=\"self\"/>");
+        let _ = writeln!(xml, "  <link href=\"{base}/\"/>");
+        let _ = writeln!(xml, "  <updated>{updated}</updated>");
+        let _ = writeln!(xml, "  <id>{base}/</id>");
+        // Atom spec (RFC 4287) requires <author> on the feed or every entry
+        if !self.config.title.is_empty() {
+            let _ = writeln!(xml, "  <author><name>{title}</name></author>");
+        }
 
         for page in &pages {
             let date = normalize_date(page.date.as_deref().unwrap_or("1970-01-01"));
+            let page_title = escape_xml(&page.title);
+            let permalink = escape_xml(&page.permalink);
+
             xml.push_str("  <entry>\n");
-            xml.push_str(&format!("    <title>{}</title>\n", escape_xml(&page.title)));
-            xml.push_str(&format!(
-                "    <link href=\"{}\"/>\n",
-                escape_xml(&page.permalink)
-            ));
-            xml.push_str(&format!("    <id>{}</id>\n", escape_xml(&page.permalink)));
-            xml.push_str(&format!("    <updated>{date}</updated>\n"));
+            let _ = writeln!(xml, "    <title>{page_title}</title>");
+            let _ = writeln!(xml, "    <link href=\"{permalink}\"/>");
+            let _ = writeln!(xml, "    <id>{permalink}</id>");
+            let _ = writeln!(xml, "    <updated>{date}</updated>");
+            if let Some(author) = &page.author {
+                let _ = writeln!(xml, "    <author><name>{}</name></author>", escape_xml(author));
+            }
             if let Some(summary) = &page.summary {
-                xml.push_str(&format!(
-                    "    <summary type=\"html\">{}</summary>\n",
+                let _ = writeln!(
+                    xml,
+                    "    <summary type=\"html\">{}</summary>",
                     escape_xml(summary)
-                ));
+                );
             } else if let Some(desc) = &page.description {
-                xml.push_str(&format!("    <summary>{}</summary>\n", escape_xml(desc)));
+                let _ = writeln!(xml, "    <summary>{}</summary>", escape_xml(desc));
             }
             xml.push_str("  </entry>\n");
         }
@@ -473,27 +464,26 @@ impl Site {
     /// Generate sitemap.xml
     fn generate_sitemap(&self) -> anyhow::Result<()> {
         let mut xml = String::new();
-        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
-        xml.push('\n');
-        xml.push_str(r#"<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">"#);
-        xml.push('\n');
+        xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        xml.push_str("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
 
-        // Sections
-        for section in self.sections.values() {
+        // Sections (sorted by path for deterministic output)
+        let mut sorted_sections: Vec<&Section> = self.sections.values().collect();
+        sorted_sections.sort_by_key(|s| &s.path);
+        for section in &sorted_sections {
             xml.push_str("  <url>\n");
-            xml.push_str(&format!(
-                "    <loc>{}</loc>\n",
-                escape_xml(&section.permalink)
-            ));
+            let _ = writeln!(xml, "    <loc>{}</loc>", escape_xml(&section.permalink));
             xml.push_str("  </url>\n");
         }
 
-        // Pages
-        for page in self.pages.values() {
+        // Pages (sorted by path for deterministic output)
+        let mut sorted_pages: Vec<&Page> = self.pages.values().collect();
+        sorted_pages.sort_by_key(|p| &p.path);
+        for page in &sorted_pages {
             xml.push_str("  <url>\n");
-            xml.push_str(&format!("    <loc>{}</loc>\n", escape_xml(&page.permalink)));
+            let _ = writeln!(xml, "    <loc>{}</loc>", escape_xml(&page.permalink));
             if let Some(date) = &page.date {
-                xml.push_str(&format!("    <lastmod>{date}</lastmod>\n"));
+                let _ = writeln!(xml, "    <lastmod>{date}</lastmod>");
             }
             xml.push_str("  </url>\n");
         }
@@ -501,6 +491,96 @@ impl Site {
         xml.push_str("</urlset>\n");
 
         std::fs::write(self.output_dir.join("sitemap.xml"), xml)?;
+        Ok(())
+    }
+
+    /// Generate llms.txt — structured index of site content
+    fn generate_llms_txt(&self) -> anyhow::Result<()> {
+        let mut out = String::new();
+
+        // H1: site title
+        let _ = writeln!(out, "# {}", self.config.title);
+
+        // Blockquote: site description
+        if !self.config.description.is_empty() {
+            let _ = write!(out, "\n> {}\n", self.config.description);
+        }
+
+        // Collect pages assigned to sections (to find orphans later)
+        let mut section_page_paths: std::collections::HashSet<&str> =
+            std::collections::HashSet::new();
+        for section in self.sections.values() {
+            for page in &section.pages {
+                section_page_paths.insert(&page.path);
+            }
+        }
+
+        // Sort sections: root ("/") first, then alphabetically
+        let mut sorted_sections: Vec<&Section> = self.sections.values().collect();
+        sorted_sections.sort_by(|a, b| match (a.path.as_str(), b.path.as_str()) {
+            ("/", _) => std::cmp::Ordering::Less,
+            (_, "/") => std::cmp::Ordering::Greater,
+            _ => a.path.cmp(&b.path),
+        });
+
+        for section in &sorted_sections {
+            let _ = write!(out, "\n## {}\n", section.title);
+            if let Some(desc) = &section.description
+                && !desc.is_empty()
+            {
+                let _ = write!(out, "\n{desc}\n");
+            }
+
+            // Pages are already sorted by assign_pages_to_sections
+            if !section.pages.is_empty() {
+                out.push('\n');
+                for page in &section.pages {
+                    format_page_link(&mut out, page);
+                }
+            }
+        }
+
+        // Orphan pages (not in any section)
+        let mut orphans: Vec<&Page> = self
+            .pages
+            .values()
+            .filter(|p| !section_page_paths.contains(p.path.as_str()))
+            .collect();
+        if !orphans.is_empty() {
+            content::sort_pages_by_date_ref(&mut orphans);
+            out.push_str("\n## Pages\n\n");
+            for page in &orphans {
+                format_page_link(&mut out, page);
+            }
+        }
+
+        std::fs::write(self.output_dir.join("llms.txt"), out)?;
+        Ok(())
+    }
+
+    /// Generate llms-full.txt — full raw markdown content of all pages
+    fn generate_llms_full_txt(&self) -> anyhow::Result<()> {
+        let mut out = String::new();
+
+        // H1: site title
+        let _ = writeln!(out, "# {}", self.config.title);
+
+        // Blockquote: site description
+        if !self.config.description.is_empty() {
+            let _ = write!(out, "\n> {}\n", self.config.description);
+        }
+
+        // All pages sorted by date (reverse chrono), undated last
+        let mut pages: Vec<&Page> = self.pages.values().collect();
+        content::sort_pages_by_date_ref(&mut pages);
+
+        for page in &pages {
+            let _ = write!(out, "\n## {}\n\n", page.title);
+            out.push_str(page.raw_content.trim());
+            out.push('\n');
+        }
+
+        std::fs::write(self.output_dir.join("llms-full.txt"), out)?;
         Ok(())
     }
 
@@ -521,12 +601,45 @@ impl Site {
     }
 }
 
+/// Render markdown content: shortcodes → markdown → execute → replace placeholders.
+fn render_markdown_content(
+    content: &str,
+    key: &str,
+    config: &Config,
+    root: &Path,
+    content_dir: &Path,
+    no_exec: bool,
+) -> anyhow::Result<String> {
+    let mut exec_blocks = Vec::new();
+    let html = markdown::render_markdown(
+        content,
+        &config.markdown,
+        &mut exec_blocks,
+        &config.base_url,
+    );
+
+    if !exec_blocks.is_empty() && !no_exec {
+        let working_dir = Path::new(key)
+            .parent()
+            .map(|p| content_dir.join(p))
+            .unwrap_or_else(|| content_dir.to_path_buf());
+        let errors = execute::execute_blocks(&mut exec_blocks, &working_dir, root);
+        for err in &errors {
+            eprintln!("warning: {key}: {err}");
+        }
+    }
+
+    Ok(markdown::replace_exec_placeholders(
+        &html,
+        &exec_blocks,
+        &config.markdown,
+    ))
+}
+
 /// Recursively copy a directory
 fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
-    for entry in walkdir::WalkDir::new(src)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
+    for entry in walkdir::WalkDir::new(src) {
+        let entry = entry?;
         let path = entry.path();
         let relative = path.strip_prefix(src)?;
         let dest = dst.join(relative);
@@ -543,17 +656,37 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Normalize a date string to RFC 3339 (append T00:00:00Z if date-only)
-fn normalize_date(s: &str) -> String {
-    if s.contains('T') {
-        if s.ends_with('Z') || s.contains('+') {
-            s.to_string()
-        } else {
-            format!("{s}Z")
+/// Format a page as a markdown link with optional description suffix
+fn format_page_link(out: &mut String, page: &Page) {
+    match page.description.as_deref() {
+        Some(desc) if !desc.is_empty() => {
+            let _ = writeln!(out, "- [{}]({}): {}", page.title, page.permalink, desc);
         }
-    } else {
-        format!("{s}T00:00:00Z")
+        _ => {
+            let _ = writeln!(out, "- [{}]({})", page.title, page.permalink);
+        }
     }
+}
+
+/// Normalize a date string to RFC 3339 (append `T00:00:00Z` if date-only).
+///
+/// Handles dates with timezone offsets (`+05:00`, `-05:00`), UTC `Z` suffix,
+/// and bare datetime strings (no timezone → appends `Z`).
+fn normalize_date(s: &str) -> String {
+    // Try full RFC 3339 / offset datetime first
+    if chrono::DateTime::parse_from_rfc3339(s).is_ok() {
+        return s.to_string();
+    }
+    // Try naive datetime (no timezone)
+    if chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S").is_ok() {
+        return format!("{s}Z");
+    }
+    // Try date-only
+    if chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").is_ok() {
+        return format!("{s}T00:00:00Z");
+    }
+    // Fallback: return as-is (shouldn't happen with valid frontmatter)
+    s.to_string()
 }
 
 #[cfg(test)]
@@ -705,5 +838,142 @@ title = "Test Site"
         let mut site = Site::load(&root, &output, false).unwrap();
         site.build().unwrap();
         assert!(output.join("style.css").exists());
+    }
+
+    #[test]
+    fn test_build_generates_sitemap_by_default() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+        assert!(output.join("sitemap.xml").exists());
+    }
+
+    #[test]
+    fn test_build_sitemap_disabled() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        // Rewrite config to disable sitemap
+        std::fs::write(
+            root.join("config.toml"),
+            r#"base_url = "https://example.com"
+title = "Test Site"
+generate_sitemap = false
+"#,
+        )
+        .unwrap();
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+        assert!(!output.join("sitemap.xml").exists());
+    }
+
+    #[test]
+    fn test_build_generates_llms_txt_by_default() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+        assert!(output.join("llms.txt").exists());
+        assert!(output.join("llms-full.txt").exists());
+
+        let llms = std::fs::read_to_string(output.join("llms.txt")).unwrap();
+        assert!(llms.starts_with("# Test Site\n"));
+        assert!(llms.contains("## Blog"));
+        assert!(llms.contains("[Hello World]"));
+        assert!(llms.contains("https://example.com/posts/hello/"));
+
+        let llms_full = std::fs::read_to_string(output.join("llms-full.txt")).unwrap();
+        assert!(llms_full.starts_with("# Test Site\n"));
+        assert!(llms_full.contains("## Hello World"));
+        assert!(llms_full.contains("Hello content"));
+    }
+
+    #[test]
+    fn test_build_llms_txt_disabled() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        std::fs::write(
+            root.join("config.toml"),
+            r#"base_url = "https://example.com"
+title = "Test Site"
+generate_llms_txt = false
+"#,
+        )
+        .unwrap();
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+        assert!(!output.join("llms.txt").exists());
+        assert!(!output.join("llms-full.txt").exists());
+    }
+
+    #[test]
+    fn test_llms_txt_with_description() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        std::fs::write(
+            root.join("config.toml"),
+            r#"base_url = "https://example.com"
+title = "Test Site"
+description = "A site for testing"
+"#,
+        )
+        .unwrap();
+        // Add description to a page
+        std::fs::write(
+            root.join("content/posts/hello.md"),
+            "+++\ntitle = \"Hello World\"\ndate = \"2025-01-01\"\ndescription = \"A hello post\"\n+++\nHello content",
+        )
+        .unwrap();
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        let llms = std::fs::read_to_string(output.join("llms.txt")).unwrap();
+        assert!(llms.contains("> A site for testing"));
+        assert!(llms.contains(": A hello post"));
+    }
+
+    // --- normalize_date ---
+
+    #[test]
+    fn test_normalize_date_date_only() {
+        assert_eq!(normalize_date("2025-01-15"), "2025-01-15T00:00:00Z");
+    }
+
+    #[test]
+    fn test_normalize_date_with_utc_z() {
+        assert_eq!(
+            normalize_date("2025-01-15T10:30:00Z"),
+            "2025-01-15T10:30:00Z"
+        );
+    }
+
+    #[test]
+    fn test_normalize_date_bare_datetime() {
+        assert_eq!(
+            normalize_date("2025-01-15T10:30:00"),
+            "2025-01-15T10:30:00Z"
+        );
+    }
+
+    #[test]
+    fn test_normalize_date_positive_offset() {
+        assert_eq!(
+            normalize_date("2025-01-15T10:30:00+05:00"),
+            "2025-01-15T10:30:00+05:00"
+        );
+    }
+
+    #[test]
+    fn test_normalize_date_negative_offset() {
+        // This was previously broken — negative offsets were not detected.
+        assert_eq!(
+            normalize_date("2025-01-15T10:30:00-05:00"),
+            "2025-01-15T10:30:00-05:00"
+        );
     }
 }

@@ -261,7 +261,7 @@ pub fn taxonomy_single_context(term: &TaxonomyTerm, config: &Config) -> tera::Co
 
 /// Convert Config to a Tera-compatible Value
 pub fn config_to_value(config: &Config) -> serde_json::Value {
-    serde_json::to_value(config).unwrap_or_default()
+    serde_json::to_value(config).expect("Config serialization should never fail")
 }
 
 #[cfg(test)]

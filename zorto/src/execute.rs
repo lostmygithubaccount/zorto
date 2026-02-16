@@ -12,8 +12,19 @@ pub struct ExecutableBlock {
     pub error: Option<String>,
 }
 
-/// Execute all pending code blocks for a page
-pub fn execute_blocks(blocks: &mut [ExecutableBlock], working_dir: &Path, site_root: &Path) {
+/// Execute all pending code blocks for a page.
+///
+/// Each block's `output` and `error` fields are populated with the execution
+/// results. Errors in individual blocks are stored in `block.error` (they are
+/// rendered inline as `<div class="code-error">`) and also surfaced via the
+/// return value so the caller can decide whether to fail the build.
+pub fn execute_blocks(
+    blocks: &mut [ExecutableBlock],
+    working_dir: &Path,
+    site_root: &Path,
+) -> Vec<String> {
+    let mut errors = Vec::new();
+
     for block in blocks.iter_mut() {
         match block.language.as_str() {
             "python" => {
@@ -27,15 +38,18 @@ pub fn execute_blocks(blocks: &mut [ExecutableBlock], working_dir: &Path, site_r
                             }
                         }
                         Err(e) => {
-                            block.error = Some(format!("Python execution error: {e}"));
+                            let msg = format!("Python execution error: {e}");
+                            block.error = Some(msg.clone());
+                            errors.push(msg);
                         }
                     }
                 }
                 #[cfg(not(feature = "python"))]
                 {
-                    block.error = Some(
-                        "Python execution not available (built without python feature)".to_string(),
-                    );
+                    let msg =
+                        "Python execution not available (built without python feature)".to_string();
+                    block.error = Some(msg.clone());
+                    errors.push(msg);
                 }
             }
             "bash" | "sh" => match execute_bash(block, working_dir) {
@@ -46,14 +60,20 @@ pub fn execute_blocks(blocks: &mut [ExecutableBlock], working_dir: &Path, site_r
                     }
                 }
                 Err(e) => {
-                    block.error = Some(format!("Bash execution error: {e}"));
+                    let msg = format!("Bash execution error: {e}");
+                    block.error = Some(msg.clone());
+                    errors.push(msg);
                 }
             },
             lang => {
-                block.error = Some(format!("Unsupported executable language: {lang}"));
+                let msg = format!("Unsupported executable language: {lang}");
+                block.error = Some(msg.clone());
+                errors.push(msg);
             }
         }
     }
+
+    errors
 }
 
 /// Find a .venv directory: check site root, walk up parents, then fall back to VIRTUAL_ENV env var
@@ -114,7 +134,14 @@ fn activate_venv(py: pyo3::Python<'_>, site_root: &Path) -> pyo3::PyResult<()> {
     Ok(())
 }
 
-/// Execute a Python code block using PyO3
+/// Execute a Python code block using the embedded PyO3 interpreter.
+///
+/// # Thread safety
+///
+/// This function calls `os.chdir()` to set the working directory for the
+/// executed code. `chdir` is process-global state, so this is not safe to call
+/// from multiple threads concurrently. Page rendering is currently sequential,
+/// so this is fine — but must be revisited if parallel rendering is added.
 #[cfg(feature = "python")]
 fn execute_python(
     block: &ExecutableBlock,
