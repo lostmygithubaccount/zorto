@@ -50,7 +50,10 @@ fn test_dkdc_dev_respects_llms_txt_config() {
         assert!(output.join("llms-full.txt").exists());
 
         let llms = std::fs::read_to_string(output.join("llms.txt")).unwrap();
-        assert!(llms.starts_with("# "), "llms.txt should start with site title");
+        assert!(
+            llms.starts_with("# "),
+            "llms.txt should start with site title"
+        );
         assert!(llms.contains("##"), "llms.txt should have section headings");
         assert!(
             llms.contains("https://dkdc.dev/"),

@@ -441,7 +441,11 @@ impl Site {
             let _ = writeln!(xml, "    <id>{permalink}</id>");
             let _ = writeln!(xml, "    <updated>{date}</updated>");
             if let Some(author) = &page.author {
-                let _ = writeln!(xml, "    <author><name>{}</name></author>", escape_xml(author));
+                let _ = writeln!(
+                    xml,
+                    "    <author><name>{}</name></author>",
+                    escape_xml(author)
+                );
             }
             if let Some(summary) = &page.summary {
                 let _ = writeln!(

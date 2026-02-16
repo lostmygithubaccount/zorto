@@ -2345,7 +2345,7 @@ dependencies = [
 
 [[package]]
 name = "zorto-py"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "pyo3",
  "zorto",
