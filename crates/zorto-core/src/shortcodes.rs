@@ -150,10 +150,10 @@ fn resolve_shortcode(
     }
 }
 
-/// Built-in `include` shortcode: read file contents relative to site root.
+/// Built-in `include` shortcode: read file contents from a local path or remote URL.
 ///
 /// Arguments:
-/// - `path` (required): file path relative to site root
+/// - `path` (required): file path relative to site root, or an `https://` URL
 /// - `strip_frontmatter` (optional): "true" to strip `+++`-delimited TOML frontmatter
 fn builtin_include(
     args_str: &str,
@@ -164,6 +164,33 @@ fn builtin_include(
     let path = args
         .get("path")
         .ok_or_else(|| anyhow::anyhow!("include shortcode requires a `path` argument"))?;
+
+    let content = if path.starts_with("https://") || path.starts_with("http://") {
+        fetch_url(path)?
+    } else {
+        read_local_file(path, site_root, sandbox_root)?
+    };
+
+    let strip = args.get("strip_frontmatter").is_some_and(|v| v == "true");
+    if strip {
+        Ok(strip_toml_frontmatter(&content))
+    } else {
+        Ok(content)
+    }
+}
+
+/// Fetch content from a remote URL.
+fn fetch_url(url: &str) -> anyhow::Result<String> {
+    ureq::get(url)
+        .call()
+        .map_err(|e| anyhow::anyhow!("include shortcode: failed to fetch {url}: {e}"))?
+        .body_mut()
+        .read_to_string()
+        .map_err(|e| anyhow::anyhow!("include shortcode: failed to read response from {url}: {e}"))
+}
+
+/// Read a local file within the sandbox boundary.
+fn read_local_file(path: &str, site_root: &Path, sandbox_root: &Path) -> anyhow::Result<String> {
     let file_path = site_root.join(path);
 
     // Ensure the resolved path stays within the sandbox boundary (allow
@@ -182,19 +209,12 @@ fn builtin_include(
         anyhow::bail!("include shortcode: path escapes sandbox boundary: {}", path);
     }
 
-    let content = std::fs::read_to_string(&canonical).map_err(|e| {
+    std::fs::read_to_string(&canonical).map_err(|e| {
         anyhow::anyhow!(
             "include shortcode: cannot read {}: {e}",
             file_path.display()
         )
-    })?;
-
-    let strip = args.get("strip_frontmatter").is_some_and(|v| v == "true");
-    if strip {
-        Ok(strip_toml_frontmatter(&content))
-    } else {
-        Ok(content)
-    }
+    })
 }
 
 /// Strip `+++`-delimited TOML frontmatter from content.

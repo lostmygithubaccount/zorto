@@ -41,6 +41,9 @@ walkdir = "2"
 # Python execution
 pyo3 = { version = "0.28", optional = true }
 
+# HTTP (for remote includes)
+ureq = "3"
+
 # Utilities
 anyhow = "1"
 chrono = "0.4"
