@@ -50,7 +50,14 @@ Use `{bash}` or `{python}` in code blocks to execute them.
 echo "hello"
 ```
 
+```{bash}
+echo "Built on $(uname -s) $(uname -m) at $(date -u '+%Y-%m-%d %H:%M UTC')"
+```
+
 ```{python}
 for i in range(5):
     print(i)
 ```
+
+> [!TIP]
+> If you're reading elsewhere, see [https://zorto.dev](https://zorto.dev) for the rendered results of the code blocks above.
