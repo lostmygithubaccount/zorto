@@ -40,7 +40,7 @@ Python checks: `ruff check .`, `ruff format --check .`, `ty check`
 
 ## Claude Code instructions
 
-- DO NOT depend on any dkdc-* packages. This is a separate open source-ish project that we will eventually move to its own repository.
+- DO NOT depend on any dkdc-* packages. This is a standalone open source project.
 - do clone Zola & Quarto (and any other repos) into the .gitignored 'external' directory and use them as references for how to implement the features in this project.
 - Python distribution (via PyO3/maturin) is a hard requirement. The `crates/zorto-py/` bindings and `py/zorto/` wrapper must be maintained.
 

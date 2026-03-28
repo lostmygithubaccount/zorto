@@ -6,8 +6,8 @@ rust-version = "1.85"
 authors = ["Cody <cody@dkdc.dev>"]
 description = "Desktop app for zorto (future)"
 license = "MIT"
-repository = "https://github.com/lostmygithubaccount/zorto"
-homepage = "https://github.com/lostmygithubaccount/zorto"
+repository = "https://github.com/dkdc-io/zorto"
+homepage = "https://github.com/dkdc-io/zorto"
 
 [dependencies]
 anyhow = "1"

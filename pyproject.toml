@@ -10,9 +10,9 @@ readme = "README.md"
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/lostmygithubaccount/zorto"
-Repository = "https://github.com/lostmygithubaccount/zorto"
-Issues = "https://github.com/lostmygithubaccount/zorto/issues"
+Homepage = "https://github.com/dkdc-io/zorto"
+Repository = "https://github.com/dkdc-io/zorto"
+Issues = "https://github.com/dkdc-io/zorto/issues"
 
 [project.scripts]
 zorto = "zorto:main"

@@ -1,10 +1,10 @@
 # Zorto
 
-[![GitHub Release](https://img.shields.io/github/v/release/lostmygithubaccount/zorto?color=blue)](https://github.com/lostmygithubaccount/zorto/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/dkdc-io/zorto?color=blue)](https://github.com/dkdc-io/zorto/releases)
 [![PyPI](https://img.shields.io/pypi/v/zorto?color=blue)](https://pypi.org/project/zorto/)
 [![crates.io](https://img.shields.io/crates/v/zorto?color=blue)](https://crates.io/crates/zorto)
-[![CI](https://img.shields.io/github/actions/workflow/status/lostmygithubaccount/zorto/ci.yml?branch=main&label=CI)](https://github.com/lostmygithubaccount/zorto/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-8A2BE2.svg)](https://github.com/lostmygithubaccount/zorto/blob/main/LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/dkdc-io/zorto/ci.yml?branch=main&label=CI)](https://github.com/dkdc-io/zorto/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-8A2BE2.svg)](https://github.com/dkdc-io/zorto/blob/main/LICENSE)
 
 A fast static site generator with executable code blocks inspired by [Zola](https://github.com/getzola/zola) and [Quarto](https://github.com/quarto-dev/quarto-cli).
 

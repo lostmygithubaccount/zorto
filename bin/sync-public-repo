@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Mirror zorto source from the dkdc monorepo to lostmygithubaccount/zorto.
+# Mirror zorto source from the dkdc monorepo to dkdc-io/zorto.
 # Uses rsync to copy files, then commits and pushes to the public repo.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZORTO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-PUBLIC_REPO="lostmygithubaccount/zorto"
+PUBLIC_REPO="dkdc-io/zorto"
 CLONE_DIR="${ZORTO_DIR}/.sync-repo"
 
 info()  { printf '\033[1;35m[sync]\033[0m %s\n' "$*"; }
@@ -65,7 +65,7 @@ else
     git push -u origin main
 fi
 
-info "done — https://github.com/lostmygithubaccount/zorto"
+info "done — https://github.com/dkdc-io/zorto"
 
 # ──────────────────────────────────────
 # optionally tag a release

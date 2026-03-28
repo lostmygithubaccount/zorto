@@ -1,0 +1,42 @@
+# zorto.dev: zorto configuration
+base_url = "https://zorto.dev"
+title = "zorto.dev"
+generate_llms_txt = false
+
+compile_sass = true
+slugify.paths = "safe"
+
+[markdown]
+highlight_code = true
+insert_anchor_links = "right"
+highlight_theme = "css"
+highlight_themes_css = [
+  { theme = "base16-ocean-dark", filename = "syntax-dark.css" },
+]
+render_emoji = true
+external_links_target_blank = true
+external_links_no_follow = true
+external_links_no_referrer = true
+smart_punctuation = true
+
+[extra]
+logo_text = "zorto.dev"
+author = "Cody"
+default_og_image = "dkdc2-logo-dark.png"
+favicon = "/dkdc2-favicon-32.png"
+favicon_mimetype = "image/png"
+
+menu_items = [
+  { name = "blog", url = "/posts" },
+]
+
+features = [
+  { name = "Fast", description = "Written in Rust. Render your website in milliseconds." },
+  { name = "AI-native", description = "Built for AI to create your website in minutes & maintain it with ease." },
+  { name = "Executable code blocks", description = "Run Python and Bash at build time. Output rendered inline." },
+  { name = "Live reload", description = "Preview server with automatic reload." },
+  { name = "Shortcodes", description = "Built-in shortcodes for common use cases; or build your own custom shortcodes to handle anything." },
+  { name = "Free & open source", description = "MIT-licensed forever." },
+]
+
+copyright_html = '<a href="/">Zorto</a> by <a href="https://dkdc.dev" target="_blank" rel="noopener">dkdc.dev</a> via <a href="https://zorto.dev" target="_blank" rel="noopener">Zorto</a>'
