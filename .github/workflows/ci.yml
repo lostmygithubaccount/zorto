@@ -9,18 +9,3 @@ on:
 jobs:
   check:
     uses: ./.github/workflows/check.yml
-
-  website:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: website-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: website-${{ runner.os }}-
-      - run: cargo build
-      - run: cd website && bin/build

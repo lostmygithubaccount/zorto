@@ -5,4 +5,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 bin/check-rs
 bin/check-py
 
+echo "Building website..."
+cargo build -p zorto --quiet
+export PATH="$PWD/target/debug:$PATH"
+(cd website && bin/build)
+
 echo "All checks passed!"
