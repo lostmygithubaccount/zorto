@@ -52,4 +52,4 @@ features = [
   { name = "free & open source", description = "MIT-licensed forever." },
 ]
 
-copyright_html = '<a href="/">Zorto</a> by <a href="https://dkdc.dev" target="_blank" rel="noopener">dkdc.dev</a> via <a href="https://zorto.dev" target="_blank" rel="noopener">Zorto</a>'
+copyright_html = '<a href="/">Zorto</a> by <a href="https://dkdc.io" target="_blank" rel="noopener">dkdc.io</a> via <a href="https://zorto.dev" target="_blank" rel="noopener">Zorto</a>'
