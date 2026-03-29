@@ -69,9 +69,10 @@
         {%- endif %}
         <ul class="navbar__links">
         {%- for item in config.extra.menu_items %}
-            {%- set item_url = item.url | replace(from="$BASE_URL", to=config.base_url) %}
-            {%- set is_active = current_path is starting_with(item_url) and item_url != config.base_url %}
-            <li{% if is_active %} class="active"{% endif %}><a href="{{ item_url }}"{% if item.external | default(value=false) %} target="_blank" rel="noopener"{% endif %}>{{ item.name }}{% if item.external | default(value=false) %}<svg class="external-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>{% endif %}</a></li>
+            {%- set item_url = item.url | replace(from="$BASE_URL", to="") %}
+            {%- set full_item_url = config.base_url ~ item_url %}
+            {%- set is_active = current_path is starting_with(full_item_url) and item_url != "/" %}
+            <li{% if is_active %} class="active"{% endif %}><a href="{{ item_url }}" aria-current="{% if is_active %}page{% endif %}"{% if item.external | default(value=false) %} target="_blank" rel="noopener"{% endif %}>{{ item.name }}{% if item.external | default(value=false) %}<svg class="external-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>{% endif %}</a></li>
         {%- endfor %}
         </ul>
         {%- endif %}

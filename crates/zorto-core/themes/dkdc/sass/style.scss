@@ -1192,3 +1192,37 @@ pre.mermaid {
     padding: 0;
   }
 }
+
+.docs-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.docs-card {
+  display: block;
+  padding: 20px;
+  background: var(--background-raised);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+
+  &:hover {
+    border-color: var(--accent-alpha-70);
+    transform: translateY(-2px);
+  }
+
+  h3 {
+    color: var(--accent);
+    margin: 0 0 6px;
+    font-size: 1.1rem;
+  }
+
+  p {
+    color: var(--color-muted);
+    margin: 0;
+    font-size: 0.9rem;
+  }
+}

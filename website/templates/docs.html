@@ -6,45 +6,26 @@
 <div class="docs-layout">
     <aside class="docs-sidebar">
         <nav class="docs-nav" aria-label="Documentation">
-            {% set gs = get_section(path="docs/getting-started/_index.md") %}
-            <div class="docs-nav__section">
-                <h3><a href="{{ gs.permalink | replace(from=config.base_url, to="") }}">getting started</a></h3>
-                <ul>
-                {%- for p in gs.pages %}
-                    <li{% if page.permalink == p.permalink %} class="active"{% endif %}><a href="{{ p.permalink | replace(from=config.base_url, to="") }}">{{ p.title | lower }}</a></li>
-                {%- endfor %}
-                </ul>
-            </div>
+            {%- if page.path is starting_with("/docs/getting-started") %}
+            {% set current_section = get_section(path="docs/getting-started/_index.md") %}
+            {%- elif page.path is starting_with("/docs/concepts") %}
+            {% set current_section = get_section(path="docs/concepts/_index.md") %}
+            {%- elif page.path is starting_with("/docs/how-to") %}
+            {% set current_section = get_section(path="docs/how-to/_index.md") %}
+            {%- elif page.path is starting_with("/docs/reference") %}
+            {% set current_section = get_section(path="docs/reference/_index.md") %}
+            {%- endif %}
 
-            {% set concepts = get_section(path="docs/concepts/_index.md") %}
+            {%- if current_section %}
             <div class="docs-nav__section">
-                <h3><a href="{{ concepts.permalink | replace(from=config.base_url, to="") }}">concepts</a></h3>
+                <h3><a href="{{ current_section.permalink | replace(from=config.base_url, to="") }}">{{ current_section.title | lower }}</a></h3>
                 <ul>
-                {%- for p in concepts.pages %}
+                {%- for p in current_section.pages %}
                     <li{% if page.permalink == p.permalink %} class="active"{% endif %}><a href="{{ p.permalink | replace(from=config.base_url, to="") }}">{{ p.title | lower }}</a></li>
                 {%- endfor %}
                 </ul>
             </div>
-
-            {% set howto = get_section(path="docs/how-to/_index.md") %}
-            <div class="docs-nav__section">
-                <h3><a href="{{ howto.permalink | replace(from=config.base_url, to="") }}">how-to</a></h3>
-                <ul>
-                {%- for p in howto.pages %}
-                    <li{% if page.permalink == p.permalink %} class="active"{% endif %}><a href="{{ p.permalink | replace(from=config.base_url, to="") }}">{{ p.title | lower }}</a></li>
-                {%- endfor %}
-                </ul>
-            </div>
-
-            {% set reference = get_section(path="docs/reference/_index.md") %}
-            <div class="docs-nav__section">
-                <h3><a href="{{ reference.permalink | replace(from=config.base_url, to="") }}">reference</a></h3>
-                <ul>
-                {%- for p in reference.pages %}
-                    <li{% if page.permalink == p.permalink %} class="active"{% endif %}><a href="{{ p.permalink | replace(from=config.base_url, to="") }}">{{ p.title | lower }}</a></li>
-                {%- endfor %}
-                </ul>
-            </div>
+            {%- endif %}
         </nav>
     </aside>
 
