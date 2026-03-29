@@ -1,3 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WEBSITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_DIR="$(cd "$WEBSITE_DIR/.." && pwd)"
+cd "$REPO_DIR"
 cargo run -p zorto -- --root website --sandbox . preview --open "$@"

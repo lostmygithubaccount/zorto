@@ -51,8 +51,20 @@ pub fn setup_tera(
     // 2. Overlay with local templates (local always wins)
     if templates_dir.exists() {
         let templates_glob = format!("{}/**/*.html", templates_dir.display());
-        let local = tera::Tera::parse(&templates_glob)?;
-        tera.extend(&local)?;
+        // Tera::parse errors if the glob matches no files. Only parse if
+        // there are actually HTML files to load.
+        match tera::Tera::parse(&templates_glob) {
+            Ok(local) => tera.extend(&local)?,
+            Err(e) => {
+                let msg = e.to_string();
+                // "No files matched" is expected when templates/ exists but
+                // is empty (all templates come from the theme). Any other
+                // parse error is a real problem.
+                if !msg.contains("No files matched") {
+                    return Err(anyhow::anyhow!("template error: {e}"));
+                }
+            }
+        }
     }
 
     // Register custom functions

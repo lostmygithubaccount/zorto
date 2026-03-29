@@ -11,21 +11,33 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::sync::broadcast;
 
-const LIVERELOAD_JS: &str = "
+const LIVERELOAD_JS: &str = r#"
 <script>
 (function() {
-    var ws = new WebSocket('ws://' + location.host + '/__livereload');
-    ws.onmessage = function(event) {
-        if (event.data === 'reload') {
-            location.reload();
-        }
-    };
-    ws.onclose = function() {
-        setTimeout(function() { location.reload(); }, 1000);
-    };
+    var reconnectInterval = 1000;
+    var maxReconnect = 30000;
+
+    function connect() {
+        var ws = new WebSocket('ws://' + location.host + '/__livereload');
+        ws.onmessage = function(event) {
+            if (event.data === 'reload') {
+                location.reload();
+            }
+        };
+        ws.onclose = function() {
+            // Reconnect with backoff instead of reloading the page.
+            // Only an explicit 'reload' message from the server triggers a page reload.
+            setTimeout(function() { connect(); }, reconnectInterval);
+            reconnectInterval = Math.min(reconnectInterval * 1.5, maxReconnect);
+        };
+        ws.onopen = function() {
+            reconnectInterval = 1000;
+        };
+    }
+    connect();
 })();
 </script>
-";
+"#;
 
 #[derive(Clone)]
 struct AppState {
