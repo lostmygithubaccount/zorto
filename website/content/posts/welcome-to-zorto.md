@@ -6,7 +6,7 @@ description = "A fast static site generator built for AI and agents. MIT-license
 tags = ["zorto"]
 +++
 
-Zorto is a fast static site generator inspired by [Zola](https://www.getzola.org/) and [Quarto](https://quarto.org/). Here's what makes it different.
+Zorto is a fast static site generator inspired by [Zola](https://www.getzola.org/) and [Quarto](https://quarto.org/).
 
 <!-- more -->
 
