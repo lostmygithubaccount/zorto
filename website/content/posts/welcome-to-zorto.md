@@ -12,7 +12,7 @@ Zorto is a fast static site generator inspired by [Zola](https://www.getzola.org
 
 ## built for AI and agents
 
-Zorto is designed from the ground up for agentic software engineering. AI can create a full website in minutes and maintain it with ease -- the config-driven architecture, built-in themes, and opinionated linting make it natural for both humans and agents to work with.
+Zorto is designed from the ground up for agentic software engineering. AI can create a full website in minutes and maintain it with ease: the config-driven architecture, built-in themes, and opinionated linting make it natural for both humans and agents to work with.
 
 More on AI-native workflows coming soon as we approach v1.
 
@@ -24,11 +24,11 @@ Zorto's defining feature. Fenced code blocks marked with `{python}` or `{bash}` 
 echo "This ran at $(date +%Y-%m-%d)"
 ```
 
-The output is rendered inline. This powers self-updating documentation -- our [CLI reference](/docs/reference/cli/) runs `zorto --help` at build time, so the docs are always current.
+The output is rendered inline. This powers self-updating documentation: our [CLI reference](/docs/reference/cli/) runs `zorto --help` at build time, so the docs are always current.
 
 ## built-in themes
 
-Zorto ships with three themes: `dkdc`, `light`, and `dark`. Set `theme = "dkdc"` in `config.toml` and you get a complete site -- navbar, footer, theme toggle, responsive design.
+Zorto ships with three themes: `dkdc`, `light`, and `dark`. Set `theme = "dkdc"` in `config.toml` and you get a complete site: navbar, footer, theme toggle, responsive design.
 
 All themes support light/dark mode toggling. Override any template or SCSS variable locally; your files always win.
 
@@ -51,7 +51,7 @@ Eight built-in shortcodes: `include`, `tabs`, `note`, `details`, `figure`, `yout
 
 ## llms.txt
 
-Zorto generates [llms.txt](/llms.txt) and [llms-full.txt](/llms-full.txt) by default -- structured text files that help LLMs understand your site. This is enabled out of the box; set `generate_llms_txt = false` in `config.toml` to disable.
+Zorto generates [llms.txt](/llms.txt) and [llms-full.txt](/llms-full.txt) by default: structured text files that help LLMs understand your site. This is enabled out of the box; set `generate_llms_txt = false` in `config.toml` to disable.
 
 ## what's next
 
@@ -59,7 +59,7 @@ We're working toward v1 with more built-in themes, support for additional langua
 
 ## free and open source
 
-Zorto is [MIT-licensed](https://github.com/dkdc-io/zorto/blob/main/LICENSE) -- free and open source forever. We may consider dual-licensing with Apache 2.0 in the future; [open an issue](https://github.com/dkdc-io/zorto/issues) if that would be useful for your project.
+Zorto is [MIT-licensed](https://github.com/dkdc-io/zorto/blob/main/LICENSE): free and open source forever. We may consider dual-licensing with Apache 2.0 in the future; [open an issue](https://github.com/dkdc-io/zorto/issues) if that would be useful for your project.
 
 ## install
 

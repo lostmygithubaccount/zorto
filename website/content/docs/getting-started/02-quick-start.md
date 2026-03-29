@@ -32,6 +32,6 @@ Edit `content/_index.md`, save, and watch it update instantly.
 
 ## next steps
 
-- [installation](/docs/getting-started/installation/) -- other install methods (cargo, pip)
-- [first site](/docs/getting-started/first-site/) -- project structure, adding pages, blogs
-- [concepts](/docs/concepts/) -- how Zorto works under the hood
+- [installation](/docs/getting-started/installation/): other install methods (cargo, pip)
+- [first site](/docs/getting-started/first-site/): project structure, adding pages, blogs
+- [concepts](/docs/concepts/): how Zorto works under the hood

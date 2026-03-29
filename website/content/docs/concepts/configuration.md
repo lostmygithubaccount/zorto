@@ -41,7 +41,7 @@ name = "categories"
 
 [extra]
 author = "Your Name"
-# Any custom data -- accessible as config.extra in templates
+# Any custom data: accessible as config.extra in templates
 ```
 
 ## Key sections

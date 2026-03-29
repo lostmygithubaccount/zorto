@@ -31,7 +31,7 @@ Or with pip:
 pip install zorto
 ```
 
-The Python package bundles the same Rust binary -- no performance difference.
+The Python package bundles the same Rust binary: no performance difference.
 
 ## Verify
 

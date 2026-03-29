@@ -19,7 +19,7 @@ mysite/
 └── static/           # static assets (copied as-is to public/)
 ```
 
-With `theme = "dkdc"` in `config.toml`, you don't need `templates/` or `sass/` -- the theme provides them.
+With `theme = "dkdc"` in `config.toml`, you don't need `templates/` or `sass/`: the theme provides them.
 
 ## adding a page
 
@@ -59,9 +59,9 @@ Output goes to `public/`. Host it anywhere.
 
 ## learn more
 
-- [content model](/docs/concepts/content-model/) -- sections, pages, frontmatter
-- [templates](/docs/concepts/templates/) -- Tera engine, context variables
-- [themes](/docs/concepts/themes/) -- built-in themes, overrides
-- [shortcodes](/docs/concepts/shortcodes/) -- note, figure, tabs, and more
-- [callouts](/docs/concepts/callouts/) -- GitHub-style alerts
-- [configuration](/docs/concepts/configuration/) -- all config.toml options
+- [content model](/docs/concepts/content-model/): sections, pages, frontmatter
+- [templates](/docs/concepts/templates/): Tera engine, context variables
+- [themes](/docs/concepts/themes/): built-in themes, overrides
+- [shortcodes](/docs/concepts/shortcodes/): note, figure, tabs, and more
+- [callouts](/docs/concepts/callouts/): GitHub-style alerts
+- [configuration](/docs/concepts/configuration/): all config.toml options

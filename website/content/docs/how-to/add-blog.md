@@ -49,8 +49,8 @@ name = "tags"
 
 Zorto automatically generates:
 
-- `/tags/` -- list of all tags
-- `/tags/intro/` -- all posts with the "intro" tag
+- `/tags/`: list of all tags
+- `/tags/intro/`: all posts with the "intro" tag
 
 ## Feed
 
