@@ -2,7 +2,7 @@
 
 [package]
 name = "zorto-py"
-version = "0.11.1"
+version = "0.12.0"
 edition = "2024"
 authors = ["Cody <cody@dkdc.dev>"]
 license = "MIT"
