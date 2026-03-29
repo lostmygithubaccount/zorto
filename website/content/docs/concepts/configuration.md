@@ -1,5 +1,6 @@
 +++
 title = "Configuration"
+template = "docs.html"
 +++
 
 Zorto is configured via `config.toml` in your project root.
@@ -9,6 +10,7 @@ Zorto is configured via `config.toml` in your project root.
 ```toml
 base_url = "https://example.com"
 title = "My site"
+template = "docs.html"
 ```
 
 ## Full example
@@ -16,6 +18,7 @@ title = "My site"
 ```toml
 base_url = "https://example.com"
 title = "My site"
+template = "docs.html"
 description = "A site built with Zorto"
 theme = "dkdc"
 

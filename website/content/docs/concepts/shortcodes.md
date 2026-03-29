@@ -1,5 +1,6 @@
 +++
 title = "Shortcodes"
+template = "docs.html"
 +++
 
 Shortcodes let you embed rich content in markdown without writing HTML.

@@ -1,5 +1,6 @@
 +++
 title = "Configuration reference"
+template = "docs.html"
 +++
 
 Complete reference for `config.toml`.

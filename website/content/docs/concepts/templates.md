@@ -1,5 +1,6 @@
 +++
 title = "Templates"
+template = "docs.html"
 +++
 
 Zorto uses the [Tera](https://keats.github.io/tera/) template engine, which has Jinja2-like syntax.

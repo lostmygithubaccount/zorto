@@ -1,5 +1,6 @@
 +++
 title = "Themes"
+template = "docs.html"
 +++
 
 Zorto ships with three built-in themes. Each supports automatic light/dark mode toggling.

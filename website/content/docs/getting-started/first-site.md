@@ -1,5 +1,6 @@
 +++
 title = "First site"
+template = "docs.html"
 +++
 
 This guide walks through the structure of a Zorto site and common tasks.
@@ -25,6 +26,7 @@ Create `content/about.md`:
 ```markdown
 +++
 title = "About"
+template = "docs.html"
 +++
 
 This is my about page.
@@ -39,6 +41,7 @@ Create the section index at `content/posts/_index.md`:
 ```toml
 +++
 title = "Blog"
+template = "docs.html"
 sort_by = "date"
 paginate_by = 10
 +++
@@ -49,6 +52,7 @@ Then add a post at `content/posts/hello-world.md`:
 ```markdown
 +++
 title = "Hello world"
+template = "docs.html"
 date = "2026-01-01"
 +++
 
@@ -73,6 +77,7 @@ Then tag your posts:
 ```toml
 +++
 title = "Hello world"
+template = "docs.html"
 date = "2026-01-01"
 [taxonomies]
 tags = ["intro", "hello"]

@@ -1,5 +1,6 @@
 +++
 title = "Customize a theme"
+template = "docs.html"
 +++
 
 Zorto themes are fully overridable. You don't need to fork a theme to customize it.

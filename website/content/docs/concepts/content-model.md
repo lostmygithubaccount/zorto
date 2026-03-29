@@ -1,5 +1,6 @@
 +++
 title = "Content model"
+template = "docs.html"
 +++
 
 ## Sections vs pages
@@ -18,6 +19,7 @@ Every content file starts with TOML frontmatter between `+++` delimiters:
 ```toml
 +++
 title = "My page"
+template = "docs.html"
 date = "2026-01-15"
 author = "Cody"
 description = "A short summary for SEO and feeds."
