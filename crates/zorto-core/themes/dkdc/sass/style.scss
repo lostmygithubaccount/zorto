@@ -559,9 +559,24 @@ hr {
 
   &__actions {
     display: flex;
-    gap: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
     justify-content: center;
     margin-top: 32px;
+
+    .button {
+      font-size: 0.9rem;
+      padding: 8px 18px;
+    }
+
+    @media (max-width: $phone-max-width) {
+      gap: 8px;
+
+      .button {
+        font-size: 0.85rem;
+        padding: 8px 14px;
+      }
+    }
   }
 }
 
