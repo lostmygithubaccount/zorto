@@ -1,5 +1,6 @@
 +++
 title = "Shortcodes reference"
+template = "docs.html"
 +++
 
 Complete reference for all built-in shortcodes.

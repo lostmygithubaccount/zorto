@@ -1,5 +1,6 @@
 +++
 title = "Quick start"
+template = "docs.html"
 +++
 
 ## Create a new site

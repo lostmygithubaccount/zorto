@@ -20,19 +20,26 @@ pub fn compile_sass_with_theme(
                 return Ok(());
             }
 
-            let work_dir = tempfile::tempdir()?;
+            let work_dir = tempfile::tempdir()
+                .map_err(|e| anyhow::anyhow!("failed to create temp dir for SCSS: {e}"))?;
 
             // Write theme SCSS files as base layer
             for (filename, content) in &scss_files {
-                std::fs::write(work_dir.path().join(filename), content)?;
+                std::fs::write(work_dir.path().join(filename), content)
+                    .map_err(|e| anyhow::anyhow!("failed to write theme SCSS {filename}: {e}"))?;
             }
 
             // Overlay local sass files (local overrides theme)
             if sass_dir.exists() {
-                for entry in std::fs::read_dir(sass_dir)? {
+                for entry in std::fs::read_dir(sass_dir)
+                    .map_err(|e| anyhow::anyhow!("cannot read sass dir: {e}"))?
+                {
                     let entry = entry?;
                     if entry.path().is_file() {
-                        std::fs::copy(entry.path(), work_dir.path().join(entry.file_name()))?;
+                        std::fs::copy(entry.path(), work_dir.path().join(entry.file_name()))
+                            .map_err(|e| {
+                                anyhow::anyhow!("failed to copy {}: {e}", entry.path().display())
+                            })?;
                     }
                 }
             }

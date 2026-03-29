@@ -1,18 +1,23 @@
 +++
 title = "Installation"
+template = "docs.html"
 +++
 
-## From crates.io (Rust)
+## Install script
 
-If you have Rust installed:
+The quickest way to install Zorto:
+
+```bash
+curl -sSL https://dkdc.sh/zorto | bash
+```
+
+## From crates.io (Rust)
 
 ```bash
 cargo install zorto
 ```
 
 ## From PyPI (Python)
-
-If you prefer Python tooling:
 
 ```bash
 uv tool install zorto

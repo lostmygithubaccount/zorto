@@ -1,5 +1,6 @@
 +++
 title = "CLI reference"
+template = "docs.html"
 +++
 
 The `zorto` command-line interface. Install from [crates.io](https://crates.io/crates/zorto) or [PyPI](https://pypi.org/project/zorto/). API docs at [docs.rs](https://docs.rs/zorto-core).

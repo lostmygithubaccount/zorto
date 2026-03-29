@@ -1,51 +1,47 @@
 +++
-title = "Deploy to Netlify"
+title = "Deploy your site"
+template = "docs.html"
+slug = "deploy"
 +++
 
-## 1. Build your site
+Zorto builds a static `public/` directory that can be hosted anywhere.
 
-Make sure your site builds locally:
+## Build
 
 ```bash
 zorto build
 ```
 
-The output goes to `public/`.
+This outputs everything to `public/`. Upload that directory to any static hosting provider.
 
-## 2. Add netlify.toml
+## GitHub Pages
 
-Create `netlify.toml` in your repository root:
+Add a GitHub Actions workflow at `.github/workflows/deploy.yml`:
 
-```toml
-[build]
-command = "pip install zorto && zorto build"
-publish = "public"
-
-[build.environment]
-PYTHON_VERSION = "3.12"
+```yaml
+name: Deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install zorto && zorto build
+      - uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
 ```
 
-Alternatively, install via Rust:
+## Any static host
 
-```toml
-[build]
-command = "cargo install zorto && zorto build"
-publish = "public"
-```
+Zorto outputs plain HTML, CSS, and assets. Point any static hosting provider at the `public/` directory:
+
+- **Cloudflare Pages**: build command `pip install zorto && zorto build`, output dir `public`
+- **Vercel**: same build command and output dir
+- **S3 / GCS**: upload `public/` to a bucket with static hosting enabled
 
 > [!TIP]
-> The Python install is faster on Netlify since it downloads a prebuilt wheel. Cargo install compiles from source.
-
-## 3. Connect your repository
-
-1. Log into [Netlify](https://app.netlify.com)
-2. Click **Add new site** > **Import an existing project**
-3. Select your Git provider and repository
-4. Netlify detects `netlify.toml` automatically
-5. Click **Deploy site**
-
-## 4. Custom domain
-
-In **Site settings** > **Domain management**, add your custom domain and configure DNS as directed.
-
-Every push to your main branch triggers a new deploy.
+> The Python install (`pip install zorto`) is fastest on CI since it downloads a prebuilt wheel. `cargo install zorto` compiles from source and takes longer.

@@ -22,14 +22,14 @@ favicon = "/dkdc2-favicon-32.png"
 favicon_mimetype = "image/png"
 
 menu_items = [
-  { name = "Getting started", url = "/docs/getting-started/" },
-  { name = "Concepts", url = "/docs/concepts/" },
-  { name = "How-to", url = "/docs/how-to/" },
-  { name = "Reference", url = "/docs/reference/" },
+  { name = "getting started", url = "/docs/getting-started/" },
+  { name = "concepts", url = "/docs/concepts/" },
+  { name = "how-to", url = "/docs/how-to/" },
+  { name = "reference", url = "/docs/reference/" },
 ]
 
 menu_items_right = [
-  { name = "Blog", url = "/posts" },
+  { name = "blog", url = "/posts" },
 ]
 
 [[extra.social_links]]
@@ -53,4 +53,4 @@ features = [
   { name = "Free & open source", description = "MIT-licensed forever." },
 ]
 
-copyright_html = '<a href="/">Zorto</a> by <a href="https://dkdc.dev" target="_blank" rel="noopener">dkdc.dev</a>'
+copyright_html = '<a href="/">Zorto</a> by <a href="https://dkdc.dev" target="_blank" rel="noopener">dkdc.dev</a> via <a href="https://zorto.dev" target="_blank" rel="noopener">Zorto</a>'

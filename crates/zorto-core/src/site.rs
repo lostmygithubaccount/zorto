@@ -221,9 +221,12 @@ impl Site {
     fn render_templates(&self, tera: &tera::Tera) -> anyhow::Result<()> {
         // Clean and create output dir
         if self.output_dir.exists() {
-            std::fs::remove_dir_all(&self.output_dir)?;
+            std::fs::remove_dir_all(&self.output_dir).map_err(|e| {
+                anyhow::anyhow!("failed to clean {}: {e}", self.output_dir.display())
+            })?;
         }
-        std::fs::create_dir_all(&self.output_dir)?;
+        std::fs::create_dir_all(&self.output_dir)
+            .map_err(|e| anyhow::anyhow!("failed to create {}: {e}", self.output_dir.display()))?;
 
         // Render pages
         for page in self.pages.values() {
@@ -617,7 +620,9 @@ impl Site {
             if let Some(parent) = dest.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::copy(asset_path, &dest)?;
+            std::fs::copy(asset_path, &dest).map_err(|e| {
+                anyhow::anyhow!("failed to copy asset {}: {e}", asset_path.display())
+            })?;
         }
 
         Ok(())
@@ -673,7 +678,13 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
             if let Some(parent) = dest.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::copy(path, &dest)?;
+            std::fs::copy(path, &dest).map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to copy {} -> {}: {e}",
+                    path.display(),
+                    dest.display()
+                )
+            })?;
         }
     }
     Ok(())

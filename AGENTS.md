@@ -44,6 +44,12 @@ Python checks: `ruff check .`, `ruff format --check .`, `ty check`
 - do clone Zola & Quarto (and any other repos) into the .gitignored 'external' directory and use them as references for how to implement the features in this project.
 - Python distribution (via PyO3/maturin) is a hard requirement. The `crates/zorto-py/` bindings and `py/zorto/` wrapper must be maintained.
 
+## style conventions
+
+- **all lowercase** for nav items, menu text, UI labels, and headings on the website (dkdc brand style). Sentence case is planned for v1.0.0 (like Go's convention shift).
+- "Zorto" (capitalized) in documentation prose; `zorto` for commands, code, URLs.
+- built-in themes: `dkdc`, `light`, `dark`. All feature-gated Cargo features (default: all enabled). Python builds always include all themes.
+
 ## Zola reference
 
 zorto references Zola's MIT-licensed code as a design guide. The reference copy in `external/zola/` **must stay at tag v0.21.0** — this is the last MIT-licensed release. Starting at v0.22.0, Zola switched to EUPL which is incompatible with our MIT license. Do NOT checkout, pull, or reference any Zola code beyond v0.21.0.

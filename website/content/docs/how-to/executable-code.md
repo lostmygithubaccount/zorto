@@ -1,5 +1,6 @@
 +++
 title = "Executable code blocks"
+template = "docs.html"
 +++
 
 Zorto can execute Python and Bash code blocks at build time and render their output inline.

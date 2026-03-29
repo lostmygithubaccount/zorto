@@ -1,5 +1,6 @@
 +++
 title = "Callouts"
+template = "docs.html"
 +++
 
 Zorto supports GitHub-style callout alerts in markdown using blockquote syntax.

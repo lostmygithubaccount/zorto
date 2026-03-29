@@ -1,5 +1,6 @@
 +++
 title = "Add a blog"
+template = "docs.html"
 +++
 
 ## Create the section
@@ -9,6 +10,7 @@ Create `content/posts/_index.md`:
 ```toml
 +++
 title = "Blog"
+template = "docs.html"
 sort_by = "date"
 paginate_by = 10
 +++
@@ -23,6 +25,7 @@ Create `content/posts/my-first-post.md`:
 ```markdown
 +++
 title = "My first post"
+template = "docs.html"
 date = "2026-01-15"
 author = "Cody"
 
