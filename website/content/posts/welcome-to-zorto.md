@@ -1,5 +1,5 @@
 +++
-title = "introducing zorto"
+title = "introducing Zorto"
 date = "2026-03-28"
 author = "Cody"
 description = "A fast static site generator built for AI and agents. MIT-licensed, free and open source forever."
