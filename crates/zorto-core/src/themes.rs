@@ -10,6 +10,7 @@
 
 /// A built-in theme.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Theme {
     /// Violet/cyan dark-default theme with animations. The dkdc brand theme.
     #[cfg(feature = "theme-dkdc")]
@@ -55,6 +56,7 @@ impl Theme {
     /// Get all template files for this theme as `(name, content)` pairs.
     ///
     /// Template names use forward slashes (e.g. `"macros/post.html"`).
+    #[allow(unreachable_patterns)]
     pub fn templates(&self) -> Vec<(&'static str, &'static str)> {
         match self {
             #[cfg(feature = "theme-dkdc")]
@@ -138,10 +140,12 @@ impl Theme {
                     include_str!("../themes/dark/templates/macros/post.html"),
                 ),
             ],
+            _ => vec![],
         }
     }
 
     /// Get all SCSS files for this theme as `(filename, content)` pairs.
+    #[allow(unreachable_patterns)]
     pub fn scss(&self) -> Vec<(&'static str, &'static str)> {
         match self {
             #[cfg(feature = "theme-dkdc")]
@@ -153,6 +157,7 @@ impl Theme {
             )],
             #[cfg(feature = "theme-dark")]
             Self::Dark => vec![("style.scss", include_str!("../themes/dark/sass/style.scss"))],
+            _ => vec![],
         }
     }
 }
