@@ -61,8 +61,12 @@
   let W, H, cols, rows, centerX, centerY, maxDist;
 
   function resize() {
-    W = canvas.parentElement.offsetWidth;
-    H = canvas.parentElement.offsetHeight;
+    var newW = canvas.parentElement.offsetWidth;
+    var newH = canvas.parentElement.offsetHeight;
+    // Skip resize if only height changed slightly (mobile address bar)
+    if (W && Math.abs(newW - W) < 2 && Math.abs(newH - H) < 100) return;
+    W = newW;
+    H = newH;
     canvas.width = W;
     canvas.height = H;
     cols = Math.ceil(W / spacing) + 1;
