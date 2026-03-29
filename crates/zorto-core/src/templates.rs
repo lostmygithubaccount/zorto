@@ -58,7 +58,7 @@ pub fn setup_tera(
                 // tera.extend() skips templates that already exist, so we
                 // re-add local templates as raw strings to override theme ones.
                 let mut overrides = Vec::new();
-                for (name, _) in &local.templates {
+                for name in local.templates.keys() {
                     let path = templates_dir.join(name);
                     if path.exists() {
                         let content = std::fs::read_to_string(&path)?;
