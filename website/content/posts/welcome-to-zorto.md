@@ -49,6 +49,10 @@ Eight built-in shortcodes: `include`, `tabs`, `note`, `details`, `figure`, `yout
 
 `zorto check` warns about hardcoded strings in templates, inspired by clippy. User-facing text belongs in `config.toml` or content files, not in HTML templates. This keeps themes reusable.
 
+## what's next
+
+We're working toward v1 with more built-in themes, support for additional languages in executable code blocks (beyond Python and Bash), and broader visualization support. More on all of that soon.
+
 ## free and open source
 
 Zorto is [MIT-licensed](https://github.com/dkdc-io/zorto/blob/main/LICENSE) -- free and open source forever. We may consider dual-licensing with Apache 2.0 in the future; [open an issue](https://github.com/dkdc-io/zorto/issues) if that would be useful for your project.
