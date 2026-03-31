@@ -41,8 +41,8 @@ menu_items = [
 ]
 
 menu_items_right = [
-  { name = "Blog", url = "/posts" },
   { name = "llms.txt", url = "/llms.txt" },
+  { name = "Blog", url = "/posts" },
 ]
 
 social_links = [

@@ -1,10 +1,10 @@
 [package]
 name = "zorto-core"
-version = "0.13.0"
+version = "0.13.1"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Cody <cody@dkdc.dev>"]
-description = "Core library for zorto — a fast static site generator with executable code blocks"
+description = "Core library for zorto — the AI-native static site generator (SSG) with executable code blocks"
 license = "MIT"
 repository = "https://github.com/dkdc-io/zorto"
 homepage = "https://github.com/dkdc-io/zorto"

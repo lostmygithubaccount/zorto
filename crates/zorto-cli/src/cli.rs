@@ -9,7 +9,7 @@ use zorto_core::site;
 #[command(
     name = "zorto",
     version,
-    about = "A fast static site generator with executable code blocks"
+    about = "The AI-native static site generator (SSG) with executable code blocks"
 )]
 struct Cli {
     #[command(subcommand)]
