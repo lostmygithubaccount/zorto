@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}404 | {{ config.title }}{% endblock title %}
+{% block content %}
+<div class="matrix-404">
+    <canvas id="matrix-canvas"></canvas>
+    <div class="matrix-404__content">
+        <h1>404</h1>
+        <p>page not found</p>
+        <a href="{{ config.base_url }}" class="button">&larr; back home</a>
+    </div>
+</div>
+<style>
+.matrix-404 { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; z-index: 10; }
+#matrix-canvas { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+.matrix-404__content { position: relative; z-index: 1; text-align: center; padding: 40px; background: rgba(10, 15, 26, 0.85); border: 1px solid var(--accent-alpha-20); border-radius: 8px; backdrop-filter: blur(4px); }
+.matrix-404__content h1 { font-size: 6rem; margin: 0; color: var(--accent); text-shadow: 0 0 30px var(--accent); }
+.matrix-404__content p { font-size: 1.5rem; color: var(--accent-secondary); margin: 10px 0 30px; }
+</style>
+<script>
+(function() {
+    const canvas = document.getElementById('matrix-canvas');
+    const ctx = canvas.getContext('2d');
+    const colors = ['rgba(59, 130, 246, ', 'rgba(52, 211, 153, '];
+    const charArray = '01'.split('');
+    let fontSize = 14, columns, drops = [];
+    function initMatrix() {
+        canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
+        columns = Math.floor(canvas.width / fontSize);
+        drops = []; for (let i = 0; i < columns; i++) drops[i] = Math.random() * -100;
+    }
+    function draw() {
+        ctx.fillStyle = 'rgba(10, 15, 26, 0.05)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.font = fontSize + 'px monospace';
+        for (let i = 0; i < drops.length; i++) {
+            const char = charArray[Math.floor(Math.random() * charArray.length)];
+            ctx.fillStyle = colors[i % 2] + (0.3 + Math.random() * 0.7) + ')';
+            ctx.fillText(char, i * fontSize, drops[i] * fontSize);
+            if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+            drops[i]++;
+        }
+    }
+    canvas.style.display = 'block'; initMatrix();
+    let animationId, lastTime = 0; const interval = 1000 / 20;
+    function animate(t) { animationId = requestAnimationFrame(animate); if (t - lastTime < interval) return; lastTime = t; draw(); }
+    animate(0);
+    window.addEventListener('resize', function() { setTimeout(initMatrix, 100); });
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { cancelAnimationFrame(animationId); ctx.fillStyle = 'rgba(10, 15, 26, 1)'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+})();
+</script>
+{% endblock content %}

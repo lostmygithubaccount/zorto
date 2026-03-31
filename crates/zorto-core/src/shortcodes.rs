@@ -1,6 +1,6 @@
 use regex::Regex;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 static BODY_SHORTCODE_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -167,6 +167,8 @@ fn resolve_shortcode(
 /// Arguments:
 /// - `path` (required): file path relative to site root, or an `https://` URL
 /// - `strip_frontmatter` (optional): "true" to strip `+++`-delimited TOML frontmatter
+/// - `rewrite_links` (optional): "true" to rewrite relative `.md` links to clean URL paths.
+///   This makes links work on both GitHub (as `.md` links) and the built site (as clean URLs).
 fn builtin_include(
     args_str: &str,
     site_root: &Path,
@@ -184,11 +186,90 @@ fn builtin_include(
     };
 
     let strip = args.get("strip_frontmatter").is_some_and(|v| v == "true");
-    if strip {
-        Ok(strip_toml_frontmatter(&content))
+    let mut content = if strip {
+        strip_toml_frontmatter(&content)
     } else {
-        Ok(content)
+        content
+    };
+
+    let rewrite = args.get("rewrite_links").is_some_and(|v| v == "true");
+    if rewrite && !path.starts_with("http") {
+        content = rewrite_md_links(&content, path);
     }
+
+    Ok(content)
+}
+
+/// Regex matching markdown links to local `.md` files: `[text](path.md)` or `[text](path.md#anchor)`.
+static MD_LINK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\[([^\]]*)\]\(([^)]+?\.md)(#[^)]*)?\)").unwrap());
+
+/// Rewrite relative `.md` links in included content to clean URL paths.
+///
+/// Given the include `path` (relative to site root), resolves each relative `.md`
+/// link against the included file's parent directory, then converts to a clean URL:
+/// - Strip `.md` extension
+/// - `README` at the end maps to the directory (e.g. `docs/concepts/README` → `/docs/concepts/`)
+/// - Prepend `/`, append `/`
+/// - Preserve `#anchor` fragments
+pub(crate) fn rewrite_md_links(content: &str, include_path: &str) -> String {
+    let include_dir = Path::new(include_path).parent().unwrap_or(Path::new(""));
+
+    MD_LINK_RE
+        .replace_all(content, |caps: &regex::Captures| {
+            let text = &caps[1];
+            let rel_path = &caps[2];
+            let anchor = caps.get(3).map(|m| m.as_str()).unwrap_or("");
+
+            // Skip absolute URLs and paths
+            if rel_path.starts_with("http://")
+                || rel_path.starts_with("https://")
+                || rel_path.starts_with('/')
+            {
+                return caps[0].to_string();
+            }
+
+            // Resolve relative to the included file's directory
+            let resolved = normalize_path(&include_dir.join(rel_path));
+            let resolved_str = resolved.to_string_lossy();
+
+            // Strip .md extension
+            let without_ext = resolved_str.trim_end_matches(".md");
+
+            // Handle README → directory
+            let url_path = if without_ext.ends_with("/README") || without_ext == "README" {
+                without_ext.trim_end_matches("README").to_string()
+            } else {
+                format!("{without_ext}/")
+            };
+
+            // Ensure leading slash
+            let url_path = if url_path.starts_with('/') {
+                url_path
+            } else {
+                format!("/{url_path}")
+            };
+
+            format!("[{text}]({url_path}{anchor})")
+        })
+        .into_owned()
+}
+
+/// Normalize a path by resolving `.` and `..` components without filesystem access.
+pub(crate) fn normalize_path(path: &Path) -> PathBuf {
+    let mut components = Vec::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                components.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => {
+                components.push(other);
+            }
+        }
+    }
+    components.iter().collect()
 }
 
 /// Fetch content from a remote URL.
@@ -832,5 +913,73 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result, "shared content");
+    }
+
+    #[test]
+    fn test_rewrite_md_links_relative() {
+        let content = "[Config](../reference/config.md)";
+        let result = rewrite_md_links(content, "../docs/getting-started/installation.md");
+        assert_eq!(result, "[Config](/docs/reference/config/)");
+    }
+
+    #[test]
+    fn test_rewrite_md_links_with_anchor() {
+        let content = "[Themes](../concepts/themes.md#built-in)";
+        let result = rewrite_md_links(content, "../docs/getting-started/quick-start.md");
+        assert_eq!(result, "[Themes](/docs/concepts/themes/#built-in)");
+    }
+
+    #[test]
+    fn test_rewrite_md_links_readme() {
+        let content = "[Concepts](../concepts/README.md)";
+        let result = rewrite_md_links(content, "../docs/getting-started/installation.md");
+        assert_eq!(result, "[Concepts](/docs/concepts/)");
+    }
+
+    #[test]
+    fn test_rewrite_md_links_same_dir() {
+        let content = "[Quick start](quick-start.md)";
+        let result = rewrite_md_links(content, "../docs/getting-started/installation.md");
+        assert_eq!(result, "[Quick start](/docs/getting-started/quick-start/)");
+    }
+
+    #[test]
+    fn test_rewrite_md_links_skips_http() {
+        let content = "[Zola](https://github.com/getzola/zola.md)";
+        let result = rewrite_md_links(content, "../docs/concepts/themes.md");
+        assert_eq!(result, "[Zola](https://github.com/getzola/zola.md)");
+    }
+
+    #[test]
+    fn test_rewrite_md_links_preserves_non_md() {
+        let content = "[Image](photo.jpg) and [Doc](other.md)";
+        let result = rewrite_md_links(content, "../docs/concepts/themes.md");
+        assert_eq!(
+            result,
+            "[Image](photo.jpg) and [Doc](/docs/concepts/other/)"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_md_links_integration() {
+        let tmp = TempDir::new().unwrap();
+        let site = tmp.path().join("site");
+        let docs = tmp.path().join("docs").join("getting-started");
+        let dir = site.join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(&docs).unwrap();
+        std::fs::write(
+            docs.join("install.md"),
+            "See [config](../reference/config.md) for details.",
+        )
+        .unwrap();
+        let result = process_shortcodes(
+            r#"{{ include(path="../docs/getting-started/install.md", rewrite_links="true") }}"#,
+            &dir,
+            &site,
+            tmp.path(),
+        )
+        .unwrap();
+        assert_eq!(result, "See [config](/docs/reference/config/) for details.");
     }
 }

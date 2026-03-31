@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-use crate::config::{SortBy, default_toml_table};
+use crate::config::{ContentDirConfig, SortBy, default_toml_table};
 
 /// Compute the URL path for a page given its parent directory and slug.
 /// e.g. ("posts", "hello") -> "/posts/hello/"
@@ -89,6 +89,25 @@ pub struct Frontmatter {
     pub rest: HashMap<String, toml::Value>,
 }
 
+impl Default for Frontmatter {
+    fn default() -> Self {
+        Self {
+            title: None,
+            date: None,
+            author: None,
+            description: None,
+            draft: false,
+            slug: None,
+            template: None,
+            aliases: Vec::new(),
+            sort_by: None,
+            paginate_by: None,
+            extra: default_toml_table(),
+            rest: HashMap::new(),
+        }
+    }
+}
+
 /// A rendered page (any `.md` file that is not `_index.md`).
 #[derive(Debug, Clone, Serialize)]
 pub struct Page {
@@ -157,25 +176,6 @@ pub struct Section {
     pub extra: serde_json::Value,
     /// Path of the source `_index.md` relative to the content directory.
     pub relative_path: String,
-}
-
-impl Default for Frontmatter {
-    fn default() -> Self {
-        Self {
-            title: None,
-            date: None,
-            author: None,
-            description: None,
-            draft: false,
-            slug: None,
-            template: None,
-            aliases: vec![],
-            sort_by: None,
-            paginate_by: None,
-            extra: default_toml_table(),
-            rest: HashMap::new(),
-        }
-    }
 }
 
 /// Parse TOML frontmatter from `+++` delimiters.
@@ -397,6 +397,222 @@ pub fn load_content(content_dir: &Path, base_url: &str) -> anyhow::Result<Loaded
         pages,
         assets,
     })
+}
+
+/// Load an external directory of plain markdown files as content pages and sections.
+///
+/// - `README.md` files become sections (like `_index.md`)
+/// - Other `.md` files become pages
+/// - Title is extracted from the first `# Heading`
+/// - Description is extracted from the first paragraph after the heading
+/// - Files listed in `config.exclude` are skipped
+pub fn load_content_dir(
+    dir: &Path,
+    config: &ContentDirConfig,
+    base_url: &str,
+) -> anyhow::Result<LoadedContent> {
+    let mut sections = HashMap::new();
+    let mut pages = HashMap::new();
+
+    if !dir.exists() {
+        return Ok(LoadedContent {
+            sections,
+            pages,
+            assets: vec![],
+        });
+    }
+
+    for entry in WalkDir::new(dir)
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| anyhow::anyhow!("failed to walk content dir {}: {e}", dir.display()))?
+    {
+        let path = entry.path();
+        if path.is_dir() {
+            continue;
+        }
+
+        let filename = path.file_name().unwrap_or_default().to_string_lossy();
+        if !filename.ends_with(".md") {
+            continue;
+        }
+
+        // Relative path within the external dir (e.g. "getting-started/installation.md")
+        let rel_in_dir = path
+            .strip_prefix(dir)
+            .expect("walkdir entry is under dir")
+            .to_string_lossy()
+            .to_string();
+
+        // Check exclude list
+        if config.exclude.contains(&rel_in_dir) {
+            continue;
+        }
+
+        let raw = std::fs::read_to_string(path)
+            .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", path.display()))?;
+
+        let is_readme = filename == "README.md";
+        let stem = Path::new(&rel_in_dir)
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+
+        let (extracted_title, description) = extract_title_description(&raw);
+        // Use extracted H1 title, or derive from filename for non-README files
+        let title = extracted_title.unwrap_or_else(|| title_from_filename(&stem));
+
+        // Strip the title heading from body content so it doesn't render twice
+        let body = strip_title_heading(&raw);
+
+        // Optionally rewrite .md links to clean URLs
+        let body = if config.rewrite_links {
+            let include_path = format!("../{}/{}", config.path, rel_in_dir);
+            crate::shortcodes::rewrite_md_links(&body, &include_path)
+        } else {
+            body
+        };
+
+        if is_readme {
+            // README.md → section
+            let rel_path = if config.url_prefix.is_empty() {
+                "_index.md".to_string()
+            } else {
+                let parent = Path::new(&rel_in_dir)
+                    .parent()
+                    .unwrap_or(Path::new(""))
+                    .to_string_lossy();
+                if parent.is_empty() {
+                    format!("{}/_index.md", config.url_prefix)
+                } else {
+                    format!("{}/{parent}/_index.md", config.url_prefix)
+                }
+            };
+
+            let fm = Frontmatter {
+                title: Some(title),
+                description,
+                template: Some(config.section_template.clone()),
+                sort_by: config.sort_by,
+                ..Default::default()
+            };
+            let section = build_section(fm, body, &rel_path, base_url);
+            sections.insert(rel_path, section);
+        } else {
+            // Regular .md → page
+            let parent = Path::new(&rel_in_dir)
+                .parent()
+                .unwrap_or(Path::new(""))
+                .to_string_lossy();
+            let rel_path = if parent.is_empty() {
+                format!("{}/{stem}.md", config.url_prefix)
+            } else {
+                format!("{}/{parent}/{stem}.md", config.url_prefix)
+            };
+
+            let fm = Frontmatter {
+                title: Some(title),
+                description,
+                template: Some(config.template.clone()),
+                ..Default::default()
+            };
+            let page = build_page(fm, body, &rel_path, base_url);
+            pages.insert(rel_path, page);
+        }
+    }
+
+    Ok(LoadedContent {
+        sections,
+        pages,
+        assets: vec![],
+    })
+}
+
+/// Extract title and description from plain markdown (no frontmatter).
+///
+/// Title: first `# Heading` line, or `None` if absent.
+/// Description: first non-empty paragraph of prose (stops at headings, lists, code fences).
+/// When no H1 exists, the description is extracted from the start of the content.
+pub fn extract_title_description(content: &str) -> (Option<String>, Option<String>) {
+    let mut title = None;
+    let mut desc_lines = Vec::new();
+    let mut found_title = false;
+    let mut in_desc = false;
+
+    for line in content.lines() {
+        if !found_title {
+            if let Some(h1) = line.strip_prefix("# ") {
+                title = Some(h1.trim().to_string());
+                found_title = true;
+                continue;
+            }
+        }
+
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            if in_desc {
+                break;
+            }
+            continue;
+        }
+
+        if trimmed.starts_with('#')
+            || trimmed.starts_with('-')
+            || trimmed.starts_with("```")
+            || trimmed.starts_with('|')
+            || trimmed.starts_with('<')
+        {
+            if !in_desc {
+                continue;
+            }
+            break;
+        }
+
+        in_desc = true;
+        desc_lines.push(trimmed);
+    }
+
+    let desc = if desc_lines.is_empty() {
+        None
+    } else {
+        Some(desc_lines.join(" "))
+    };
+    (title, desc)
+}
+
+/// Derive a human-readable title from a filename stem.
+///
+/// e.g. `"add-blog"` → `"Add blog"`, `"content-model"` → `"Content model"`
+fn title_from_filename(stem: &str) -> String {
+    let mut title = stem.replace('-', " ");
+    if let Some(first) = title.get_mut(..1) {
+        first.make_ascii_uppercase();
+    }
+    title
+}
+
+/// Strip the first `# Heading` line from content so it doesn't render twice
+/// (the title is already shown by the template).
+fn strip_title_heading(content: &str) -> String {
+    let mut lines = content.lines();
+    let mut result = Vec::new();
+    let mut found = false;
+
+    for line in &mut lines {
+        if !found && line.starts_with("# ") {
+            found = true;
+            continue;
+        }
+        result.push(line);
+    }
+
+    // Trim leading blank lines after stripping the title
+    let start = result
+        .iter()
+        .position(|l| !l.trim().is_empty())
+        .unwrap_or(0);
+    result[start..].join("\n")
 }
 
 /// Sort key: extract date string for reverse chronological ordering (undated sort last).

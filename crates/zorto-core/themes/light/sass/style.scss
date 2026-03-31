@@ -903,3 +903,55 @@ figure {
   padding: 1rem;
   overflow-x: auto;
 }
+
+// Markdown FAB
+.md-fab {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+  &__toggle {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 50%;
+    border: 1px solid var(--border-color, #333);
+    background: var(--bg-color, #1a1a2e);
+    color: var(--text-color, #e0e0e0);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    transition: background 0.2s;
+    svg { width: 1.25rem; height: 1.25rem; }
+    &:hover { opacity: 0.8; }
+  }
+  &--copied .md-fab__toggle {
+    border-color: #22d3ee;
+    color: #22d3ee;
+  }
+  &__menu {
+    position: absolute;
+    bottom: 3.25rem;
+    right: 0;
+    background: var(--bg-color, #1a1a2e);
+    border: 1px solid var(--border-color, #333);
+    border-radius: 0.5rem;
+    padding: 0.25rem;
+    min-width: 11rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  &__item {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: none;
+    background: none;
+    color: var(--text-color, #e0e0e0);
+    cursor: pointer;
+    text-align: left;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    &:hover { background: var(--bg-hover, rgba(255,255,255,0.05)); }
+  }
+}

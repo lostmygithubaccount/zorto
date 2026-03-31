@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ section.title | default(value=config.title) }}{% endblock title %}
+{% block content %}
+<div class="page-content">
+    <div class="posts">
+        {%- if section.content %}
+        <div class="post">
+            <div class="post-content">{{ section.content | safe }}</div>
+        </div>
+        {% endif %}
+        {%- if paginator %}
+            {%- set show_pages = paginator.pages %}
+        {% else %}
+            {%- set show_pages = section.pages %}
+        {% endif %}
+        {%- for page in show_pages %}
+        <div class="post on-list">
+            {{ post_macros::header(page=page) }}
+            {{ post_macros::content(page=page, summary=true, show_only_description=page.extra.show_only_description | default(value=false)) }}
+        </div>
+        {% endfor %}
+        {%- if paginator %}
+        <div class="pagination">
+            <div class="pagination__buttons">
+            {%- if paginator.previous %}
+                <span class="button previous">
+                    <a href="{{ paginator.previous | replace(from=config.base_url, to="") }}">
+                        <span class="button__icon">&larr;</span>&nbsp;
+                        <span class="button__text">newer posts</span>
+                    </a>
+                </span>
+            {% endif %}
+            {%- if paginator.next %}
+                <span class="button next">
+                    <a href="{{ paginator.next | replace(from=config.base_url, to="") }}">
+                        <span class="button__text">older posts</span>&nbsp;
+                        <span class="button__icon">&rarr;</span>
+                    </a>
+                </span>
+            {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock content %}

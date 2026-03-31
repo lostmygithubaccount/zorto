@@ -21,12 +21,13 @@ name = "zorto"
 path = "src/main.rs"
 
 [features]
-default = ["embed-python", "theme-dkdc", "theme-light", "theme-dark"]
+default = ["embed-python", "theme-dkdc", "theme-light", "theme-dark", "theme-zorto"]
 embed-python = ["zorto-core/embed-python"]
 python = ["zorto-core/python"]
 theme-dkdc = ["zorto-core/theme-dkdc"]
 theme-light = ["zorto-core/theme-light"]
 theme-dark = ["zorto-core/theme-dark"]
+theme-zorto = ["zorto-core/theme-zorto"]
 webapp = ["dep:zorto-webapp"]
 app = ["dep:zorto-app"]
 

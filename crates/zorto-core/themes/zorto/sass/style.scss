@@ -1,32 +1,31 @@
 @import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&family=Space+Grotesk:wght@400;500;700&display=swap');
 
-// zorto.dev: project site styles
-// Colors: violet/purple neon + cyan accent
+// zorto theme: blue/green color scheme from zorto logo
 
 // ========================================
 // CSS Variables
 // ========================================
 :root {
-  --accent: rgb(167, 139, 250);
-  --accent-alpha-70: rgba(167, 139, 250, .7);
-  --accent-alpha-20: rgba(167, 139, 250, .2);
+  --accent: rgb(59, 130, 246);
+  --accent-alpha-70: rgba(59, 130, 246, .7);
+  --accent-alpha-20: rgba(59, 130, 246, .2);
 
-  --accent-secondary: rgb(34, 211, 238);
-  --accent-secondary-alpha-20: rgba(34, 211, 238, .2);
+  --accent-secondary: rgb(52, 211, 153);
+  --accent-secondary-alpha-20: rgba(52, 211, 153, .2);
 
-  --background: #0f0d1a;
-  --background-raised: #16132a;
+  --background: #0a0f1a;
+  --background-raised: #101824;
   --color: #e2e8f0;
   --color-muted: rgba(226, 232, 240, .5);
-  --border-color: rgba(167, 139, 250, .15);
+  --border-color: rgba(59, 130, 246, .15);
 
   --code-bg: rgba(0, 0, 0, 0.3);
   --max-width: 1200px;
 }
 
 [data-theme="light"] {
-  --background: #1a1726;
-  --background-raised: #1e1a30;
+  --background: #141c2a;
+  --background-raised: #1a2436;
 }
 
 // Breakpoints
@@ -880,7 +879,7 @@ hr {
 
 .code-output {
   border-top: 1px solid var(--border-color);
-  background: rgba(34, 211, 238, 0.05);
+  background: rgba(52, 211, 153, 0.05);
 
   pre {
     margin: 0;
@@ -1258,7 +1257,7 @@ pre.mermaid {
     height: 2.75rem;
     border-radius: 50%;
     border: 1px solid var(--border-color, #333);
-    background: var(--bg-color, #1a1a2e);
+    background: var(--bg-color, #0a0f1a);
     color: var(--text-color, #e0e0e0);
     cursor: pointer;
     display: flex;
@@ -1270,14 +1269,14 @@ pre.mermaid {
     &:hover { opacity: 0.8; }
   }
   &--copied .md-fab__toggle {
-    border-color: #22d3ee;
-    color: #22d3ee;
+    border-color: #34d399;
+    color: #34d399;
   }
   &__menu {
     position: absolute;
     bottom: 3.25rem;
     right: 0;
-    background: var(--bg-color, #1a1a2e);
+    background: var(--bg-color, #0a0f1a);
     border: 1px solid var(--border-color, #333);
     border-radius: 0.5rem;
     padding: 0.25rem;

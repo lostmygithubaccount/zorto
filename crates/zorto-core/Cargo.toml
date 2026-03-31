@@ -13,12 +13,13 @@ categories = ["web-programming"]
 readme = "../../README.md"
 
 [features]
-default = ["embed-python", "theme-dkdc", "theme-light", "theme-dark"]
+default = ["embed-python", "theme-dkdc", "theme-light", "theme-dark", "theme-zorto"]
 embed-python = ["python", "pyo3/auto-initialize"]
 python = ["dep:pyo3"]
 theme-dkdc = []
 theme-light = []
 theme-dark = []
+theme-zorto = []
 
 [dependencies]
 # Templating

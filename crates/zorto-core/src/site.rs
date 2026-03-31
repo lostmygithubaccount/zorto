@@ -50,7 +50,20 @@ impl Site {
         let config = Config::load(root)?;
         let content_dir = root.join("content");
 
-        let loaded = content::load_content(&content_dir, &config.base_url)?;
+        let mut loaded = content::load_content(&content_dir, &config.base_url)?;
+
+        // Load external content directories
+        for dir_config in &config.content_dirs {
+            let dir_path = root.join(&dir_config.path);
+            let external = content::load_content_dir(&dir_path, dir_config, &config.base_url)?;
+            // Merge: external content doesn't override manually-authored content
+            for (k, v) in external.sections {
+                loaded.sections.entry(k).or_insert(v);
+            }
+            for (k, v) in external.pages {
+                loaded.pages.entry(k).or_insert(v);
+            }
+        }
 
         Ok(Site {
             config,
@@ -210,8 +223,8 @@ impl Site {
                     shortcodes::process_shortcodes(&raw, &shortcode_dir, root, sandbox)?;
                 section.content =
                     render_markdown_content(&processed, key, config, root, &content_dir, no_exec)?;
+                section.raw_content = processed;
             }
-            section.raw_content = raw;
         }
 
         Ok(())
@@ -236,6 +249,21 @@ impl Site {
             let out_path = self.output_dir.join(page.path.trim_start_matches('/'));
             std::fs::create_dir_all(&out_path)?;
             std::fs::write(out_path.join("index.html"), html)?;
+
+            // Write .md version (post-shortcode markdown)
+            if self.config.generate_md_files {
+                let md_path = page.path.trim_start_matches('/').trim_end_matches('/');
+                let md_file = if md_path.is_empty() {
+                    self.output_dir.join("index.md")
+                } else {
+                    self.output_dir.join(format!("{md_path}.md"))
+                };
+                if let Some(parent) = md_file.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                let md_content = format!("# {}\n\n{}\n", page.title, page.raw_content.trim());
+                std::fs::write(md_file, md_content)?;
+            }
 
             // Generate alias redirects
             for alias in &page.aliases {
@@ -317,6 +345,21 @@ impl Site {
                 let out_path = self.output_dir.join(section.path.trim_start_matches('/'));
                 std::fs::create_dir_all(&out_path)?;
                 std::fs::write(out_path.join("index.html"), html)?;
+            }
+
+            // Write .md version for sections with content
+            if self.config.generate_md_files && !section.raw_content.trim().is_empty() {
+                let md_path = section.path.trim_start_matches('/').trim_end_matches('/');
+                let md_file = if md_path.is_empty() {
+                    self.output_dir.join("index.md")
+                } else {
+                    self.output_dir.join(format!("{md_path}.md"))
+                };
+                if let Some(parent) = md_file.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                let md_content = format!("# {}\n\n{}\n", section.title, section.raw_content.trim());
+                std::fs::write(md_file, md_content)?;
             }
         }
 
@@ -561,7 +604,7 @@ impl Site {
             if !section.pages.is_empty() {
                 out.push('\n');
                 for page in &section.pages {
-                    format_page_link(&mut out, page);
+                    format_page_link(&mut out, page, self.config.generate_md_files);
                 }
             }
         }
@@ -576,7 +619,7 @@ impl Site {
             content::sort_pages_by_date_ref(&mut orphans);
             out.push_str("\n## Pages\n\n");
             for page in &orphans {
-                format_page_link(&mut out, page);
+                format_page_link(&mut out, page, self.config.generate_md_files);
             }
         }
 
@@ -650,7 +693,8 @@ fn render_markdown_content(
         let working_dir = Path::new(key)
             .parent()
             .map(|p| content_dir.join(p))
-            .unwrap_or_else(|| content_dir.to_path_buf());
+            .filter(|p| p.exists())
+            .unwrap_or_else(|| root.to_path_buf());
         let errors = execute::execute_blocks(&mut exec_blocks, &working_dir, root);
         for err in &errors {
             eprintln!("warning: {key}: {err}");
@@ -690,14 +734,22 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Format a page as a markdown link with optional description suffix
-fn format_page_link(out: &mut String, page: &Page) {
+/// Format a page as a markdown link with optional description suffix.
+///
+/// When `md_links` is true, links point to `.md` versions of pages.
+fn format_page_link(out: &mut String, page: &Page, md_links: bool) {
+    let url = if md_links {
+        let trimmed = page.permalink.trim_end_matches('/');
+        format!("{trimmed}.md")
+    } else {
+        page.permalink.clone()
+    };
     match page.description.as_deref() {
         Some(desc) if !desc.is_empty() => {
-            let _ = writeln!(out, "- [{}]({}): {}", page.title, page.permalink, desc);
+            let _ = writeln!(out, "- [{}]({url}): {}", page.title, desc);
         }
         _ => {
-            let _ = writeln!(out, "- [{}]({})", page.title, page.permalink);
+            let _ = writeln!(out, "- [{}]({url})", page.title);
         }
     }
 }

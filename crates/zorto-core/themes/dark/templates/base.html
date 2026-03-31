@@ -170,6 +170,41 @@
   });
 })();
 </script>
+{%- if config.extra.enable_md_fab %}
+{%- set_global fab_path = "/" %}
+{%- if page %}{% set_global fab_path = page.path %}
+{%- elif section %}{% set_global fab_path = section.path %}{% endif %}
+{%- set_global fab_excluded = false %}
+{%- if config.extra.md_fab_exclude %}
+  {%- for exc in config.extra.md_fab_exclude %}
+    {%- if fab_path == exc %}{% set_global fab_excluded = true %}{% endif %}
+  {%- endfor %}
+{%- endif %}
+{%- if not fab_excluded %}
+<div class="md-fab" id="md-fab">
+  <button class="md-fab__toggle" aria-label="Markdown" title="Markdown">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 208 128" fill="currentColor"><rect width="198" height="118" x="5" y="5" rx="10" fill="none" stroke="currentColor" stroke-width="10"/><path d="M30 98V30h20l20 25 20-25h20v68H90V59L70 84 50 59v39zm125 0l-30-33h20V30h20v35h20z"/></svg>
+  </button>
+  <div class="md-fab__menu" hidden>
+    <button class="md-fab__item" data-action="copy-url">Copy page's .md link</button>
+    <button class="md-fab__item" data-action="copy-content">Copy page as Markdown</button>
+  </div>
+</div>
+<script>
+(function(){
+  var fab=document.getElementById('md-fab');if(!fab)return;
+  var toggle=fab.querySelector('.md-fab__toggle'),menu=fab.querySelector('.md-fab__menu');
+  var p=window.location.pathname.replace(/\/$/,'');
+  var mdUrl=window.location.origin+(p||'/index')+'.md';
+  function flash(){toggle.classList.add('md-fab--copied');setTimeout(function(){toggle.classList.remove('md-fab--copied');},1500);menu.setAttribute('hidden','');}
+  toggle.addEventListener('click',function(){menu.toggleAttribute('hidden');});
+  fab.querySelector('[data-action="copy-url"]').addEventListener('click',function(){navigator.clipboard.writeText(mdUrl).then(flash);});
+  fab.querySelector('[data-action="copy-content"]').addEventListener('click',function(){fetch(mdUrl).then(function(r){return r.text();}).then(function(t){navigator.clipboard.writeText(t).then(flash);});});
+  document.addEventListener('click',function(e){if(!fab.contains(e.target))menu.setAttribute('hidden','');});
+})();
+</script>
+{%- endif %}
+{%- endif %}
 {%- block extra_body %}{% endblock extra_body %}
 </body>
 </html>

@@ -21,6 +21,9 @@ pub enum Theme {
     /// Clean dark-default theme. No animations.
     #[cfg(feature = "theme-dark")]
     Dark,
+    /// Blue/green dark-default theme with animations. The zorto brand theme.
+    #[cfg(feature = "theme-zorto")]
+    Zorto,
 }
 
 impl Theme {
@@ -36,6 +39,8 @@ impl Theme {
             "light" => Some(Self::Light),
             #[cfg(feature = "theme-dark")]
             "dark" => Some(Self::Dark),
+            #[cfg(feature = "theme-zorto")]
+            "zorto" => Some(Self::Zorto),
             _ => None,
         }
     }
@@ -50,6 +55,8 @@ impl Theme {
         names.push("light");
         #[cfg(feature = "theme-dark")]
         names.push("dark");
+        #[cfg(feature = "theme-zorto")]
+        names.push("zorto");
         names
     }
 
@@ -140,6 +147,33 @@ impl Theme {
                     include_str!("../themes/dark/templates/macros/post.html"),
                 ),
             ],
+            #[cfg(feature = "theme-zorto")]
+            Self::Zorto => vec![
+                (
+                    "base.html",
+                    include_str!("../themes/zorto/templates/base.html"),
+                ),
+                (
+                    "page.html",
+                    include_str!("../themes/zorto/templates/page.html"),
+                ),
+                (
+                    "section.html",
+                    include_str!("../themes/zorto/templates/section.html"),
+                ),
+                (
+                    "index.html",
+                    include_str!("../themes/zorto/templates/index.html"),
+                ),
+                (
+                    "404.html",
+                    include_str!("../themes/zorto/templates/404.html"),
+                ),
+                (
+                    "macros/post.html",
+                    include_str!("../themes/zorto/templates/macros/post.html"),
+                ),
+            ],
             _ => vec![],
         }
     }
@@ -157,6 +191,11 @@ impl Theme {
             )],
             #[cfg(feature = "theme-dark")]
             Self::Dark => vec![("style.scss", include_str!("../themes/dark/sass/style.scss"))],
+            #[cfg(feature = "theme-zorto")]
+            Self::Zorto => vec![(
+                "style.scss",
+                include_str!("../themes/zorto/sass/style.scss"),
+            )],
             _ => vec![],
         }
     }

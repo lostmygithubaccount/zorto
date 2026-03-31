@@ -42,6 +42,12 @@ pub struct Config {
     /// Taxonomy definitions (default: a single `"tags"` taxonomy).
     #[serde(default, skip_serializing)]
     pub taxonomies: Vec<TaxonomyConfig>,
+    /// Generate `.md` output files alongside HTML for every page (default: `false`).
+    #[serde(default)]
+    pub generate_md_files: bool,
+    /// External content directories to load as pages/sections.
+    #[serde(default, skip_serializing)]
+    pub content_dirs: Vec<ContentDirConfig>,
 }
 
 /// Where to insert anchor links on headings.
@@ -111,6 +117,39 @@ impl Default for MarkdownConfig {
 pub struct TaxonomyConfig {
     /// Taxonomy name (e.g. `"tags"`, `"categories"`).
     pub name: String,
+}
+
+/// Configuration for loading an external directory of plain markdown as content.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ContentDirConfig {
+    /// Path to the external directory (relative to site root).
+    pub path: String,
+    /// URL prefix for generated pages (e.g. `"docs"` → `/docs/...`).
+    pub url_prefix: String,
+    /// Template for generated pages (default: `"page.html"`).
+    #[serde(default = "default_page_html")]
+    pub template: String,
+    /// Template for generated sections (default: `"section.html"`).
+    #[serde(default = "default_section_html")]
+    pub section_template: String,
+    /// Sort order for pages within generated sections.
+    #[serde(default)]
+    pub sort_by: Option<SortBy>,
+    /// Rewrite relative `.md` links in content to clean URL paths.
+    #[serde(default)]
+    pub rewrite_links: bool,
+    /// Files to exclude (relative to the external directory, e.g. `"reference/cli.md"`).
+    /// Excluded files are expected to exist as manual content in `content/`.
+    #[serde(default)]
+    pub exclude: Vec<String>,
+}
+
+fn default_page_html() -> String {
+    "page.html".to_string()
+}
+
+fn default_section_html() -> String {
+    "section.html".to_string()
 }
 
 fn default_true() -> bool {
