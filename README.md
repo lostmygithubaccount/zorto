@@ -30,6 +30,12 @@ cargo:
 cargo install zorto
 ```
 
+Verify installation:
+
+```{bash}
+zorto --version
+```
+
 You can use `uvx` to run it without installing:
 
 ```bash

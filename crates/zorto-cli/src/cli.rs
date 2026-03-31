@@ -132,7 +132,8 @@ where
     }
 
     let Some(command) = cli.command else {
-        anyhow::bail!("No subcommand provided. Run `zorto --help` for usage.");
+        Cli::parse_from(["zorto", "--help"]);
+        unreachable!();
     };
 
     match command {
