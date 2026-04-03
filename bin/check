@@ -5,9 +5,6 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 bin/check-rs
 bin/check-py
 
-echo "Building Python bindings..."
-bin/build-py
-
 echo "Building website..."
 cargo build -p zorto --quiet
 export PATH="$PWD/target/debug:$PATH"

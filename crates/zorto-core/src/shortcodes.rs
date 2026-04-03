@@ -1246,12 +1246,13 @@ fn builtin_pyref(args_str: &str, site_root: &Path) -> anyhow::Result<String> {
     let parsed: serde_json::Value = serde_json::from_str(&json_str)
         .map_err(|e| anyhow::anyhow!("pyref: failed to parse introspection result: {e}"))?;
 
-    // Check for error
+    // Check for error — gracefully degrade if module can't be imported
     if let Some(obj) = parsed.as_object() {
         if let Some(err) = obj.get("error") {
-            return Err(anyhow::anyhow!(
-                "pyref: {}",
-                err.as_str().unwrap_or("unknown error")
+            let msg = err.as_str().unwrap_or("unknown error");
+            eprintln!("pyref warning: {msg}");
+            return Ok(format!(
+                "<div class=\"pyref\"><p><em>Python API reference unavailable: {msg}</em></p></div>"
             ));
         }
     }
