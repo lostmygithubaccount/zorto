@@ -6,7 +6,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
     <meta name="robots" content="noodp"/>
-    <style>html.theme-loading{visibility:hidden}</style>
+    <style>html.theme-swapping{opacity:0!important}</style>
     <link rel="stylesheet" href="/style.css" id="theme-stylesheet">
     <script>
       (function() {
@@ -18,11 +18,18 @@
         var siteTheme = localStorage.getItem('site-theme');
         var defaultTheme = '{{ config.theme | default(value="zorto") }}';
         if (siteTheme && siteTheme !== defaultTheme) {
-          document.documentElement.classList.add('theme-loading');
+          document.documentElement.classList.add('theme-swapping');
           var link = document.getElementById('theme-stylesheet');
-          link.href = '/style-' + siteTheme + '.css';
-          link.onload = function() { document.documentElement.classList.remove('theme-loading'); };
-          setTimeout(function() { document.documentElement.classList.remove('theme-loading'); }, 500);
+          var newLink = document.createElement('link');
+          newLink.rel = 'stylesheet';
+          newLink.id = 'theme-stylesheet';
+          newLink.href = '/style-' + siteTheme + '.css';
+          newLink.onload = function() {
+            link.remove();
+            document.documentElement.classList.remove('theme-swapping');
+          };
+          link.insertAdjacentElement('afterend', newLink);
+          setTimeout(function() { document.documentElement.classList.remove('theme-swapping'); }, 2000);
         }
       })();
     </script>
@@ -199,10 +206,18 @@
   function applySiteTheme(name) {
     var href = (name === defaultTheme) ? '/style.css' : '/style-' + name + '.css';
     if (styleLink.getAttribute('href') !== href) {
-      document.documentElement.classList.add('theme-loading');
-      styleLink.href = href;
-      styleLink.onload = function() { document.documentElement.classList.remove('theme-loading'); };
-      setTimeout(function() { document.documentElement.classList.remove('theme-loading'); }, 500);
+      document.documentElement.classList.add('theme-swapping');
+      var newLink = document.createElement('link');
+      newLink.rel = 'stylesheet';
+      newLink.id = 'theme-stylesheet';
+      newLink.href = href;
+      newLink.onload = function() {
+        styleLink.remove();
+        styleLink = newLink;
+        document.documentElement.classList.remove('theme-swapping');
+      };
+      styleLink.insertAdjacentElement('afterend', newLink);
+      setTimeout(function() { document.documentElement.classList.remove('theme-swapping'); }, 2000);
     }
     localStorage.setItem('site-theme', name);
     currentSiteTheme = name;
