@@ -1,6 +1,6 @@
 # Zorto documentation
 
-Zorto is a static site generator with executable code blocks, written in Rust with Python bindings.
+Zorto is the AI-native static site generator (SSG) with executable code blocks.
 
 ```bash
 zorto init my-site && cd my-site && zorto preview
