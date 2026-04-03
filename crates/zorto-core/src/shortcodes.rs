@@ -29,6 +29,13 @@ static ARGS_SINGLE_RE: LazyLock<Regex> =
 /// - `youtube(id="...")`: Responsive YouTube embed
 /// - `gist(url="...")`: Embedded GitHub Gist
 /// - `mermaid()`: Mermaid diagram
+/// - `pyref(module="...")`: Python API reference (requires `python` feature)
+/// - `configref(src="...")`: Config reference from Rust source doc comments
+/// - `flow(steps="Label:Desc|Label:Desc|...")`: Horizontal step flow diagram
+/// - `layers(items="Title:Desc:badge|...")`: Vertical layered stack diagram
+/// - `tree()`: File tree visualization (body content, one line per entry)
+/// - `compare(left_title, left, right_title, right)`: Side-by-side comparison cards
+/// - `cascade(items="Priority:Label:badge|...")`: Override/priority cascade diagram
 ///
 /// Process shortcodes in content.
 ///
@@ -158,6 +165,13 @@ fn resolve_shortcode(
         "youtube" => builtin_youtube(args_str),
         "gist" => builtin_gist(args_str),
         "mermaid" => builtin_mermaid(body),
+        "pyref" => builtin_pyref(args_str, site_root),
+        "configref" => builtin_configref(args_str, site_root, sandbox_root),
+        "flow" => builtin_flow(args_str),
+        "layers" => builtin_layers(args_str),
+        "tree" => builtin_tree(args_str, body),
+        "compare" => builtin_compare(args_str),
+        "cascade" => builtin_cascade(args_str),
         _ => render_shortcode(name, args_str, body, shortcode_dir),
     }
 }
@@ -521,6 +535,441 @@ fn builtin_gist(args_str: &str) -> anyhow::Result<String> {
     ))
 }
 
+/// Built-in `flow` shortcode: horizontal step flow diagram.
+///
+/// Arguments:
+/// - `steps` (required): pipe-delimited steps, each as "Label:Description" or just "Label"
+/// - `caption` (optional): caption text below the diagram
+///
+/// Example: {{ flow(steps="Write:Markdown|Parse:Find code blocks|Execute:Run code|Render:HTML output") }}
+fn builtin_flow(args_str: &str) -> anyhow::Result<String> {
+    let args = parse_args(args_str);
+    let steps_str = args
+        .get("steps")
+        .ok_or_else(|| anyhow::anyhow!("flow shortcode requires a `steps` argument"))?;
+    let caption = args.get("caption");
+
+    let steps: Vec<(&str, &str)> = steps_str
+        .split('|')
+        .map(|s| {
+            let s = s.trim();
+            match s.split_once(':') {
+                Some((label, desc)) => (label.trim(), desc.trim()),
+                None => (s, ""),
+            }
+        })
+        .collect();
+
+    let mut html = String::from(
+        "<div class=\"cv-visual cv-visual--wide cv-visual--center\">\n\
+         <div class=\"cv-flow\">\n",
+    );
+
+    for (i, (label, desc)) in steps.iter().enumerate() {
+        if i > 0 {
+            html.push_str("<div class=\"cv-flow__arrow\">\u{2192}</div>\n");
+        }
+        let step_class = if i == steps.len() - 1 {
+            "cv-flow__step cv-flow__step--green"
+        } else if i > 0 {
+            "cv-flow__step cv-flow__step--accent"
+        } else {
+            "cv-flow__step"
+        };
+        html.push_str(&format!("<div class=\"{step_class}\">"));
+        html.push_str(&format!(
+            "<div class=\"cv-flow__label\"><strong>{}</strong>",
+            escape_html(label)
+        ));
+        if !desc.is_empty() {
+            html.push_str(&escape_html(desc));
+        }
+        html.push_str("</div></div>\n");
+    }
+
+    html.push_str("</div>\n");
+
+    if let Some(cap) = caption {
+        html.push_str(&format!(
+            "<p class=\"cv-caption\">{}</p>\n",
+            escape_html(cap)
+        ));
+    }
+
+    html.push_str("</div>");
+    Ok(html)
+}
+
+/// Built-in `layers` shortcode: vertical layered stack diagram.
+///
+/// Arguments:
+/// - `items` (required): pipe-delimited items, each as "Title:Description:badge" or "Title:Description"
+/// - `caption` (optional): caption text below the diagram
+///
+/// Example: {{ layers(items="Identity:Who is this site?:base_url|Build:What outputs?:feeds") }}
+fn builtin_layers(args_str: &str) -> anyhow::Result<String> {
+    let args = parse_args(args_str);
+    let items_str = args
+        .get("items")
+        .ok_or_else(|| anyhow::anyhow!("layers shortcode requires an `items` argument"))?;
+    let caption = args.get("caption");
+
+    let items: Vec<(&str, &str, &str)> = items_str
+        .split('|')
+        .map(|s| {
+            let s = s.trim();
+            let parts: Vec<&str> = s.splitn(3, ':').collect();
+            match parts.len() {
+                3 => (parts[0].trim(), parts[1].trim(), parts[2].trim()),
+                2 => (parts[0].trim(), parts[1].trim(), ""),
+                _ => (s, "", ""),
+            }
+        })
+        .collect();
+
+    let mut html = String::from(
+        "<div class=\"cv-visual cv-visual--center\">\n\
+         <div class=\"cv-layers\">\n",
+    );
+
+    for (i, (title, desc, badge)) in items.iter().enumerate() {
+        let num = i + 1;
+        html.push_str("<div class=\"cv-layers__item\">");
+        html.push_str(&format!(
+            "<div class=\"cv-layers__num\">{num}</div>"
+        ));
+        html.push_str("<div class=\"cv-layers__content\">");
+        html.push_str(&format!(
+            "<div class=\"cv-layers__title\">{}</div>",
+            escape_html(title)
+        ));
+        if !desc.is_empty() {
+            html.push_str(&format!(
+                "<div class=\"cv-layers__desc\">{}</div>",
+                escape_html(desc)
+            ));
+        }
+        html.push_str("</div>");
+        if !badge.is_empty() {
+            html.push_str(&format!(
+                "<span class=\"cv-layers__badge cv-layers__badge--blue\">{}</span>",
+                escape_html(badge)
+            ));
+        }
+        html.push_str("</div>\n");
+    }
+
+    html.push_str("</div>\n");
+
+    if let Some(cap) = caption {
+        html.push_str(&format!(
+            "<p class=\"cv-caption\">{}</p>\n",
+            escape_html(cap)
+        ));
+    }
+
+    html.push_str("</div>");
+    Ok(html)
+}
+
+/// Built-in `tree` shortcode: file tree visualization.
+///
+/// Arguments:
+/// - `caption` (optional): caption text below the tree
+///
+/// Body: one entry per line, format: "path  # comment  [tag]"
+/// Indent with spaces to show nesting. Lines starting with # are ignored.
+///
+/// Example:
+/// {% tree(caption="Directory structure") %}
+/// content/
+///   _index.md        # root section  [section]
+///   about.md         # standalone    [page → /about/]
+///   posts/
+///     _index.md      # blog section  [section]
+///     first-post.md  # a blog post   [page]
+/// {% end %}
+fn builtin_tree(args_str: &str, body: Option<&str>) -> anyhow::Result<String> {
+    let args = parse_args(args_str);
+    let caption = args.get("caption");
+    let body = body.ok_or_else(|| anyhow::anyhow!("tree shortcode requires a body"))?;
+
+    let mut html = String::from(
+        "<div class=\"cv-visual cv-visual--center\">\n\
+         <div class=\"cv-tree\">\n",
+    );
+
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        // Count leading spaces for indentation
+        let indent = line.len() - line.trim_start().len();
+        let depth = indent / 2;
+
+        // Parse: "name  # comment  [tag]"
+        let (name_part, comment, tag) = parse_tree_line(trimmed);
+
+        let is_dir = name_part.ends_with('/');
+        let is_section_file = name_part.contains("_index.md")
+            || tag.to_lowercase().contains("section");
+        let icon = if is_dir { "\u{1F4C2}" } else { "\u{1F4DD}" };
+
+        let name_class = if is_dir || is_section_file {
+            "cv-tree__name cv-tree__name--section"
+        } else if tag.to_lowercase().contains("page") {
+            "cv-tree__name cv-tree__name--page"
+        } else {
+            "cv-tree__name"
+        };
+
+        let tag_class = if tag.to_lowercase().contains("section") {
+            "cv-tree__tag cv-tree__tag--section"
+        } else if tag.to_lowercase().contains("page") {
+            "cv-tree__tag cv-tree__tag--page"
+        } else {
+            "cv-tree__tag cv-tree__tag--url"
+        };
+
+        // Build tree prefix based on depth
+        let prefix = if depth > 0 {
+            let mut p = String::new();
+            for _ in 0..depth - 1 {
+                p.push_str("\u{00A0}\u{00A0}\u{00A0}\u{00A0}");
+            }
+            p.push_str("\u{251C}\u{2500}\u{2500} ");
+            format!(
+                "<span class=\"cv-tree__prefix\">{}</span>",
+                p
+            )
+        } else {
+            String::new()
+        };
+
+        html.push_str("<div class=\"cv-tree__line\">");
+        html.push_str(&prefix);
+        html.push_str(&format!(
+            "<span class=\"cv-tree__icon\">{icon}</span>"
+        ));
+        html.push_str(&format!(
+            "<span class=\"{name_class}\">{}</span>",
+            escape_html(&name_part)
+        ));
+
+        if !tag.is_empty() {
+            html.push_str(&format!(
+                "<span class=\"{tag_class}\">{}</span>",
+                escape_html(&tag)
+            ));
+        }
+
+        if !comment.is_empty() && tag.is_empty() {
+            html.push_str(&format!(
+                "<span class=\"cv-tree__tag cv-tree__tag--url\">{}</span>",
+                escape_html(&comment)
+            ));
+        }
+
+        html.push_str("</div>\n");
+    }
+
+    html.push_str("</div>\n");
+
+    if let Some(cap) = caption {
+        html.push_str(&format!(
+            "<p class=\"cv-caption\">{}</p>\n",
+            escape_html(cap)
+        ));
+    }
+
+    html.push_str("</div>");
+    Ok(html)
+}
+
+/// Parse a tree line into (name, comment, tag).
+/// Format: "filename  # comment  [tag]" or "filename  [tag]" or just "filename"
+fn parse_tree_line(line: &str) -> (String, String, String) {
+    let mut name = line.to_string();
+    let mut comment = String::new();
+    let mut tag = String::new();
+
+    // Extract [tag] if present
+    if let Some(bracket_start) = name.rfind('[') {
+        if let Some(bracket_end) = name.rfind(']') {
+            if bracket_end > bracket_start {
+                tag = name[bracket_start + 1..bracket_end].trim().to_string();
+                name = name[..bracket_start].trim_end().to_string();
+            }
+        }
+    }
+
+    // Extract # comment if present
+    if let Some(hash_pos) = name.find(" # ") {
+        comment = name[hash_pos + 3..].trim().to_string();
+        name = name[..hash_pos].trim_end().to_string();
+    }
+
+    (name, comment, tag)
+}
+
+/// Built-in `compare` shortcode: side-by-side comparison cards.
+///
+/// Arguments:
+/// - `left_title` (required): title for the left card
+/// - `left` (required): body text for the left card
+/// - `right_title` (required): title for the right card
+/// - `right` (required): body text for the right card
+/// - `left_style` (optional): "accent" (blue) or "green" or "muted"
+/// - `right_style` (optional): "accent" or "green" or "muted"
+/// - `caption` (optional): caption text below
+///
+/// Example: {{ compare(left_title="Section", left="A directory with _index.md", right_title="Page", right="An individual .md file") }}
+fn builtin_compare(args_str: &str) -> anyhow::Result<String> {
+    let args = parse_args(args_str);
+    let left_title = args.get("left_title").map(|s| s.as_str()).unwrap_or("");
+    let left = args
+        .get("left")
+        .ok_or_else(|| anyhow::anyhow!("compare shortcode requires a `left` argument"))?;
+    let right_title = args.get("right_title").map(|s| s.as_str()).unwrap_or("");
+    let right = args
+        .get("right")
+        .ok_or_else(|| anyhow::anyhow!("compare shortcode requires a `right` argument"))?;
+    let left_style = args
+        .get("left_style")
+        .map(|s| s.as_str())
+        .unwrap_or("accent");
+    let right_style = args
+        .get("right_style")
+        .map(|s| s.as_str())
+        .unwrap_or("green");
+    let caption = args.get("caption");
+
+    let left_class = match left_style {
+        "green" => "cv-compare__card cv-compare__card--green",
+        "muted" => "cv-compare__card cv-compare__card--muted",
+        _ => "cv-compare__card cv-compare__card--accent",
+    };
+    let right_class = match right_style {
+        "accent" => "cv-compare__card cv-compare__card--accent",
+        "muted" => "cv-compare__card cv-compare__card--muted",
+        _ => "cv-compare__card cv-compare__card--green",
+    };
+
+    let mut html = String::from(
+        "<div class=\"cv-visual cv-visual--wide cv-visual--center\">\n\
+         <div class=\"cv-compare\">\n",
+    );
+
+    html.push_str(&format!(
+        "<div class=\"{left_class}\">\
+         <div class=\"cv-compare__title\">{}</div>\
+         <div class=\"cv-compare__body\">{}</div>\
+         </div>\n",
+        escape_html(left_title),
+        escape_html(left)
+    ));
+
+    html.push_str(&format!(
+        "<div class=\"{right_class}\">\
+         <div class=\"cv-compare__title\">{}</div>\
+         <div class=\"cv-compare__body\">{}</div>\
+         </div>\n",
+        escape_html(right_title),
+        escape_html(right)
+    ));
+
+    html.push_str("</div>\n");
+
+    if let Some(cap) = caption {
+        html.push_str(&format!(
+            "<p class=\"cv-caption\">{}</p>\n",
+            escape_html(cap)
+        ));
+    }
+
+    html.push_str("</div>");
+    Ok(html)
+}
+
+/// Built-in `cascade` shortcode: override/priority cascade diagram.
+///
+/// Arguments:
+/// - `items` (required): pipe-delimited items, each as "Priority:Label:badge"
+///   The last item is highlighted as the "winner" (green).
+/// - `caption` (optional): caption text below
+///
+/// Example: {{ cascade(items="Default:Theme templates:fallback|Override:Your templates/:wins") }}
+fn builtin_cascade(args_str: &str) -> anyhow::Result<String> {
+    let args = parse_args(args_str);
+    let items_str = args
+        .get("items")
+        .ok_or_else(|| anyhow::anyhow!("cascade shortcode requires an `items` argument"))?;
+    let caption = args.get("caption");
+
+    let items: Vec<(&str, &str, &str)> = items_str
+        .split('|')
+        .map(|s| {
+            let s = s.trim();
+            let parts: Vec<&str> = s.splitn(3, ':').collect();
+            match parts.len() {
+                3 => (parts[0].trim(), parts[1].trim(), parts[2].trim()),
+                2 => (parts[0].trim(), parts[1].trim(), ""),
+                _ => (s, "", ""),
+            }
+        })
+        .collect();
+
+    let mut html = String::from(
+        "<div class=\"cv-visual cv-visual--center\">\n\
+         <div class=\"cv-cascade\">\n",
+    );
+
+    let last_idx = items.len().saturating_sub(1);
+    for (i, (priority, label, badge)) in items.iter().enumerate() {
+        let level_class = if i == last_idx {
+            "cv-cascade__level cv-cascade__level--winner"
+        } else {
+            "cv-cascade__level"
+        };
+        let badge_class = if i == last_idx {
+            "cv-cascade__badge cv-cascade__badge--wins"
+        } else {
+            "cv-cascade__badge cv-cascade__badge--default"
+        };
+
+        html.push_str(&format!("<div class=\"{level_class}\">"));
+        html.push_str(&format!(
+            "<span class=\"cv-cascade__priority\">{}</span>",
+            escape_html(priority)
+        ));
+        html.push_str(&format!(
+            "<span class=\"cv-cascade__label\">{}</span>",
+            escape_html(label)
+        ));
+        if !badge.is_empty() {
+            html.push_str(&format!(
+                "<span class=\"{badge_class}\">{}</span>",
+                escape_html(badge)
+            ));
+        }
+        html.push_str("</div>\n");
+    }
+
+    html.push_str("</div>\n");
+
+    if let Some(cap) = caption {
+        html.push_str(&format!(
+            "<p class=\"cv-caption\">{}</p>\n",
+            escape_html(cap)
+        ));
+    }
+
+    html.push_str("</div>");
+    Ok(html)
+}
+
 /// Built-in `mermaid` shortcode: render a Mermaid diagram.
 ///
 /// Body content is the Mermaid diagram definition.
@@ -531,6 +980,710 @@ fn builtin_mermaid(body: Option<&str>) -> anyhow::Result<String> {
         "<pre class=\"mermaid\">{}</pre>",
         escape_html(body)
     ))
+}
+
+/// Embedded Python script for introspecting a module's public API.
+///
+/// Returns a JSON array of items, each with:
+/// - `kind`: "function" or "class"
+/// - `name`: fully qualified name
+/// - `signature`: function/method signature string
+/// - `docstring`: first paragraph of the docstring (or empty)
+/// - `methods`: (classes only) list of public methods with signature + docstring
+#[cfg(feature = "python")]
+const PYREF_SCRIPT: &str = r#"
+import importlib
+import inspect
+import json
+
+def _get_sig(obj):
+    try:
+        return str(inspect.signature(obj))
+    except (ValueError, TypeError):
+        return "()"
+
+def _get_doc(obj):
+    doc = inspect.getdoc(obj)
+    if not doc:
+        return "", []
+    lines = doc.strip().split("\n")
+    summary_lines = []
+    examples = []
+    current_example = []
+    in_example = False
+
+    past_summary = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith(">>> ") or stripped.startswith("... "):
+            in_example = True
+            past_summary = True
+            current_example.append(stripped)
+        elif in_example:
+            if stripped and not stripped.startswith(">>> "):
+                # This is expected output — include it
+                current_example.append(stripped)
+            else:
+                if current_example:
+                    examples.append(current_example)
+                    current_example = []
+                in_example = False
+                if stripped.startswith(">>> "):
+                    in_example = True
+                    current_example.append(stripped)
+        elif not past_summary:
+            if stripped == "" and summary_lines:
+                past_summary = True  # End of first paragraph, keep scanning for examples
+            elif stripped:
+                summary_lines.append(stripped)
+
+    if current_example:
+        examples.append(current_example)
+
+    summary = " ".join(summary_lines).strip()
+    return summary, examples
+
+def _run_examples(examples, module_name):
+    results = []
+    # Shared namespace across all examples for this item
+    ns = {}
+    exec(f"import {module_name}", ns)
+
+    for block in examples:
+        code_lines = []
+        expected_lines = []
+        for line in block:
+            if line.startswith(">>> ") or line.startswith("... "):
+                code_lines.append(line[4:])
+            elif line.startswith(">>>"):
+                code_lines.append(line[3:])
+            else:
+                expected_lines.append(line)
+
+        code = "\n".join(code_lines)
+
+        import io, contextlib
+        stdout = io.StringIO()
+        actual = ""
+        try:
+            with contextlib.redirect_stdout(stdout):
+                if len(code_lines) > 1:
+                    # Exec all but last line, then eval last line
+                    setup = "\n".join(code_lines[:-1])
+                    exec(setup, ns)
+                    try:
+                        result = eval(code_lines[-1], ns)
+                        if result is not None:
+                            print(repr(result))
+                    except SyntaxError:
+                        exec(code_lines[-1], ns)
+                else:
+                    try:
+                        result = eval(code, ns)
+                        if result is not None:
+                            print(repr(result))
+                    except SyntaxError:
+                        exec(code, ns)
+            actual = stdout.getvalue().strip()
+        except Exception as e:
+            actual = f"Error: {e}"
+
+        results.append({
+            "code": code,
+            "output": actual,
+        })
+    return results
+
+def _introspect(module_name, recursive, exclude, include, private):
+    try:
+        mod = importlib.import_module(module_name)
+    except ImportError as e:
+        return json.dumps({"error": f"Cannot import module '{module_name}': {e}"})
+
+    exclude_set = set(exclude) if exclude else set()
+    include_set = set(include) if include else None
+
+    items = []
+    seen = set()
+
+    def process_module(mod, prefix):
+        for name in sorted(dir(mod)):
+            if name.startswith("__") and name.endswith("__"):
+                continue
+            if not private and name.startswith("_"):
+                continue
+            if name in exclude_set:
+                continue
+            if include_set is not None and name not in include_set:
+                continue
+
+            obj = getattr(mod, name, None)
+            if obj is None:
+                continue
+
+            full_name = f"{prefix}.{name}"
+            obj_id = id(obj)
+            if obj_id in seen:
+                continue
+            seen.add(obj_id)
+
+            if inspect.isfunction(obj) or inspect.isbuiltin(obj) or callable(obj) and not inspect.isclass(obj):
+                doc, examples = _get_doc(obj)
+                example_results = _run_examples(examples, module_name) if examples else []
+                items.append({
+                    "kind": "function",
+                    "name": full_name,
+                    "signature": _get_sig(obj),
+                    "docstring": doc,
+                    "examples": example_results,
+                })
+            elif inspect.isclass(obj):
+                methods = []
+                for mname in sorted(dir(obj)):
+                    if mname.startswith("__") and mname != "__init__":
+                        continue
+                    if not private and mname.startswith("_") and mname != "__init__":
+                        continue
+                    mobj = getattr(obj, mname, None)
+                    if mobj is None:
+                        continue
+                    if not (inspect.isfunction(mobj) or inspect.ismethod(mobj) or inspect.ismethoddescriptor(mobj) or callable(mobj)):
+                        continue
+                    # Skip unhelpful default __init__
+                    mdoc, mexamples = _get_doc(mobj)
+                    if mname == "__init__" and ("See help(type(self))" in mdoc or not mdoc):
+                        continue
+                    mexample_results = _run_examples(mexamples, module_name) if mexamples else []
+                    methods.append({
+                        "name": mname,
+                        "signature": _get_sig(mobj),
+                        "docstring": mdoc,
+                        "examples": mexample_results,
+                    })
+                class_doc, class_examples = _get_doc(obj)
+                class_example_results = _run_examples(class_examples, module_name) if class_examples else []
+                items.append({
+                    "kind": "class",
+                    "name": full_name,
+                    "signature": _get_sig(obj),
+                    "docstring": class_doc,
+                    "examples": class_example_results,
+                    "methods": methods,
+                })
+
+        if recursive:
+            for name in sorted(dir(mod)):
+                obj = getattr(mod, name, None)
+                if inspect.ismodule(obj) and hasattr(obj, "__name__") and obj.__name__.startswith(module_name + "."):
+                    sub_name = obj.__name__
+                    if sub_name not in seen:
+                        seen.add(sub_name)
+                        process_module(obj, sub_name)
+
+    process_module(mod, module_name)
+
+    # Sort: functions first, then classes, alphabetically within each group
+    functions = sorted([i for i in items if i["kind"] == "function"], key=lambda x: x["name"])
+    classes = sorted([i for i in items if i["kind"] == "class"], key=lambda x: x["name"])
+
+    return json.dumps(functions + classes)
+
+_result = _introspect(_module_name, _recursive, _exclude, _include, _private)
+"#;
+
+/// Built-in `pyref` shortcode: generate Python API reference documentation.
+///
+/// Arguments:
+/// - `module` (required): Python module name to introspect
+/// - `recursive` (optional, default "true"): walk submodules
+/// - `exclude` (optional): comma-separated names to exclude
+/// - `include` (optional): comma-separated allowlist
+/// - `private` (optional, default "false"): include _private members
+#[cfg(feature = "python")]
+fn builtin_pyref(args_str: &str, site_root: &Path) -> anyhow::Result<String> {
+    use pyo3::prelude::*;
+
+    let args = parse_args(args_str);
+    let module = args
+        .get("module")
+        .ok_or_else(|| anyhow::anyhow!("pyref shortcode requires a `module` argument"))?;
+    let recursive = args
+        .get("recursive")
+        .map(|v| v == "true")
+        .unwrap_or(true);
+    let exclude: Vec<String> = args
+        .get("exclude")
+        .map(|v| v.split(',').map(|s| s.trim().to_string()).collect())
+        .unwrap_or_default();
+    let include: Vec<String> = args
+        .get("include")
+        .map(|v| v.split(',').map(|s| s.trim().to_string()).collect())
+        .unwrap_or_default();
+    let private = args
+        .get("private")
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    let module = module.clone();
+    let site_root = site_root.to_path_buf();
+
+    let json_str = Python::attach(|py: Python<'_>| -> PyResult<String> {
+        crate::execute::activate_venv(py, &site_root)?;
+
+        // Set up variables for the script
+        let locals = pyo3::types::PyDict::new(py);
+        locals.set_item("_module_name", &module)?;
+        locals.set_item("_recursive", recursive)?;
+        locals.set_item("_private", private)?;
+
+        let exclude_list = pyo3::types::PyList::new(py, &exclude)?;
+        locals.set_item("_exclude", exclude_list)?;
+
+        let include_list = pyo3::types::PyList::new(py, &include)?;
+        locals.set_item("_include", include_list)?;
+
+        let code = std::ffi::CString::new(PYREF_SCRIPT)?;
+        // Pass locals as both globals and locals so imports/functions share scope
+        py.run(code.as_c_str(), Some(&locals), Some(&locals))?;
+
+        let result: String = locals
+            .get_item("_result")?
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("No result from pyref script"))?
+            .extract()?;
+        Ok(result)
+    })?;
+
+    // Parse the JSON result
+    let parsed: serde_json::Value = serde_json::from_str(&json_str)
+        .map_err(|e| anyhow::anyhow!("pyref: failed to parse introspection result: {e}"))?;
+
+    // Check for error
+    if let Some(obj) = parsed.as_object() {
+        if let Some(err) = obj.get("error") {
+            return Err(anyhow::anyhow!(
+                "pyref: {}",
+                err.as_str().unwrap_or("unknown error")
+            ));
+        }
+    }
+
+    let items = parsed
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("pyref: expected array from introspection"))?;
+
+    // Build HTML
+    let mut html = String::from("<div class=\"pyref\">\n");
+
+    for item in items {
+        let kind = item["kind"].as_str().unwrap_or("");
+        let name = item["name"].as_str().unwrap_or("");
+        let signature = item["signature"].as_str().unwrap_or("()");
+        let docstring = item["docstring"].as_str().unwrap_or("");
+
+        // Short name (last component) for display in signatures
+        let short_name = name.rsplit('.').next().unwrap_or(name);
+
+        match kind {
+            "function" => {
+                html.push_str(&format!(
+                    "  <div class=\"pyref-item\">\n    <h3 id=\"{name}\"><code>{name}{sig}</code></h3>\n",
+                    name = escape_html(name),
+                    sig = escape_html(signature),
+                ));
+                if !docstring.is_empty() {
+                    html.push_str(&format!(
+                        "    <p class=\"pyref-docstring\">{}</p>\n",
+                        escape_html(docstring)
+                    ));
+                }
+                if let Some(examples) = item["examples"].as_array() {
+                    if !examples.is_empty() {
+                        html.push_str("    <div class=\"pyref-examples\">\n");
+                        for ex in examples {
+                            let code = ex["code"].as_str().unwrap_or("");
+                            let output = ex["output"].as_str().unwrap_or("");
+                            html.push_str(&format!(
+                                "      <pre class=\"pyref-example-code\"><code>{}</code></pre>\n",
+                                escape_html(code)
+                            ));
+                            if !output.is_empty() {
+                                html.push_str(&format!(
+                                    "      <pre class=\"pyref-example-output\"><code>{}</code></pre>\n",
+                                    escape_html(output)
+                                ));
+                            }
+                        }
+                        html.push_str("    </div>\n");
+                    }
+                }
+                html.push_str("  </div>\n");
+            }
+            "class" => {
+                html.push_str(&format!(
+                    "  <div class=\"pyref-item pyref-class\">\n    <h3 id=\"{name}\"><code>class {name}{sig}</code></h3>\n",
+                    name = escape_html(name),
+                    sig = escape_html(signature),
+                ));
+                if !docstring.is_empty() {
+                    html.push_str(&format!(
+                        "    <p class=\"pyref-docstring\">{}</p>\n",
+                        escape_html(docstring)
+                    ));
+                }
+                if let Some(examples) = item["examples"].as_array() {
+                    if !examples.is_empty() {
+                        html.push_str("    <div class=\"pyref-examples\">\n");
+                        for ex in examples {
+                            let code = ex["code"].as_str().unwrap_or("");
+                            let output = ex["output"].as_str().unwrap_or("");
+                            html.push_str(&format!(
+                                "      <pre class=\"pyref-example-code\"><code>{}</code></pre>\n",
+                                escape_html(code)
+                            ));
+                            if !output.is_empty() {
+                                html.push_str(&format!(
+                                    "      <pre class=\"pyref-example-output\"><code>{}</code></pre>\n",
+                                    escape_html(output)
+                                ));
+                            }
+                        }
+                        html.push_str("    </div>\n");
+                    }
+                }
+
+                // Methods
+                if let Some(methods) = item["methods"].as_array() {
+                    if !methods.is_empty() {
+                        html.push_str("    <div class=\"pyref-methods\">\n");
+                        for method in methods {
+                            let mname = method["name"].as_str().unwrap_or("");
+                            let msig = method["signature"].as_str().unwrap_or("()");
+                            let mdoc = method["docstring"].as_str().unwrap_or("");
+                            let method_id = format!("{}.{}", name, mname);
+
+                            html.push_str(&format!(
+                                "      <div class=\"pyref-method\">\n        <h4 id=\"{mid}\"><code>{sn}.{mn}{ms}</code></h4>\n",
+                                mid = escape_html(&method_id),
+                                sn = escape_html(short_name),
+                                mn = escape_html(mname),
+                                ms = escape_html(msig),
+                            ));
+                            if !mdoc.is_empty() {
+                                html.push_str(&format!(
+                                    "        <p class=\"pyref-docstring\">{}</p>\n",
+                                    escape_html(mdoc)
+                                ));
+                            }
+                            if let Some(mexamples) = method["examples"].as_array() {
+                                if !mexamples.is_empty() {
+                                    html.push_str("        <div class=\"pyref-examples\">\n");
+                                    for ex in mexamples {
+                                        let code = ex["code"].as_str().unwrap_or("");
+                                        let output = ex["output"].as_str().unwrap_or("");
+                                        html.push_str(&format!(
+                                            "          <pre class=\"pyref-example-code\"><code>{}</code></pre>\n",
+                                            escape_html(code)
+                                        ));
+                                        if !output.is_empty() {
+                                            html.push_str(&format!(
+                                                "          <pre class=\"pyref-example-output\"><code>{}</code></pre>\n",
+                                                escape_html(output)
+                                            ));
+                                        }
+                                    }
+                                    html.push_str("        </div>\n");
+                                }
+                            }
+                            html.push_str("      </div>\n");
+                        }
+                        html.push_str("    </div>\n");
+                    }
+                }
+
+                html.push_str("  </div>\n");
+            }
+            _ => {}
+        }
+    }
+
+    html.push_str("</div>");
+    Ok(html)
+}
+
+/// Built-in `pyref` shortcode fallback when Python feature is not available.
+#[cfg(not(feature = "python"))]
+fn builtin_pyref(_args_str: &str, _site_root: &Path) -> anyhow::Result<String> {
+    Err(anyhow::anyhow!(
+        "pyref shortcode requires the `python` feature (build with --features python)"
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// configref shortcode — auto-generate config reference from Rust source
+// ---------------------------------------------------------------------------
+
+struct ConfigStruct {
+    #[allow(dead_code)]
+    name: String,
+    display_name: String,
+    anchor: String,
+    doc: String,
+    fields: Vec<ConfigField>,
+}
+
+struct ConfigField {
+    name: String,
+    ty: String,
+    default: Option<String>,
+    doc: String,
+}
+
+/// Built-in `configref` shortcode: generate configuration reference from Rust
+/// source doc comments and serde attributes.
+///
+/// Arguments:
+/// - `src` (required): path to the Rust source file relative to site root
+fn builtin_configref(
+    args_str: &str,
+    site_root: &Path,
+    sandbox_root: &Path,
+) -> anyhow::Result<String> {
+    let args = parse_args(args_str);
+    let src = args
+        .get("src")
+        .ok_or_else(|| anyhow::anyhow!("configref shortcode requires a `src` argument"))?;
+
+    let source = read_local_file(src, site_root, sandbox_root)?;
+    let structs = parse_rust_config(&source);
+
+    let mut html = String::new();
+    for s in &structs {
+        html.push_str(&format!(
+            "<h2 id=\"{}\">{}</h2>\n",
+            escape_html(&s.anchor),
+            escape_html(&s.display_name)
+        ));
+        if !s.doc.is_empty() {
+            html.push_str(&format!("<p>{}</p>\n", escape_html(&s.doc)));
+        }
+        html.push_str("<table>\n<thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>\n<tbody>\n");
+        for field in &s.fields {
+            let default_cell = field
+                .default
+                .as_deref()
+                .map(|d| format!("<code>{}</code>", escape_html(d)))
+                .unwrap_or_else(|| "<em>required</em>".to_string());
+            html.push_str(&format!(
+                "<tr><td><code>{}</code></td><td><code>{}</code></td><td>{}</td><td>{}</td></tr>\n",
+                escape_html(&field.name),
+                escape_html(&field.ty),
+                default_cell,
+                escape_html(&field.doc),
+            ));
+        }
+        html.push_str("</tbody></table>\n");
+    }
+
+    Ok(html)
+}
+
+/// Map a Rust struct name to its TOML display name and anchor.
+fn config_display_name(name: &str) -> Option<(&'static str, &'static str)> {
+    match name {
+        "Config" => Some(("Top-level settings", "top-level-settings")),
+        "MarkdownConfig" => Some(("[markdown]", "markdown")),
+        "TaxonomyConfig" => Some(("[[taxonomies]]", "taxonomies")),
+        "ContentDirConfig" => Some(("[[content_dirs]]", "content-dirs")),
+        _ => None,
+    }
+}
+
+/// Clean up a Rust type for display, returning `None` if the field should be skipped.
+fn clean_type(ty: &str) -> Option<String> {
+    let ty = ty.trim();
+    match ty {
+        "String" => Some("string".to_string()),
+        "bool" => Some("bool".to_string()),
+        "MarkdownConfig" | "Vec<TaxonomyConfig>" | "Vec<ContentDirConfig>" => None,
+        _ if ty.starts_with("Option<") && ty.ends_with('>') => {
+            let inner = &ty[7..ty.len() - 1];
+            clean_type(inner)
+        }
+        _ if ty.starts_with("Vec<") && ty.ends_with('>') => {
+            let inner = &ty[4..ty.len() - 1];
+            clean_type(inner).map(|t| format!("{t}[]"))
+        }
+        "toml::Value" => Some("table".to_string()),
+        "AnchorLinks" => Some("string".to_string()),
+        "SortBy" => Some("string".to_string()),
+        _ => Some(ty.to_lowercase()),
+    }
+}
+
+/// Derive the default value from serde attributes and the field type.
+fn derive_default(serde_attrs: &[String], ty: &str, is_option: bool) -> Option<String> {
+    for attr in serde_attrs {
+        if attr.contains("default = \"default_true\"") {
+            return Some("true".to_string());
+        }
+        if attr.contains("default = \"default_en\"") {
+            return Some("\"en\"".to_string());
+        }
+        if attr.contains("default = \"default_toml_table\"") {
+            return Some("{}".to_string());
+        }
+        if attr.contains("default = \"default_page_html\"") {
+            return Some("\"page.html\"".to_string());
+        }
+        if attr.contains("default = \"default_section_html\"") {
+            return Some("\"section.html\"".to_string());
+        }
+        // Generic #[serde(default)] — derive from type
+        if attr.contains("default") {
+            let clean = ty.trim();
+            if clean == "bool" {
+                return Some("false".to_string());
+            }
+            if clean == "String" {
+                return Some("\"\"".to_string());
+            }
+            if clean.starts_with("Option<") {
+                return Some("null".to_string());
+            }
+            if clean.starts_with("Vec<") {
+                return Some("[]".to_string());
+            }
+            if clean == "AnchorLinks" {
+                return Some("\"none\"".to_string());
+            }
+            if clean == "SortBy" {
+                return Some("\"date\"".to_string());
+            }
+            return Some("\"\"".to_string());
+        }
+    }
+    if is_option {
+        Some("null".to_string())
+    } else {
+        None // required
+    }
+}
+
+/// Parse Rust source to extract config structs, fields, doc comments, and serde attributes.
+fn parse_rust_config(source: &str) -> Vec<ConfigStruct> {
+    let mut structs = Vec::new();
+    let mut current_struct: Option<ConfigStruct> = None;
+    let mut doc_lines: Vec<String> = Vec::new();
+    let mut serde_attrs: Vec<String> = Vec::new();
+    let mut in_struct = false;
+    let mut brace_depth: i32 = 0;
+
+    for line in source.lines() {
+        let trimmed = line.trim();
+
+        // Collect doc comments
+        if trimmed.starts_with("///") {
+            let comment = trimmed.strip_prefix("///").unwrap_or("").trim().to_string();
+            doc_lines.push(comment);
+            continue;
+        }
+
+        // Collect serde attributes
+        if trimmed.starts_with("#[serde(") {
+            serde_attrs.push(trimmed.to_string());
+            continue;
+        }
+
+        // Skip other attributes
+        if trimmed.starts_with("#[") {
+            continue;
+        }
+
+        // Detect struct start
+        if trimmed.starts_with("pub struct ") && trimmed.contains('{') {
+            let name = trimmed
+                .strip_prefix("pub struct ")
+                .unwrap_or("")
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .to_string();
+
+            if let Some((display, anchor)) = config_display_name(&name) {
+                let doc = doc_lines.join(" ");
+                current_struct = Some(ConfigStruct {
+                    name,
+                    display_name: display.to_string(),
+                    anchor: anchor.to_string(),
+                    doc,
+                    fields: Vec::new(),
+                });
+                in_struct = true;
+                brace_depth = 1;
+            }
+            doc_lines.clear();
+            serde_attrs.clear();
+            continue;
+        }
+
+        if in_struct {
+            // Track brace depth
+            for ch in trimmed.chars() {
+                match ch {
+                    '{' => brace_depth += 1,
+                    '}' => brace_depth -= 1,
+                    _ => {}
+                }
+            }
+
+            // Parse field: `pub field_name: Type,`
+            if trimmed.starts_with("pub ") && trimmed.contains(':') {
+                let without_pub = trimmed.strip_prefix("pub ").unwrap_or(trimmed);
+                if let Some((field_name, rest)) = without_pub.split_once(':') {
+                    let field_name = field_name.trim().to_string();
+                    let ty = rest.trim().trim_end_matches(',').trim().to_string();
+                    let is_option = ty.starts_with("Option<");
+
+                    if let Some(clean_ty) = clean_type(&ty) {
+                        let default = derive_default(&serde_attrs, &ty, is_option);
+                        let doc = doc_lines.join(" ");
+
+                        if let Some(ref mut cs) = current_struct {
+                            cs.fields.push(ConfigField {
+                                name: field_name,
+                                ty: clean_ty,
+                                default,
+                                doc,
+                            });
+                        }
+                    }
+                }
+                doc_lines.clear();
+                serde_attrs.clear();
+            } else if !trimmed.is_empty() {
+                // Non-field line inside struct — reset accumulators unless comment
+                if !trimmed.starts_with("//") {
+                    doc_lines.clear();
+                    serde_attrs.clear();
+                }
+            }
+
+            if brace_depth == 0 {
+                if let Some(cs) = current_struct.take() {
+                    structs.push(cs);
+                }
+                in_struct = false;
+            }
+        } else {
+            // Outside struct — reset accumulators on non-doc/attr lines
+            if !trimmed.is_empty() && !trimmed.starts_with("//") {
+                doc_lines.clear();
+                serde_attrs.clear();
+            }
+        }
+    }
+
+    structs
 }
 
 /// Escape HTML special characters for safe attribute/content insertion.

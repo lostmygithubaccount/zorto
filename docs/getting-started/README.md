@@ -1,7 +1,7 @@
 # Getting started
 
-Install Zorto, create a site, and deploy it in minutes.
+This tutorial walks you through building a complete site with Zorto, from installation to production build.
 
-- [Installation](installation.md): install via script, cargo, pip, or uv
-- [Quick start](quick-start.md): get a site running in 30 seconds
-- [First site](first-site.md): project structure, pages, blogs, and building
+- [Installation](installation.md): install Zorto on your machine
+- [Your first site](quick-start.md): build a site step by step, learning each concept as you go
+- [Next steps](first-site.md): where to go from here

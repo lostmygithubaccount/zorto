@@ -59,12 +59,15 @@ hero_actions = [
 ]
 
 features = [
-  { name = "Fast", description = "Written in Rust. Render your website in milliseconds." },
-  { name = "AI-native", description = "Built for AI to create your website in minutes & maintain it with ease." },
-  { name = "Executable code blocks", description = "Run Python and Bash at build time. Output rendered inline." },
-  { name = "Built-in themes", description = "Ship with zorto, dkdc, light, and dark themes. Override anything locally." },
-  { name = "Shortcodes & callouts", description = "Built-in note, details, figure, youtube, mermaid shortcodes. GitHub-style callout alerts." },
-  { name = "Free & open source", description = "MIT-licensed forever." },
+  { name = "Free & open source", description = "MIT-licensed forever. Built in Rust.", url = "/docs/concepts/open-source/" },
+  { name = "AI-native", description = "Explicit contracts, compiler-like quality checks, llms.txt for consumption.", url = "/docs/concepts/ai-native/" },
+  { name = "Executable code blocks", description = "Run Python and Bash at build time. Output rendered inline.", url = "/docs/concepts/executable-code/" },
+  { name = "Fast", description = "Written in Rust. Build your site in milliseconds.", url = "/docs/concepts/fast/" },
+  { name = "Callouts", description = "GitHub-style callout alerts: note, tip, warning, caution, important.", url = "/docs/concepts/callouts/" },
+  { name = "Shortcodes", description = "Built-in tabs, figures, diagrams, embeds, and more. No HTML in markdown.", url = "/docs/concepts/shortcodes/" },
+  { name = "Blog, events, and more", description = "Sections with date sorting, pagination, and taxonomy support.", url = "/docs/concepts/blog/" },
+  { name = "Themes", description = "Four built-in themes with light/dark mode. Override templates and styles locally.", url = "/docs/concepts/themes/" },
+  { name = "Live reload", description = "Dev server with automatic rebuilds and instant browser refresh.", url = "/docs/concepts/live-reload/" },
 ]
 
 copyright_html = '<a href="/">Zorto</a> by <a href="https://dkdc.io" target="_blank" rel="noopener">dkdc.io</a> via <a href="https://zorto.dev" target="_blank" rel="noopener">Zorto</a>'

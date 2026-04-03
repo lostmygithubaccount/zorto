@@ -1,4 +1,6 @@
-Zorto supports GitHub-style callout alerts. Use blockquote syntax with a type marker.
+# Callouts reference
+
+Zorto supports GitHub-style callout alerts. Use blockquote syntax with a type marker. See [callouts concept](../concepts/callouts.md) for when to use callouts vs shortcodes.
 
 ## Syntax
 

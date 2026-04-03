@@ -646,6 +646,11 @@ hr {
     margin: 0;
     flex: 1;
   }
+
+  &--link {
+    text-decoration: none;
+    cursor: pointer;
+  }
 }
 
 // ========================================
@@ -1295,5 +1300,548 @@ pre.mermaid {
     border-radius: 0.25rem;
     font-size: 0.875rem;
     &:hover { background: var(--bg-hover, rgba(255,255,255,0.05)); }
+  }
+}
+
+// pyref — Python API reference shortcode
+.pyref {
+  margin: 1.5rem 0;
+
+  .pyref-item {
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border-color, #333);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    h3 {
+      margin: 0 0 0.5rem 0;
+      code {
+        font-size: 1rem;
+        background: none;
+        padding: 0;
+      }
+    }
+  }
+
+  .pyref-docstring {
+    margin: 0.25rem 0 0.5rem 0;
+    color: var(--text-muted, #999);
+    white-space: pre-wrap;
+  }
+
+  .pyref-methods {
+    margin-top: 0.75rem;
+    padding-left: 1.5rem;
+    border-left: 2px solid var(--border-color, #333);
+  }
+
+  .pyref-method {
+    padding: 0.5rem 0;
+
+    h4 {
+      margin: 0 0 0.25rem 0;
+      code {
+        font-size: 0.9rem;
+        background: none;
+        padding: 0;
+      }
+    }
+  }
+
+  .pyref-examples {
+    margin: 0.5rem 0;
+
+    .pyref-example-code {
+      background: var(--code-bg, #1d1f21);
+      padding: 0.75rem 1rem;
+      border-radius: 4px 4px 0 0;
+      margin: 0;
+      overflow-x: auto;
+
+      code { font-size: 0.85rem; }
+    }
+
+    .pyref-example-output {
+      background: var(--output-bg, #2b2d30);
+      padding: 0.5rem 1rem;
+      border-radius: 0 0 4px 4px;
+      margin: 0 0 0.75rem 0;
+      border-top: 1px solid var(--border-color, #333);
+      overflow-x: auto;
+
+      code { font-size: 0.85rem; color: var(--text-muted, #999); }
+    }
+  }
+}
+
+// ========================================
+// Concept Visual Diagrams (cv-*)
+// Pure CSS/HTML diagrams for documentation
+// ========================================
+
+.cv-visual {
+  margin: 28px 0;
+  max-width: 520px;
+
+  &--wide { max-width: 100%; }
+  &--center { margin-left: auto; margin-right: auto; }
+}
+
+.cv-caption {
+  font-size: 0.82rem;
+  color: var(--color-muted);
+  text-align: center;
+  margin: 10px 0 0;
+  font-style: italic;
+}
+
+// Flow diagram — horizontal steps with arrows
+.cv-flow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px 16px;
+  background: var(--background-raised);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+
+  @media (max-width: $phone-max-width) {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__step {
+    text-align: center;
+    min-width: 70px;
+    padding: 10px 14px;
+    background: var(--background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+
+    @media (max-width: $phone-max-width) {
+      min-width: 0;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+    }
+  }
+
+  &__step--accent {
+    border-color: var(--accent-alpha-70);
+    background: var(--accent-alpha-20);
+  }
+
+  &__step--green {
+    border-color: rgba(52, 211, 153, .4);
+    background: rgba(52, 211, 153, .1);
+  }
+
+  &__icon {
+    font-size: 1.4rem;
+    margin-bottom: 4px;
+
+    @media (max-width: $phone-max-width) {
+      font-size: 1.2rem;
+      margin-bottom: 0;
+    }
+  }
+
+  &__label {
+    font-size: 0.78rem;
+    color: var(--color-muted);
+    line-height: 1.3;
+
+    strong {
+      color: var(--color);
+      display: block;
+      font-size: 0.82rem;
+    }
+  }
+
+  &__arrow {
+    color: var(--accent);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+
+    @media (max-width: $phone-max-width) {
+      transform: rotate(90deg);
+      font-size: 0.9rem;
+    }
+  }
+}
+
+// Layer stack — vertical layered diagram
+.cv-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--background-raised);
+
+    &:last-child { border-bottom: none; }
+
+    @media (max-width: $phone-max-width) {
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 14px;
+    }
+  }
+
+  &__item--active {
+    background: var(--accent-alpha-20);
+    border-left: 3px solid var(--accent);
+  }
+
+  &__item--green {
+    background: rgba(52, 211, 153, .08);
+    border-left: 3px solid var(--accent-secondary);
+  }
+
+  &__num {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-alpha-20);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  &__content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__title {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color);
+    margin: 0;
+  }
+
+  &__desc {
+    font-size: 0.78rem;
+    color: var(--color-muted);
+    margin: 2px 0 0;
+  }
+
+  &__badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+
+    @media (max-width: $phone-max-width) {
+      flex-shrink: 1;
+      font-size: 0.65rem;
+      word-break: break-word;
+    }
+  }
+
+  &__badge--blue {
+    background: var(--accent-alpha-20);
+    color: var(--accent);
+  }
+
+  &__badge--green {
+    background: var(--accent-secondary-alpha-20);
+    color: var(--accent-secondary);
+  }
+}
+
+// File tree — visual directory structure
+.cv-tree {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.82rem;
+  background: var(--background-raised);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 16px 20px;
+  overflow-x: auto;
+
+  @media (max-width: $phone-max-width) {
+    font-size: 0.75rem;
+    padding: 12px 14px;
+  }
+
+  &__line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    color: var(--color-muted);
+    white-space: nowrap;
+
+    &:hover { color: var(--color); }
+  }
+
+  &__prefix {
+    color: var(--border-color);
+    user-select: none;
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    font-style: normal;
+  }
+
+  &__name {
+    color: var(--color);
+  }
+
+  &__name--section {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  &__name--page {
+    color: var(--accent-secondary);
+  }
+
+  &__tag {
+    font-family: "Public Sans", sans-serif;
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 4px;
+  }
+
+  &__tag--section {
+    background: var(--accent-alpha-20);
+    color: var(--accent);
+  }
+
+  &__tag--page {
+    background: var(--accent-secondary-alpha-20);
+    color: var(--accent-secondary);
+  }
+
+  &__tag--url {
+    background: transparent;
+    color: var(--color-muted);
+    font-style: italic;
+  }
+}
+
+// Comparison — side-by-side or stacked cards
+.cv-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+
+  @media (max-width: $phone-max-width) {
+    grid-template-columns: 1fr;
+  }
+
+  &__card {
+    padding: 16px;
+    background: var(--background-raised);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+
+    @media (max-width: $phone-max-width) {
+      padding: 12px;
+    }
+  }
+
+  &__card--accent {
+    border-color: var(--accent-alpha-70);
+  }
+
+  &__card--green {
+    border-color: rgba(52, 211, 153, .4);
+  }
+
+  &__card--muted {
+    opacity: 0.5;
+  }
+
+  &__title {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color);
+    margin: 0 0 8px;
+  }
+
+  &__body {
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    line-height: 1.5;
+
+    code {
+      font-size: 0.78rem;
+      padding: 1px 4px;
+    }
+  }
+}
+
+// Code mockup — styled code block visual
+.cv-code {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--background-raised);
+
+  &__bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--background);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.75rem;
+    color: var(--color-muted);
+  }
+
+  &__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+
+    &--red { background: #f87171; }
+    &--yellow { background: #fbbf24; }
+    &--green { background: #34d399; }
+  }
+
+  &__filename {
+    margin-left: 8px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.75rem;
+  }
+
+  &__body {
+    padding: 14px 18px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    overflow-x: auto;
+  }
+
+  &__line {
+    color: var(--color-muted);
+
+    &--key { color: var(--accent); }
+    &--value { color: var(--accent-secondary); }
+    &--comment { color: var(--color-muted); opacity: 0.5; font-style: italic; }
+    &--highlight { background: var(--accent-alpha-20); margin: 0 -18px; padding: 0 18px; display: block; }
+  }
+}
+
+// Cascade/override diagram
+.cv-cascade {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+
+  &__level {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--background-raised);
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+    position: relative;
+
+    &:first-child { border-radius: 10px 10px 0 0; }
+    &:last-child { border-bottom: 1px solid var(--border-color); border-radius: 0 0 10px 10px; }
+
+    @media (max-width: $phone-max-width) {
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 14px;
+    }
+  }
+
+  &__level--winner {
+    background: rgba(52, 211, 153, .08);
+    border-color: rgba(52, 211, 153, .3);
+
+    & + .cv-cascade__level { border-top-color: rgba(52, 211, 153, .3); }
+  }
+
+  &__priority {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+    width: 48px;
+  }
+
+  &__label {
+    flex: 1;
+    font-size: 0.85rem;
+    color: var(--color);
+
+    code { font-size: 0.8rem; }
+  }
+
+  &__badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  &__badge--wins {
+    background: var(--accent-secondary-alpha-20);
+    color: var(--accent-secondary);
+  }
+
+  &__badge--default {
+    background: var(--accent-alpha-20);
+    color: var(--accent);
+  }
+}
+
+// Chip list
+.cv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px;
+  background: var(--background-raised);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+
+  &__chip {
+    padding: 5px 14px;
+    background: var(--background);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.82rem;
+    color: var(--accent);
+    font-weight: 600;
+
+    &--green { color: var(--accent-secondary); border-color: rgba(52, 211, 153, .3); }
+    &--muted { color: var(--color-muted); font-family: "Public Sans", sans-serif; font-weight: 400; font-style: italic; border: none; }
   }
 }

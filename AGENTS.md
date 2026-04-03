@@ -46,9 +46,9 @@ Python checks: `ruff check .`, `ruff format --check .`, `ty check`
 
 ## style conventions
 
-- **all lowercase** for nav items, menu text, UI labels, and headings on the website (dkdc brand style). Sentence case is planned for v1.0.0 (like Go's convention shift).
+- **Sentence case** for headings in documentation and on the website. Zorto is an independent open source project — it does NOT follow dkdc's all-lowercase brand style.
 - "Zorto" (capitalized) in documentation prose; `zorto` for commands, code, URLs.
-- built-in themes: `dkdc`, `light`, `dark`. All feature-gated Cargo features (default: all enabled). Python builds always include all themes.
+- built-in themes: `zorto`, `dkdc`, `light`, `dark`. All feature-gated Cargo features (default: all enabled). Python builds always include all themes.
 
 ## Zola reference
 

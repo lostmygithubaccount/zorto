@@ -1,4 +1,6 @@
-Complete reference for all built-in shortcodes.
+# Shortcodes reference
+
+Complete reference for all built-in shortcodes. See [shortcodes concept](../concepts/shortcodes.md) for an overview and [how to customize your theme](../how-to/customize-theme.md) for creating custom shortcodes.
 
 ## include
 
@@ -8,8 +10,9 @@ Include the contents of another file.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `path` | string | *required* | Path to the file (relative to project root) |
-| `strip_frontmatter` | bool | `false` | Remove TOML frontmatter from included content |
+| `path` | string | *required* | Path to the file (relative to project root), or an `https://` URL |
+| `strip_frontmatter` | bool | `false` | Remove `+++`-delimited TOML frontmatter from included content |
+| `rewrite_links` | bool | `false` | Rewrite relative `.md` links to clean URL paths |
 
 **Example:**
 
@@ -34,7 +37,7 @@ Each tab's content is separated by `<!-- tab -->` in the body.
 <!-- tab -->
 `uv tool install zorto`
 <!-- tab -->
-`curl -sSL https://dkdc.sh/zorto | bash`
+`curl -LsSf https://dkdc.sh/zorto | sh`
 {% end %}
 
 ## note
@@ -175,3 +178,152 @@ graph LR
     B --> C[HTML]
 {% end %}
 ```
+
+## pyref
+
+Auto-generate Python API reference documentation by introspecting a module at build time. Requires the `python` feature.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `module` | string | *required* | Python module name to document |
+| `recursive` | bool | `true` | Walk submodules |
+| `exclude` | string | `""` | Comma-separated names to exclude |
+| `include` | string | `""` | Comma-separated allowlist (only document these) |
+| `private` | bool | `false` | Include `_private` members |
+
+**Example:**
+
+<pre><code>&#123;&#123; pyref(module="zorto", exclude="main,core", recursive="false") &#125;&#125;</code></pre>
+
+Generates HTML with function signatures, class methods, and docstrings. Doctest examples (`>>>` lines in docstrings) are executed at build time and their output is rendered inline.
+
+## configref
+
+Auto-generate configuration reference from a Rust source file's doc comments and serde attributes.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `src` | string | *required* | Path to Rust source file (relative to site root) |
+
+**Example:**
+
+<pre><code>&#123;&#123; configref(src="../crates/zorto-core/src/config.rs") &#125;&#125;</code></pre>
+
+Parses struct definitions, field types, `///` doc comments, and `#[serde(...)]` attributes to generate HTML tables.
+
+## flow
+
+Horizontal step flow diagram with arrows between steps.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `steps` | string | *required* | Pipe-delimited steps, each as `Label:Description` or just `Label` |
+| `caption` | string | `""` | Caption text below the diagram |
+
+**Example:**
+
+{{ flow(steps="Write:Markdown content|Build:Compile site|Deploy:Push to production", caption="A typical workflow.") }}
+
+**Syntax:**
+
+<pre><code>&#123;&#123; flow(steps="Write:Content|Build:Compile|Deploy:Ship", caption="Development workflow.") &#125;&#125;</code></pre>
+
+## layers
+
+Vertical layered stack diagram with numbered items.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `items` | string | *required* | Pipe-delimited items, each as `Title:Description:badge` |
+| `caption` | string | `""` | Caption text below the diagram |
+
+**Example:**
+
+{{ layers(items="Identity:Site name and URL:base_url|Build:Output toggles:feeds, sitemap|Theme:Visual appearance:theme", caption="Configuration layers.") }}
+
+**Syntax:**
+
+<pre><code>&#123;&#123; layers(items="Layer 1:Description:badge|Layer 2:Description:badge") &#125;&#125;</code></pre>
+
+## tree
+
+File tree visualization. Body content defines the tree structure, one entry per line.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `caption` | string | `""` | Caption text below the tree |
+
+Lines use indentation (2 spaces per level) for nesting. Append `[tag]` for labels. Directories end with `/`.
+
+**Example:**
+
+{% tree(caption="A typical Zorto project.") %}
+my-site/
+  config.toml
+  content/
+    _index.md  [section]
+    about.md  [page]
+  templates/
+  sass/
+{% end %}
+
+**Syntax:**
+
+<pre><code>&#123;% tree(caption="Project structure.") %&#125;
+content/
+  _index.md  [section]
+  about.md  [page]
+&#123;% end %&#125;</code></pre>
+
+## compare
+
+Side-by-side comparison cards.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `left_title` | string | `""` | Title for the left card |
+| `left` | string | *required* | Body text for the left card |
+| `right_title` | string | `""` | Title for the right card |
+| `right` | string | *required* | Body text for the right card |
+| `left_style` | string | `"accent"` | Style: `accent` (blue), `green`, or `muted` |
+| `right_style` | string | `"green"` | Style: `accent`, `green`, or `muted` |
+| `caption` | string | `""` | Caption text below |
+
+**Example:**
+
+{{ compare(left_title="Before", left="Manual process, error-prone, slow.", right_title="After", right="Automated, validated, fast.") }}
+
+**Syntax:**
+
+<pre><code>&#123;&#123; compare(left_title="Option A", left="Description A", right_title="Option B", right="Description B") &#125;&#125;</code></pre>
+
+## cascade
+
+Override/priority cascade diagram. The last item is highlighted as the winner.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `items` | string | *required* | Pipe-delimited items, each as `Priority:Label:badge` |
+| `caption` | string | `""` | Caption text below |
+
+**Example:**
+
+{{ cascade(items="Default:Built-in theme templates:fallback|Override:Your local templates/:wins", caption="Local files always take priority.") }}
+
+**Syntax:**
+
+<pre><code>&#123;&#123; cascade(items="Low:Default value:default|High:Your override:wins") &#125;&#125;</code></pre>
