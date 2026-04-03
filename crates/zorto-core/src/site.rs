@@ -122,6 +122,9 @@ impl Site {
                 .as_deref()
                 .and_then(crate::themes::Theme::from_name);
             sass::compile_sass_with_theme(&sass_dir, &self.output_dir, theme.as_ref())?;
+            if self.config.compile_all_themes {
+                sass::compile_all_theme_styles(&self.output_dir, theme.as_ref())?;
+            }
         }
 
         // Copy static files

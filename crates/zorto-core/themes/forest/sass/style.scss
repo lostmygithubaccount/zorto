@@ -1,0 +1,34 @@
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+// forest theme: green/lime color scheme
+
+:root {
+  --accent: rgb(34, 197, 94);
+  --accent-alpha-70: rgba(34, 197, 94, .7);
+  --accent-alpha-20: rgba(34, 197, 94, .2);
+  --accent-secondary: rgb(163, 230, 53);
+  --accent-secondary-alpha-20: rgba(163, 230, 53, .2);
+  --background: #0a1a0f;
+  --background-raised: #102418;
+  --color: #d0f0da;
+  --color-muted: rgba(208, 240, 218, .5);
+  --border-color: rgba(34, 197, 94, .15);
+  --code-bg: rgba(0, 0, 0, 0.3);
+  --max-width: 1200px;
+}
+
+[data-theme="light"] {
+  --background: #eef8f0;
+  --background-raised: #ffffff;
+  --color: #0f2918;
+  --color-muted: rgba(15, 41, 24, .5);
+  --border-color: rgba(34, 197, 94, .15);
+  --code-bg: #e6f5ea;
+}
+
+$phone-max-width: 683px;
+$tablet-max-width: 899px;
+$nav-collapse-width: 600px;
+
+@import 'structure';
+@import 'components';

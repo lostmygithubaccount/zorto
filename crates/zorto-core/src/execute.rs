@@ -78,7 +78,7 @@ pub fn execute_blocks(
 
 /// Find a .venv directory: check site root, walk up parents, then fall back to VIRTUAL_ENV env var
 #[cfg(feature = "python")]
-fn find_venv(site_root: &Path) -> Option<std::path::PathBuf> {
+pub(crate) fn find_venv(site_root: &Path) -> Option<std::path::PathBuf> {
     // Walk up from site root looking for .venv
     let mut dir = Some(site_root);
     while let Some(d) = dir {
@@ -96,7 +96,7 @@ fn find_venv(site_root: &Path) -> Option<std::path::PathBuf> {
 
 /// Activate a venv's site-packages in the embedded Python interpreter (once per process)
 #[cfg(feature = "python")]
-fn activate_venv(py: pyo3::Python<'_>, site_root: &Path) -> pyo3::PyResult<()> {
+pub(crate) fn activate_venv(py: pyo3::Python<'_>, site_root: &Path) -> pyo3::PyResult<()> {
     use pyo3::prelude::*;
     static VENV_ACTIVATED: Once = Once::new();
     let venv_dir = match find_venv(site_root) {

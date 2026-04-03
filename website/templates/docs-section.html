@@ -22,19 +22,19 @@
             {% set concepts = get_section(path="docs/concepts/_index.md") %}
             <a href="{{ concepts.permalink | replace(from=config.base_url, to="") }}" class="docs-card">
                 <h3>Concepts</h3>
-                <p>Content model, templates, themes, shortcodes, callouts, and configuration.</p>
+                <p>Core concepts: AI-native design, executable code, themes, callouts, and more.</p>
             </a>
 
             {% set howto = get_section(path="docs/how-to/_index.md") %}
             <a href="{{ howto.permalink | replace(from=config.base_url, to="") }}" class="docs-card">
                 <h3>How-to</h3>
-                <p>Practical guides: add a blog, customize a theme, executable code blocks.</p>
+                <p>Step-by-step guides: blogging, deployment, SEO, analytics, and more.</p>
             </a>
 
             {% set reference = get_section(path="docs/reference/_index.md") %}
             <a href="{{ reference.permalink | replace(from=config.base_url, to="") }}" class="docs-card">
                 <h3>Reference</h3>
-                <p>CLI, configuration, shortcodes, and callouts reference.</p>
+                <p>CLI, Python API, configuration, shortcodes, and callouts.</p>
             </a>
         </div>
     </div>

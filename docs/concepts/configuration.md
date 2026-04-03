@@ -1,4 +1,8 @@
+# Configuration
+
 Zorto is configured via `config.toml` in your project root.
+
+{{ layers(items="Identity:Who is this site?:base_url, title|Build behavior:What outputs to produce?:feeds, sitemap|Content processing:How to parse and organize content?:markdown, taxonomies|Theme and custom data:How should the site look?:theme, extra", caption="Four conceptual layers, one file. Everything from identity to appearance in config.toml.") }}
 
 ## Minimal example
 
@@ -19,6 +23,7 @@ compile_sass = true
 generate_feed = true
 generate_sitemap = true
 generate_llms_txt = true
+generate_md_files = true
 
 [markdown]
 highlight_code = true
@@ -48,20 +53,55 @@ author = "Your Name"
 | `base_url` | string | *required* | Full URL of your site |
 | `title` | string | `""` | Site title |
 | `description` | string | `""` | Site description |
-| `theme` | string | `""` | Theme name (`dkdc`, `light`, `dark`) |
+| `theme` | string | `""` | Theme name (`zorto`, `dkdc`, `light`, `dark`) |
 | `compile_sass` | bool | `true` | Compile SCSS to CSS |
 | `generate_feed` | bool | `false` | Generate Atom feed |
 | `generate_sitemap` | bool | `true` | Generate sitemap.xml |
 | `generate_llms_txt` | bool | `true` | Generate llms.txt and llms-full.txt |
+| `generate_md_files` | bool | `false` | Generate .md versions of every page alongside HTML |
 
 ### `[markdown]`
 
-Controls markdown rendering. See the [config reference](../reference/config.md) for all fields.
+Controls how Markdown is rendered to HTML. The most commonly used options:
+
+- `highlight_code` — syntax highlighting for fenced code blocks
+- `insert_anchor_links` — add `#` links to headings (`"right"`, `"left"`, or `"none"`)
+- `external_links_target_blank` — open external links in a new tab
+- `smart_punctuation` — convert `"quotes"` to "quotes" and `--` to —
+
+See the [config reference](../reference/config.md) for all fields.
 
 ### `[[taxonomies]]`
 
-Define taxonomies like tags and categories. Each entry needs at least a `name` field.
+Define taxonomies like tags and categories. Each entry creates listing pages automatically:
+
+```toml
+[[taxonomies]]
+name = "tags"
+```
+
+This generates `/tags/` (all tags) and `/tags/<term>/` (pages with that tag). Add as many taxonomies as you need — tags, categories, authors, etc.
 
 ### `[extra]`
 
-Arbitrary key-value data accessible in templates as `config.extra`. Use this for author info, social links, navigation menus, and anything else your templates need.
+A free-form table for any custom data your templates need. Zorto passes it through as `config.extra` without interpreting it:
+
+```toml
+[extra]
+author = "Your Name"
+github = "https://github.com/you"
+menu_items = [
+  { name = "Docs", url = "/docs/" },
+  { name = "Blog", url = "/posts/" },
+]
+```
+
+Access in templates: `{{ config.extra.author }}`, `{% for item in config.extra.menu_items %}`.
+
+## Further reading
+
+- [Configuration reference](../reference/config.md) — complete field list with types and defaults
+- [Themes](themes.md) — how the `theme` setting works
+- [Content model](content-model.md) — how frontmatter relates to config
+- [How to customize your theme](../how-to/customize-theme.md) — override styles and templates
+- [How to deploy](../how-to/deploy.md) — build commands for each hosting provider

@@ -1,0 +1,162 @@
+%YAML 1.2
+---
+# TOML syntax highlighting for syntect
+# Based on the TOML spec: https://toml.io/en/v1.0.0
+name: TOML
+file_extensions:
+  - toml
+scope: source.toml
+contexts:
+  main:
+    # Comments
+    - match: '#.*$'
+      scope: comment.line.number-sign.toml
+
+    # Table headers
+    - match: '^\s*(\[\[)([^\]]*?)(\]\])'
+      captures:
+        1: punctuation.definition.table.array.toml
+        2: entity.name.table.array.toml
+        3: punctuation.definition.table.array.toml
+
+    - match: '^\s*(\[)([^\]]*?)(\])'
+      captures:
+        1: punctuation.definition.table.toml
+        2: entity.name.table.toml
+        3: punctuation.definition.table.toml
+
+    # Key = value pairs
+    - match: '([A-Za-z0-9_-]+)\s*(=)'
+      captures:
+        1: variable.other.key.toml
+        2: keyword.operator.assignment.toml
+      push: value
+
+    # Dotted keys
+    - match: '([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+)\s*(=)'
+      captures:
+        1: variable.other.key.toml
+        2: keyword.operator.assignment.toml
+      push: value
+
+    # Quoted keys
+    - match: '("[^"]*")\s*(=)'
+      captures:
+        1: variable.other.key.toml
+        2: keyword.operator.assignment.toml
+      push: value
+
+  value:
+    - match: '$'
+      pop: true
+
+    # Comments after values
+    - match: '#.*$'
+      scope: comment.line.number-sign.toml
+      pop: true
+
+    # Multi-line basic strings
+    - match: '"""'
+      scope: punctuation.definition.string.begin.toml
+      push: string_multiline_basic
+
+    # Multi-line literal strings
+    - match: "'''"
+      scope: punctuation.definition.string.begin.toml
+      push: string_multiline_literal
+
+    # Basic strings
+    - match: '"'
+      scope: punctuation.definition.string.begin.toml
+      push: string_basic
+
+    # Literal strings
+    - match: "'"
+      scope: punctuation.definition.string.begin.toml
+      push: string_literal
+
+    # Boolean
+    - match: '\b(true|false)\b'
+      scope: constant.language.boolean.toml
+      pop: true
+
+    # Datetime
+    - match: '\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?'
+      scope: constant.other.datetime.toml
+      pop: true
+
+    # Date
+    - match: '\d{4}-\d{2}-\d{2}'
+      scope: constant.other.date.toml
+      pop: true
+
+    # Float (must be before integer)
+    - match: '[+-]?(?:\d+\.\d*|\d*\.\d+)(?:[eE][+-]?\d+)?'
+      scope: constant.numeric.float.toml
+      pop: true
+
+    - match: '[+-]?(?:inf|nan)\b'
+      scope: constant.numeric.float.toml
+      pop: true
+
+    # Integer (hex, oct, bin)
+    - match: '0x[0-9a-fA-F_]+'
+      scope: constant.numeric.hex.toml
+      pop: true
+
+    - match: '0o[0-7_]+'
+      scope: constant.numeric.octal.toml
+      pop: true
+
+    - match: '0b[01_]+'
+      scope: constant.numeric.binary.toml
+      pop: true
+
+    # Integer (decimal)
+    - match: '[+-]?\d[\d_]*'
+      scope: constant.numeric.integer.toml
+      pop: true
+
+    # Inline table
+    - match: '\{'
+      scope: punctuation.definition.inline-table.begin.toml
+
+    - match: '\}'
+      scope: punctuation.definition.inline-table.end.toml
+      pop: true
+
+    # Array
+    - match: '\['
+      scope: punctuation.definition.array.begin.toml
+
+    - match: '\]'
+      scope: punctuation.definition.array.end.toml
+      pop: true
+
+  string_basic:
+    - meta_scope: string.quoted.double.toml
+    - match: '\\[btnfr"\\]|\\u[0-9a-fA-F]{4}|\\U[0-9a-fA-F]{8}'
+      scope: constant.character.escape.toml
+    - match: '"'
+      scope: punctuation.definition.string.end.toml
+      pop: true
+
+  string_literal:
+    - meta_scope: string.quoted.single.toml
+    - match: "'"
+      scope: punctuation.definition.string.end.toml
+      pop: true
+
+  string_multiline_basic:
+    - meta_scope: string.quoted.double.block.toml
+    - match: '\\[btnfr"\\]|\\u[0-9a-fA-F]{4}|\\U[0-9a-fA-F]{8}'
+      scope: constant.character.escape.toml
+    - match: '"""'
+      scope: punctuation.definition.string.end.toml
+      pop: true
+
+  string_multiline_literal:
+    - meta_scope: string.quoted.single.block.toml
+    - match: "'''"
+      scope: punctuation.definition.string.end.toml
+      pop: true

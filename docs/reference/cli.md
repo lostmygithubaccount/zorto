@@ -1,4 +1,6 @@
-The `zorto` command-line interface. Install from [crates.io](https://crates.io/crates/zorto) or [PyPI](https://pypi.org/project/zorto/). API docs at [docs.rs](https://docs.rs/zorto-core).
+# CLI reference
+
+The `zorto` command-line interface. See [installation](../getting-started/installation.md) for setup, [live reload](../concepts/live-reload.md) for preview server details, and [troubleshooting](../how-to/troubleshooting.md) for common issues.
 
 ## zorto
 

@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+// slate theme: neutral monochrome
+
+:root {
+  --accent: #94a3b8;
+  --accent-alpha-70: rgba(148, 163, 184, .7);
+  --accent-alpha-20: rgba(148, 163, 184, .2);
+
+  --accent-secondary: #cbd5e1;
+  --accent-secondary-alpha-20: rgba(203, 213, 225, .2);
+
+  --background: #0f1114;
+  --background-raised: #1a1d23;
+  --color: #e2e5ea;
+  --color-muted: rgba(226, 229, 234, .5);
+  --border-color: rgba(148, 163, 184, .15);
+
+  --code-bg: rgba(0, 0, 0, 0.3);
+  --max-width: 1200px;
+}
+
+[data-theme="light"] {
+  --background: #f8f9fa;
+  --background-raised: #ffffff;
+  --color: #1a1d23;
+  --color-muted: rgba(26, 29, 35, .55);
+  --border-color: #dee2e6;
+  --code-bg: #f1f3f5;
+}
+
+$phone-max-width: 683px;
+$tablet-max-width: 899px;
+$nav-collapse-width: 600px;
+
+@import 'structure';
+@import 'components';

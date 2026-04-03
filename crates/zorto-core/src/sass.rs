@@ -56,6 +56,42 @@ pub fn compile_sass_with_theme(
     }
 }
 
+/// Compile CSS for every available theme as `style-{name}.css`.
+///
+/// The active theme (already compiled as `style.css`) is skipped.
+pub fn compile_all_theme_styles(
+    output_dir: &Path,
+    active_theme: Option<&Theme>,
+) -> anyhow::Result<()> {
+    for name in Theme::available() {
+        let Some(theme) = Theme::from_name(name) else {
+            continue;
+        };
+        // Skip the active theme — it's already compiled as style.css
+        if active_theme == Some(&theme) {
+            continue;
+        }
+
+        let work_dir = tempfile::tempdir()
+            .map_err(|e| anyhow::anyhow!("failed to create temp dir for theme {name}: {e}"))?;
+
+        for (filename, content) in &theme.scss() {
+            std::fs::write(work_dir.path().join(filename), content)
+                .map_err(|e| anyhow::anyhow!("failed to write theme SCSS {filename}: {e}"))?;
+        }
+
+        let css = grass::from_path(
+            work_dir.path().join("style.scss"),
+            &grass::Options::default(),
+        )
+        .map_err(|e| anyhow::anyhow!("SCSS compilation error for theme {name}: {e}"))?;
+
+        std::fs::create_dir_all(output_dir)?;
+        std::fs::write(output_dir.join(format!("style-{name}.css")), css)?;
+    }
+    Ok(())
+}
+
 /// Compile all top-level SCSS files in `sass_dir` to CSS in `output_dir`.
 ///
 /// Each `<name>.scss` produces `<name>.css`. Files starting with `_` are

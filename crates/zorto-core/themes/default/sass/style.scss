@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+// default theme: clean blue, no animations
+
+:root {
+  --accent: #3b82f6;
+  --accent-alpha-70: rgba(59, 130, 246, .7);
+  --accent-alpha-20: rgba(59, 130, 246, .2);
+
+  --accent-secondary: #22d3ee;
+  --accent-secondary-alpha-20: rgba(34, 211, 238, .2);
+
+  --background: #0f172a;
+  --background-raised: #1e293b;
+  --color: #e2e8f0;
+  --color-muted: rgba(226, 232, 240, .6);
+  --border-color: rgba(59, 130, 246, .15);
+
+  --code-bg: rgba(0, 0, 0, 0.3);
+  --max-width: 1200px;
+}
+
+[data-theme="light"] {
+  --background: #ffffff;
+  --background-raised: #f8fafc;
+  --color: #1e293b;
+  --color-muted: rgba(30, 41, 59, .6);
+  --border-color: #e2e8f0;
+  --code-bg: #f1f5f9;
+}
+
+$phone-max-width: 683px;
+$tablet-max-width: 899px;
+$nav-collapse-width: 600px;
+
+@import 'structure';
+@import 'components';

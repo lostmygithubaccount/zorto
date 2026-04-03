@@ -1,67 +1,8 @@
-Complete reference for `config.toml`.
+# Configuration reference
 
-## Top-level settings
+Complete reference for `config.toml`. See [configuration concept](../concepts/configuration.md) for the mental model and examples. The tables below are auto-generated from the Zorto source code.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `base_url` | string | *required* | Full URL of the deployed site (e.g. `https://example.com`) |
-| `title` | string | `""` | Site title, available as `config.title` in templates |
-| `description` | string | `""` | Site description for meta tags and feeds |
-| `default_language` | string | `"en"` | Default language for the site |
-| `theme` | string | `""` | Theme to use (`dkdc`, `light`, `dark`) |
-| `compile_sass` | bool | `true` | Compile `.scss` files from `sass/` to CSS |
-| `generate_feed` | bool | `false` | Generate an Atom feed at `/atom.xml` |
-| `generate_sitemap` | bool | `true` | Generate `sitemap.xml` |
-| `generate_llms_txt` | bool | `true` | Generate `llms.txt` and `llms-full.txt` for LLM consumption |
-
-## `[markdown]`
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `highlight_code` | bool | `true` | Enable syntax highlighting in code blocks |
-| `highlight_theme` | string | `"base16-ocean.dark"` | Syntax highlighting theme |
-| `insert_anchor_links` | string | `"none"` | Add anchor links to headings: `"none"`, `"right"` |
-| `external_links_target_blank` | bool | `false` | Open external links in a new tab |
-| `external_links_no_follow` | bool | `false` | Add `rel="nofollow"` to external links |
-| `external_links_no_referrer` | bool | `false` | Add `rel="noreferrer"` to external links |
-| `smart_punctuation` | bool | `false` | Convert `--` to em-dash, `"quotes"` to smart quotes, etc. |
-
-## `[[taxonomies]]`
-
-Each taxonomy is defined as an array entry:
-
-```toml
-[[taxonomies]]
-name = "tags"
-
-[[taxonomies]]
-name = "categories"
-```
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | string | *required* | Taxonomy name (used in URLs and frontmatter) |
-
-## `[extra]`
-
-Arbitrary key-value pairs accessible as `config.extra` in templates. Common patterns:
-
-```toml
-[extra]
-author = "Your Name"
-favicon = "/favicon.png"
-favicon_mimetype = "image/png"
-
-menu_items = [
-  { name = "Docs", url = "/docs/" },
-  { name = "Blog", url = "/posts/" },
-]
-
-[[extra.social_links]]
-name = "GitHub"
-url = "https://github.com/you"
-icon = "github"
-```
+{{ configref(src="../crates/zorto-core/src/config.rs") }}
 
 ## Section frontmatter
 
@@ -74,6 +15,7 @@ Used in `_index.md` files:
 | `sort_by` | string | `"date"` | Sort pages by: `"date"`, `"title"` |
 | `paginate_by` | int | `0` | Pages per pagination page (0 = no pagination) |
 | `template` | string | `"section.html"` | Custom template for this section |
+| `[extra]` | table | `{}` | Custom data for templates |
 
 ## Page frontmatter
 

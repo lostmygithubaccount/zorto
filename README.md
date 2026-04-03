@@ -18,6 +18,8 @@ Recommended:
 curl -LsSf https://dkdc.sh/zorto/install.sh | sh
 ```
 
+Pre-built binaries are available for Linux and macOS via Python (`uv`). Windows users should install via `cargo` or use macOS/Linux.
+
 uv:
 
 ```bash

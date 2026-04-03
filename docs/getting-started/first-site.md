@@ -1,60 +1,35 @@
-Now that you have Zorto running, here's how a site is structured and where to go next.
+# Next steps
 
-## Project structure
+Now that you have a working site, here are some directions to explore.
 
-```
-mysite/
-├── config.toml       # site configuration
-├── content/          # markdown content
-│   └── _index.md     # homepage
-├── templates/        # tera HTML templates (optional with themes)
-├── sass/             # SCSS stylesheets (optional with themes)
-└── static/           # static assets (copied as-is to public/)
-```
+## Recommended first: use a built-in theme
 
-With `theme = "dkdc"` in `config.toml`, you don't need `templates/` or `sass/`: the theme provides them.
-
-## Adding a page
-
-Create `content/about.md`:
-
-```markdown
-+++
-title = "About"
-+++
-
-This is my about page.
-```
-
-Visit `/about/` in your browser.
-
-## Adding a blog
-
-Create `content/posts/_index.md`:
+The tutorial used hand-written templates. Zorto ships with built-in themes (`zorto`, `dkdc`, `light`, `dark`) that provide ready-made templates and styles. Add one line to `config.toml`:
 
 ```toml
-+++
-title = "Blog"
-sort_by = "date"
-paginate_by = 10
-+++
+theme = "zorto"
 ```
 
-Add posts with dates. Use `<!-- more -->` to set the summary break. See [add a blog](../how-to/add-blog.md) for the full guide.
+With a theme active, you can delete the `templates/` directory entirely — the theme provides everything. You can still override individual templates by placing files in `templates/`.
 
-## Building
+See [Themes](../concepts/themes.md) for details.
 
-```bash
-zorto build
-```
+## Deploy your site
 
-Output goes to `public/`. Host it anywhere.
+Your site is ready to go live. See [Deploy your site](../how-to/deploy.md) for setup with Netlify, Vercel, Cloudflare Pages, or GitHub Pages.
 
-## Learn more
+## Learn the concepts
 
-- [Content model](../concepts/content-model.md): sections, pages, frontmatter
-- [Templates](../concepts/templates.md): Tera engine, context variables
-- [Themes](../concepts/themes.md): built-in themes, overrides
-- [Shortcodes](../concepts/shortcodes.md): note, figure, tabs, and more
-- [Callouts](../concepts/callouts.md): GitHub-style alerts
-- [Configuration](../concepts/configuration.md): all config.toml options
+- [Content model](../concepts/content-model.md): sections, pages, frontmatter, and how Zorto organizes content
+- [AI-native](../concepts/ai-native.md): explicit contracts, build-time validation, llms.txt
+- [Executable code blocks](../concepts/executable-code.md): run Python and Bash at build time
+- [Templates](../concepts/templates.md): the Tera template engine and available context variables
+- [Configuration](../concepts/configuration.md): every `config.toml` option explained
+
+## Follow the how-to guides
+
+- [Add a blog](../how-to/add-blog.md): full guide with pagination and summaries
+- [Customize a theme](../how-to/customize-theme.md): override templates and styles
+- [Add a custom domain](../how-to/custom-domain.md): DNS records for each hosting provider
+- [Organize content](../how-to/organize-content.md): nested sections, co-located assets
+- [SEO](../how-to/seo.md): meta tags, Open Graph, llms.txt

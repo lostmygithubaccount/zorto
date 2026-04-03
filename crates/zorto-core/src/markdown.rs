@@ -3,7 +3,7 @@ use regex::Regex;
 use std::sync::LazyLock;
 use syntect::highlighting::ThemeSet;
 use syntect::html::highlighted_html_for_string;
-use syntect::parsing::SyntaxSet;
+use syntect::parsing::{SyntaxDefinition, SyntaxSet};
 
 use crate::config::{AnchorLinks, MarkdownConfig};
 use crate::content::escape_xml;
@@ -13,7 +13,18 @@ use crate::shortcodes::{
     CALLOUT_ICON_WARNING,
 };
 
-static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
+static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(|| {
+    let mut builder = SyntaxSet::load_defaults_newlines().into_builder();
+    // Add TOML syntax (not in syntect's defaults)
+    if let Ok(toml_syn) = SyntaxDefinition::load_from_str(
+        include_str!("../syntaxes/TOML.sublime-syntax"),
+        true,
+        Some("TOML"),
+    ) {
+        builder.add(toml_syn);
+    }
+    builder.build()
+});
 static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
 static FILE_ATTR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"file="([^"]+)""#).unwrap());
 
@@ -313,6 +324,15 @@ mod tests {
         // Syntax highlighting produces <pre style="..."> tags from syntect
         assert!(html.contains("<pre"));
         assert!(blocks.is_empty());
+    }
+
+    #[test]
+    fn test_toml_syntax_available() {
+        let ss = &*SYNTAX_SET;
+        assert!(
+            ss.find_syntax_by_token("toml").is_some(),
+            "TOML syntax should be available for highlighting"
+        );
     }
 
     #[test]

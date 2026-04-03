@@ -576,9 +576,43 @@ pub fn extract_title_description(content: &str) -> (Option<String>, Option<Strin
     let desc = if desc_lines.is_empty() {
         None
     } else {
-        Some(desc_lines.join(" "))
+        Some(strip_inline_markdown(&desc_lines.join(" ")))
     };
     (title, desc)
+}
+
+/// Strip common inline markdown syntax so descriptions read as plain text.
+///
+/// Converts `[text](url)` → `text`, `**bold**` → `bold`, `` `code` `` → `code`, etc.
+fn strip_inline_markdown(s: &str) -> String {
+    // [text](url) → text
+    let mut result = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'[' {
+            // Look for ](
+            if let Some(close) = s[i + 1..].find("](") {
+                let text = &s[i + 1..i + 1 + close];
+                let after_paren = i + 1 + close + 2;
+                if let Some(end_paren) = s[after_paren..].find(')') {
+                    result.push_str(text);
+                    i = after_paren + end_paren + 1;
+                    continue;
+                }
+            }
+        }
+        result.push(bytes[i] as char);
+        i += 1;
+    }
+    // **bold** / __bold__ → bold, *italic* / _italic_ → italic
+    let result = result
+        .replace("**", "")
+        .replace("__", "")
+        .replace("*", "")
+        .replace("~~", "");
+    // `code` → code
+    result.replace('`', "")
 }
 
 /// Derive a human-readable title from a filename stem.

@@ -21,10 +21,17 @@
     <h2 class="features__heading">Features</h2>
     <div class="features__grid">
         {%- for feature in config.extra.features %}
+        {%- if feature.url %}
+        <a href="{{ feature.url }}" class="feature-card feature-card--link">
+            <h3 class="feature-card__name">{{ feature.name }}</h3>
+            <p class="feature-card__desc">{{ feature.description }}</p>
+        </a>
+        {%- else %}
         <div class="feature-card">
             <h3 class="feature-card__name">{{ feature.name }}</h3>
             <p class="feature-card__desc">{{ feature.description }}</p>
         </div>
+        {%- endif %}
         {%- endfor %}
     </div>
 </section>
