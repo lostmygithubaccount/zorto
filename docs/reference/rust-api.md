@@ -14,7 +14,7 @@ Zorto's Rust API is documented on [docs.rs](https://docs.rs/zorto-core).
 ```toml
 # Cargo.toml
 [dependencies]
-zorto-core = "0.13"
+zorto-core = "0.14"
 ```
 
 ```rust

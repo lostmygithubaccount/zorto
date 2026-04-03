@@ -271,7 +271,7 @@ The technology that lets Zorto run Python code blocks. When you write a `{python
 The command that generates your final site files. For Zorto, it's `zorto build`, which reads your content, templates, and config, then writes the complete static site to `public/`. In CI/CD, the build command also typically includes installing Zorto first:
 
 ```bash
-curl -LsSf https://dkdc.sh/zorto | sh && zorto build
+curl -LsSf https://dkdc.sh/zorto/install.sh | sh && zorto build
 ```
 
 ### SCSS

@@ -18,7 +18,7 @@ The codebase is Rust (core engine, CLI, themes) with Python bindings via PyO3. I
 
 | Channel | Command |
 |---------|---------|
-| Shell installer | `curl -LsSf https://dkdc.sh/zorto \| sh` |
+| Shell installer | `curl -LsSf https://dkdc.sh/zorto/install.sh \| sh` |
 | PyPI | `uv tool install zorto` |
 | crates.io | `cargo install zorto` |
 | Source | `git clone https://github.com/dkdc-io/zorto` |

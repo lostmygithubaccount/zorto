@@ -5,10 +5,10 @@ Zorto runs on macOS and Linux. Windows support is available via WSL.
 The quickest way to install:
 
 ```bash
-curl -LsSf https://dkdc.sh/zorto | sh
+curl -LsSf https://dkdc.sh/zorto/install.sh | sh
 ```
 
-Alternatively, install from PyPI (requires Python 3.9+ and [uv](https://docs.astral.sh/uv/) or pip):
+Alternatively, install from PyPI (requires Python 3.11+ and [uv](https://docs.astral.sh/uv/) or pip):
 
 ```bash
 uv tool install zorto
@@ -16,7 +16,7 @@ uv tool install zorto
 
 The Python package includes the same Rust engine — there is no performance difference.
 
-Or build from source (requires [Rust](https://www.rust-lang.org/tools/install) 1.75+):
+Or build from source (requires [Rust](https://www.rust-lang.org/tools/install) 1.85+):
 
 ```bash
 cargo install zorto

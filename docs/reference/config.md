@@ -31,5 +31,7 @@ Used in regular `.md` files:
 | `slug` | string | filename | Override the URL slug |
 | `template` | string | `"page.html"` | Custom template |
 | `aliases` | array of strings | `[]` | Redirect old URLs to this page |
+| `sort_by` | string | `"date"` | Sort child pages by: `"date"`, `"title"` |
+| `paginate_by` | int | `0` | Pages per pagination page (0 = no pagination) |
 | taxonomy fields | array of strings | `[]` | Taxonomy values as top-level arrays (e.g. `tags = ["rust"]`) |
 | `[extra]` | table | `{}` | Custom data for templates |

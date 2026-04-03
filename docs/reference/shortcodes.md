@@ -37,7 +37,7 @@ Each tab's content is separated by `<!-- tab -->` in the body.
 <!-- tab -->
 `uv tool install zorto`
 <!-- tab -->
-`curl -LsSf https://dkdc.sh/zorto | sh`
+`curl -LsSf https://dkdc.sh/zorto/install.sh | sh`
 {% end %}
 
 ## note

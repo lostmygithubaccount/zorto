@@ -18,7 +18,7 @@ Create a `netlify.toml` in your project root:
 
 ```toml
 [build]
-command = "curl -LsSf https://dkdc.sh/zorto | sh && zorto build"
+command = "curl -LsSf https://dkdc.sh/zorto/install.sh | sh && zorto build"
 publish = "public"
 ```
 
@@ -44,7 +44,7 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
-      - run: curl -LsSf https://dkdc.sh/zorto | sh && zorto build
+      - run: curl -LsSf https://dkdc.sh/zorto/install.sh | sh && zorto build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public
@@ -58,7 +58,7 @@ Create a `vercel.json`:
 
 ```json
 {
-  "buildCommand": "curl -LsSf https://dkdc.sh/zorto | sh && zorto build",
+  "buildCommand": "curl -LsSf https://dkdc.sh/zorto/install.sh | sh && zorto build",
   "outputDirectory": "public"
 }
 ```
@@ -67,7 +67,7 @@ Create a `vercel.json`:
 
 Connect your Git repository in the Cloudflare Pages dashboard and configure:
 
-- **Build command**: `curl -LsSf https://dkdc.sh/zorto | sh && zorto build`
+- **Build command**: `curl -LsSf https://dkdc.sh/zorto/install.sh | sh && zorto build`
 - **Build output directory**: `public`
 
 Every push to your production branch triggers a build. Cloudflare Pages also creates preview deployments for pull requests automatically.
