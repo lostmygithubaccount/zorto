@@ -5,3 +5,6 @@ public/
 __pycache__/
 .venv/
 .sync-repo/
+*.so
+*.dSYM/
+TODO.md
