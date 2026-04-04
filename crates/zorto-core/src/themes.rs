@@ -118,6 +118,14 @@ impl Theme {
         "macros/post.html",
         include_str!("../themes/zorto/templates/macros/post.html"),
     );
+    const TAGS_LIST_HTML: (&'static str, &'static str) = (
+        "tags/list.html",
+        include_str!("../themes/zorto/templates/tags/list.html"),
+    );
+    const TAGS_SINGLE_HTML: (&'static str, &'static str) = (
+        "tags/single.html",
+        include_str!("../themes/zorto/templates/tags/single.html"),
+    );
 
     /// Get all template files for this theme as `(name, content)` pairs.
     ///
@@ -133,6 +141,8 @@ impl Theme {
             Self::INDEX_HTML,
             Self::NOT_FOUND_HTML,
             Self::POST_MACRO_HTML,
+            Self::TAGS_LIST_HTML,
+            Self::TAGS_SINGLE_HTML,
         ]
     }
 
