@@ -501,7 +501,7 @@
         snippet = snippet.replace(re, '<mark>$1</mark>');
         // Format URL for display
         var displayUrl = row.url.replace(/^https?:\/\/[^/]+/, '');
-        html += '<a class="search-modal__result" href="' + row.url + '">' +
+        html += '<a class="search-modal__result" href="' + displayUrl + '">' +
           '<div class="search-modal__result-title">' + titleHtml + '</div>' +
           '<div class="search-modal__result-url">' + escapeHtml(displayUrl) + '</div>' +
           '<div class="search-modal__result-snippet">' + snippet + '</div>' +
