@@ -1,18 +1,18 @@
-@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&family=Roboto+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&display=swap');
 
 // charcoal theme: dark grey/silver color scheme
 
 :root {
-  --accent: rgb(161, 161, 170);
-  --accent-alpha-70: rgba(161, 161, 170, .7);
-  --accent-alpha-20: rgba(161, 161, 170, .2);
-  --accent-secondary: rgb(212, 212, 216);
-  --accent-secondary-alpha-20: rgba(212, 212, 216, .2);
-  --background: #141414;
-  --background-raised: #1e1e1e;
-  --color: #e4e4e7;
-  --color-muted: rgba(228, 228, 231, .5);
-  --border-color: rgba(161, 161, 170, .12);
+  --accent: rgb(156, 163, 175);
+  --accent-alpha-70: rgba(156, 163, 175, .7);
+  --accent-alpha-20: rgba(156, 163, 175, .2);
+  --accent-secondary: rgb(209, 213, 219);
+  --accent-secondary-alpha-20: rgba(209, 213, 219, .2);
+  --background: #111114;
+  --background-raised: #1a1a1e;
+  --color: #d4d4d8;
+  --color-muted: rgba(212, 212, 216, .5);
+  --border-color: rgba(156, 163, 175, .15);
   --code-bg: rgba(0, 0, 0, 0.3);
   --max-width: 1200px;
 }
@@ -22,8 +22,8 @@
   --background-raised: #ffffff;
   --color: #18181b;
   --color-muted: rgba(24, 24, 27, .5);
-  --border-color: rgba(161, 161, 170, .15);
-  --code-bg: #e8e8ec;
+  --border-color: rgba(156, 163, 175, .15);
+  --code-bg: #e4e4e7;
 }
 
 $phone-max-width: 683px;

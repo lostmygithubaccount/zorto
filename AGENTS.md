@@ -66,7 +66,7 @@ Never run `zorto build` directly inside `website/` — it will fail with sandbox
 
 - **Sentence case** for headings in documentation and on the website. Zorto is an independent open source project — it does NOT follow dkdc's all-lowercase brand style.
 - "Zorto" (capitalized) in documentation prose; `zorto` for commands, code, URLs.
-- built-in themes: `zorto`, `dkdc`, `default`, `ember`, `forest`, `ocean`, `rose`, `slate`. All feature-gated Cargo features (default: all enabled). Python builds always include all themes. Every theme supports both light and dark mode via `[data-theme="light"]` CSS variable overrides.
+- built-in themes: `zorto`, `dkdc`, `default`, `ember`, `forest`, `ocean`, `rose`, `slate`, `midnight`, `sunset`, `mint`, `plum`, `sand`, `arctic`, `lime`, `charcoal`. All feature-gated Cargo features (default: all enabled). Python builds always include all themes. Every theme supports both light and dark mode via `[data-theme="light"]` CSS variable overrides.
 
 ## Zola reference
 

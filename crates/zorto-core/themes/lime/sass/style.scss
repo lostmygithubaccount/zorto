@@ -1,18 +1,18 @@
-@import url('https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&family=Fira+Code:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&display=swap');
 
 // lime theme: neon green/yellow color scheme
 
 :root {
-  --accent: rgb(163, 230, 53);
-  --accent-alpha-70: rgba(163, 230, 53, .7);
-  --accent-alpha-20: rgba(163, 230, 53, .2);
+  --accent: rgb(132, 204, 22);
+  --accent-alpha-70: rgba(132, 204, 22, .7);
+  --accent-alpha-20: rgba(132, 204, 22, .2);
   --accent-secondary: rgb(250, 204, 21);
   --accent-secondary-alpha-20: rgba(250, 204, 21, .2);
-  --background: #0f1a08;
+  --background: #0e1a08;
   --background-raised: #162410;
-  --color: #ecfccb;
-  --color-muted: rgba(236, 252, 203, .5);
-  --border-color: rgba(163, 230, 53, .15);
+  --color: #e0f0c8;
+  --color-muted: rgba(224, 240, 200, .5);
+  --border-color: rgba(132, 204, 22, .15);
   --code-bg: rgba(0, 0, 0, 0.3);
   --max-width: 1200px;
 }
@@ -20,10 +20,10 @@
 [data-theme="light"] {
   --background: #f7fee7;
   --background-raised: #ffffff;
-  --color: #1a2e05;
-  --color-muted: rgba(26, 46, 5, .5);
-  --border-color: rgba(163, 230, 53, .12);
-  --code-bg: #ecfad0;
+  --color: #1a2e08;
+  --color-muted: rgba(26, 46, 8, .5);
+  --border-color: rgba(132, 204, 22, .15);
+  --code-bg: #ecfccb;
 }
 
 $phone-max-width: 683px;

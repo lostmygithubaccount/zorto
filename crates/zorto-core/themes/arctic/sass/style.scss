@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&family=IBM+Plex+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&display=swap');
 
 // arctic theme: ice blue/white color scheme
 
@@ -6,13 +6,13 @@
   --accent: rgb(56, 189, 248);
   --accent-alpha-70: rgba(56, 189, 248, .7);
   --accent-alpha-20: rgba(56, 189, 248, .2);
-  --accent-secondary: rgb(186, 230, 253);
-  --accent-secondary-alpha-20: rgba(186, 230, 253, .2);
-  --background: #0a1520;
-  --background-raised: #0e1c2a;
-  --color: #e0f2fe;
-  --color-muted: rgba(224, 242, 254, .5);
-  --border-color: rgba(56, 189, 248, .12);
+  --accent-secondary: rgb(224, 242, 254);
+  --accent-secondary-alpha-20: rgba(224, 242, 254, .2);
+  --background: #0a1218;
+  --background-raised: #101c24;
+  --color: #d8eef8;
+  --color-muted: rgba(216, 238, 248, .5);
+  --border-color: rgba(56, 189, 248, .15);
   --code-bg: rgba(0, 0, 0, 0.3);
   --max-width: 1200px;
 }
@@ -20,10 +20,10 @@
 [data-theme="light"] {
   --background: #f0f9ff;
   --background-raised: #ffffff;
-  --color: #0c2744;
-  --color-muted: rgba(12, 39, 68, .5);
-  --border-color: rgba(56, 189, 248, .12);
-  --code-bg: #e0f0fc;
+  --color: #0c2d42;
+  --color-muted: rgba(12, 45, 66, .5);
+  --border-color: rgba(56, 189, 248, .15);
+  --code-bg: #e0f2fe;
 }
 
 $phone-max-width: 683px;

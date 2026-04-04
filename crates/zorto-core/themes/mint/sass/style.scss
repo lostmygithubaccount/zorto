@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&display=swap');
 
 // mint theme: green/cyan color scheme
 
@@ -9,21 +9,21 @@
   --accent-secondary: rgb(34, 211, 238);
   --accent-secondary-alpha-20: rgba(34, 211, 238, .2);
   --background: #0a1a14;
-  --background-raised: #0f241c;
-  --color: #d1fae5;
-  --color-muted: rgba(209, 250, 229, .5);
+  --background-raised: #10241c;
+  --color: #d0f0e4;
+  --color-muted: rgba(208, 240, 228, .5);
   --border-color: rgba(52, 211, 153, .15);
   --code-bg: rgba(0, 0, 0, 0.3);
   --max-width: 1200px;
 }
 
 [data-theme="light"] {
-  --background: #f0fdf8;
+  --background: #eefdf6;
   --background-raised: #ffffff;
-  --color: #0a2e1c;
-  --color-muted: rgba(10, 46, 28, .5);
-  --border-color: rgba(52, 211, 153, .12);
-  --code-bg: #e6f9f0;
+  --color: #0a3b24;
+  --color-muted: rgba(10, 59, 36, .5);
+  --border-color: rgba(52, 211, 153, .15);
+  --code-bg: #d1fae5;
 }
 
 $phone-max-width: 683px;

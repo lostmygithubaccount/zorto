@@ -1,29 +1,29 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
 
 // midnight theme: navy/silver color scheme
 
 :root {
-  --accent: rgb(148, 163, 184);
-  --accent-alpha-70: rgba(148, 163, 184, .7);
-  --accent-alpha-20: rgba(148, 163, 184, .2);
-  --accent-secondary: rgb(99, 102, 241);
-  --accent-secondary-alpha-20: rgba(99, 102, 241, .2);
+  --accent: rgb(100, 149, 237);
+  --accent-alpha-70: rgba(100, 149, 237, .7);
+  --accent-alpha-20: rgba(100, 149, 237, .2);
+  --accent-secondary: rgb(192, 192, 210);
+  --accent-secondary-alpha-20: rgba(192, 192, 210, .2);
   --background: #0b1120;
-  --background-raised: #111a2e;
-  --color: #cbd5e1;
-  --color-muted: rgba(203, 213, 225, .5);
-  --border-color: rgba(148, 163, 184, .15);
+  --background-raised: #131b2e;
+  --color: #d0d5e0;
+  --color-muted: rgba(208, 213, 224, .5);
+  --border-color: rgba(100, 149, 237, .15);
   --code-bg: rgba(0, 0, 0, 0.3);
   --max-width: 1200px;
 }
 
 [data-theme="light"] {
-  --background: #f1f5f9;
+  --background: #f0f2f8;
   --background-raised: #ffffff;
-  --color: #0f172a;
-  --color-muted: rgba(15, 23, 42, .5);
-  --border-color: rgba(148, 163, 184, .15);
-  --code-bg: #e8edf4;
+  --color: #0b1120;
+  --color-muted: rgba(11, 17, 32, .5);
+  --border-color: rgba(100, 149, 237, .15);
+  --code-bg: #e8ecf4;
 }
 
 $phone-max-width: 683px;
