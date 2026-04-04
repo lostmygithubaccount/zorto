@@ -95,10 +95,7 @@ fn test_app(tmp: &TempDir) -> axum::Router {
 }
 
 async fn get(app: &axum::Router, uri: &str) -> (StatusCode, String) {
-    let req = Request::builder()
-        .uri(uri)
-        .body(Body::empty())
-        .unwrap();
+    let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
     let status = resp.status();
     let body = resp.into_body().collect().await.unwrap().to_bytes();
@@ -282,7 +279,10 @@ async fn page_delete_traversal_blocked() {
     let (status, _) = post_form(&app, "/pages/delete/../../outside.txt", "").await;
     // Should redirect without deleting
     assert!(status == StatusCode::SEE_OTHER || status == StatusCode::FOUND);
-    assert!(outside.exists(), "file outside content dir must not be deleted");
+    assert!(
+        outside.exists(),
+        "file outside content dir must not be deleted"
+    );
 }
 
 #[tokio::test]
@@ -540,7 +540,8 @@ async fn config_save_valid_toml() {
     let tmp = TempDir::new().unwrap();
     let app = test_app(&tmp);
 
-    let new_config = "content=base_url+%3D+%22https%3A%2F%2Fnew.example.com%22%0Atitle+%3D+%22New+Title%22%0A";
+    let new_config =
+        "content=base_url+%3D+%22https%3A%2F%2Fnew.example.com%22%0Atitle+%3D+%22New+Title%22%0A";
     let (status, _body) = post_form(&app, "/config", new_config).await;
     assert_eq!(status, StatusCode::OK);
 
@@ -621,7 +622,8 @@ async fn page_create_at_root_section() {
     let tmp = TempDir::new().unwrap();
     let app = test_app(&tmp);
 
-    let form = "title=About+Me&section=&date=2025-01-01&description=&draft=false&tags=&body=About+page";
+    let form =
+        "title=About+Me&section=&date=2025-01-01&description=&draft=false&tags=&body=About+page";
     let (status, _) = post_form(&app, "/pages/new", form).await;
     assert!(status == StatusCode::SEE_OTHER || status == StatusCode::FOUND);
 
