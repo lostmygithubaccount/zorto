@@ -26,7 +26,7 @@ python-packages = ["zorto"]
 python-source = "py"
 manifest-path = "crates/zorto-py/Cargo.toml"
 
-[tool.ty]
+[tool.ty.src]
 exclude = ["tests/"]
 
 [build-system]
