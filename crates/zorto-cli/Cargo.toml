@@ -21,7 +21,7 @@ name = "zorto"
 path = "src/main.rs"
 
 [features]
-default = ["embed-python", "theme-zorto", "theme-dkdc", "theme-default", "theme-ember", "theme-forest", "theme-ocean", "theme-rose", "theme-slate"]
+default = ["embed-python", "theme-zorto", "theme-dkdc", "theme-default", "theme-ember", "theme-forest", "theme-ocean", "theme-rose", "theme-slate", "theme-midnight", "theme-sunset", "theme-mint", "theme-plum", "theme-sand", "theme-arctic", "theme-lime", "theme-charcoal"]
 embed-python = ["zorto-core/embed-python"]
 python = ["zorto-core/python"]
 theme-zorto = ["zorto-core/theme-zorto"]
@@ -32,6 +32,14 @@ theme-forest = ["zorto-core/theme-forest"]
 theme-ocean = ["zorto-core/theme-ocean"]
 theme-rose = ["zorto-core/theme-rose"]
 theme-slate = ["zorto-core/theme-slate"]
+theme-midnight = ["zorto-core/theme-midnight"]
+theme-sunset = ["zorto-core/theme-sunset"]
+theme-mint = ["zorto-core/theme-mint"]
+theme-plum = ["zorto-core/theme-plum"]
+theme-sand = ["zorto-core/theme-sand"]
+theme-arctic = ["zorto-core/theme-arctic"]
+theme-lime = ["zorto-core/theme-lime"]
+theme-charcoal = ["zorto-core/theme-charcoal"]
 webapp = ["dep:zorto-webapp"]
 app = ["dep:zorto-app"]
 

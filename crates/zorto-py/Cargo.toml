@@ -12,5 +12,5 @@ name = "zorto_core"
 crate-type = ["cdylib"]
 
 [dependencies]
-zorto = { path = "../zorto-cli", default-features = false, features = ["python", "theme-zorto", "theme-dkdc", "theme-default", "theme-ember", "theme-forest", "theme-ocean", "theme-rose", "theme-slate"] }
+zorto = { path = "../zorto-cli", default-features = false, features = ["python", "theme-zorto", "theme-dkdc", "theme-default", "theme-ember", "theme-forest", "theme-ocean", "theme-rose", "theme-slate", "theme-midnight", "theme-sunset", "theme-mint", "theme-plum", "theme-sand", "theme-arctic", "theme-lime", "theme-charcoal"] }
 pyo3 = { version = "0.28", features = ["extension-module", "abi3-py311"] }

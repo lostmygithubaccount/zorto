@@ -41,6 +41,30 @@ pub enum Theme {
     /// Neutral monochrome dark-default theme. Minimal and clean.
     #[cfg(feature = "theme-slate")]
     Slate,
+    /// Navy/silver dark-default theme. Corporate and professional.
+    #[cfg(feature = "theme-midnight")]
+    Midnight,
+    /// Red/orange warm dark-default theme. Creative and bold.
+    #[cfg(feature = "theme-sunset")]
+    Sunset,
+    /// Green/cyan dark-default theme. Modern and minimalist.
+    #[cfg(feature = "theme-mint")]
+    Mint,
+    /// Purple/lavender dark-default theme. Elegant and artistic.
+    #[cfg(feature = "theme-plum")]
+    Plum,
+    /// Beige/brown dark-default theme. Warm and readable.
+    #[cfg(feature = "theme-sand")]
+    Sand,
+    /// Ice blue/white dark-default theme. Clean and scientific.
+    #[cfg(feature = "theme-arctic")]
+    Arctic,
+    /// Neon green/yellow dark-default theme. Tech and energetic.
+    #[cfg(feature = "theme-lime")]
+    Lime,
+    /// Dark grey/silver dark-default theme. Technical and code-focused.
+    #[cfg(feature = "theme-charcoal")]
+    Charcoal,
 }
 
 impl Theme {
@@ -66,6 +90,22 @@ impl Theme {
             "rose" => Some(Self::Rose),
             #[cfg(feature = "theme-slate")]
             "slate" => Some(Self::Slate),
+            #[cfg(feature = "theme-midnight")]
+            "midnight" => Some(Self::Midnight),
+            #[cfg(feature = "theme-sunset")]
+            "sunset" => Some(Self::Sunset),
+            #[cfg(feature = "theme-mint")]
+            "mint" => Some(Self::Mint),
+            #[cfg(feature = "theme-plum")]
+            "plum" => Some(Self::Plum),
+            #[cfg(feature = "theme-sand")]
+            "sand" => Some(Self::Sand),
+            #[cfg(feature = "theme-arctic")]
+            "arctic" => Some(Self::Arctic),
+            #[cfg(feature = "theme-lime")]
+            "lime" => Some(Self::Lime),
+            #[cfg(feature = "theme-charcoal")]
+            "charcoal" => Some(Self::Charcoal),
             _ => None,
         }
     }
@@ -90,6 +130,22 @@ impl Theme {
         names.push("rose");
         #[cfg(feature = "theme-slate")]
         names.push("slate");
+        #[cfg(feature = "theme-midnight")]
+        names.push("midnight");
+        #[cfg(feature = "theme-sunset")]
+        names.push("sunset");
+        #[cfg(feature = "theme-mint")]
+        names.push("mint");
+        #[cfg(feature = "theme-plum")]
+        names.push("plum");
+        #[cfg(feature = "theme-sand")]
+        names.push("sand");
+        #[cfg(feature = "theme-arctic")]
+        names.push("arctic");
+        #[cfg(feature = "theme-lime")]
+        names.push("lime");
+        #[cfg(feature = "theme-charcoal")]
+        names.push("charcoal");
         names
     }
 
@@ -199,6 +255,42 @@ impl Theme {
                 "style.scss",
                 include_str!("../themes/slate/sass/style.scss"),
             )),
+            #[cfg(feature = "theme-midnight")]
+            Self::Midnight => files.push((
+                "style.scss",
+                include_str!("../themes/midnight/sass/style.scss"),
+            )),
+            #[cfg(feature = "theme-sunset")]
+            Self::Sunset => files.push((
+                "style.scss",
+                include_str!("../themes/sunset/sass/style.scss"),
+            )),
+            #[cfg(feature = "theme-mint")]
+            Self::Mint => {
+                files.push(("style.scss", include_str!("../themes/mint/sass/style.scss")))
+            }
+            #[cfg(feature = "theme-plum")]
+            Self::Plum => {
+                files.push(("style.scss", include_str!("../themes/plum/sass/style.scss")))
+            }
+            #[cfg(feature = "theme-sand")]
+            Self::Sand => {
+                files.push(("style.scss", include_str!("../themes/sand/sass/style.scss")))
+            }
+            #[cfg(feature = "theme-arctic")]
+            Self::Arctic => files.push((
+                "style.scss",
+                include_str!("../themes/arctic/sass/style.scss"),
+            )),
+            #[cfg(feature = "theme-lime")]
+            Self::Lime => {
+                files.push(("style.scss", include_str!("../themes/lime/sass/style.scss")))
+            }
+            #[cfg(feature = "theme-charcoal")]
+            Self::Charcoal => files.push((
+                "style.scss",
+                include_str!("../themes/charcoal/sass/style.scss"),
+            )),
             _ => {}
         }
         files
@@ -223,6 +315,22 @@ impl Theme {
             Self::Rose => "rose",
             #[cfg(feature = "theme-slate")]
             Self::Slate => "slate",
+            #[cfg(feature = "theme-midnight")]
+            Self::Midnight => "midnight",
+            #[cfg(feature = "theme-sunset")]
+            Self::Sunset => "sunset",
+            #[cfg(feature = "theme-mint")]
+            Self::Mint => "mint",
+            #[cfg(feature = "theme-plum")]
+            Self::Plum => "plum",
+            #[cfg(feature = "theme-sand")]
+            Self::Sand => "sand",
+            #[cfg(feature = "theme-arctic")]
+            Self::Arctic => "arctic",
+            #[cfg(feature = "theme-lime")]
+            Self::Lime => "lime",
+            #[cfg(feature = "theme-charcoal")]
+            Self::Charcoal => "charcoal",
             #[allow(unreachable_patterns)]
             _ => "unknown",
         }
