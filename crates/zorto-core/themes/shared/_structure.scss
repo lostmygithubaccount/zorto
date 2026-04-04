@@ -886,6 +886,20 @@ hr {
   }
 }
 
+.code-viz {
+  border-top: 1px solid var(--border-color);
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  background: var(--background);
+
+  img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+  }
+}
+
 // ========================================
 // Tabs
 // ========================================
