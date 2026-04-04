@@ -1,6 +1,6 @@
 [package]
 name = "zorto-webapp"
-version = "0.16.1"
+version = "0.16.2"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Cody <cody@dkdc.io>"]
@@ -10,7 +10,7 @@ repository = "https://github.com/dkdc-io/zorto"
 homepage = "https://github.com/dkdc-io/zorto"
 
 [dependencies]
-zorto-core = { path = "../zorto-core", version = "0.16.1", default-features = false }
+zorto-core = { path = "../zorto-core", version = "0.16.2", default-features = false }
 axum = { version = "0.8", features = ["ws", "multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync", "fs"] }
 anyhow = "1"
