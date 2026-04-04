@@ -36,6 +36,27 @@ impl AppState {
     }
 }
 
+/// Build the axum router with the given shared state.
+pub(crate) fn app(state: Arc<AppState>) -> Router {
+    Router::new()
+        .route("/", get(dashboard::index))
+        .route("/pages", get(pages::list))
+        .route("/pages/new", get(pages::new_form).post(pages::create))
+        .route("/pages/{*path}", get(pages::edit).post(pages::save))
+        .route("/pages/delete/{*path}", post(pages::delete))
+        .route("/sections", get(sections::list))
+        .route(
+            "/sections/{*path}",
+            get(sections::edit).post(sections::save),
+        )
+        .route("/config", get(config::edit).post(config::save))
+        .route("/assets", get(assets::list))
+        .route("/assets/upload", post(assets::upload))
+        .route("/build", post(build::trigger))
+        .route("/preview/render", post(build::render_preview))
+        .with_state(state)
+}
+
 /// Run the zorto webapp server.
 ///
 /// Starts an HTMX-based CMS webapp for managing the site at the given root directory.
@@ -54,23 +75,7 @@ pub fn run_webapp(root: &Path, output_dir: &Path, sandbox: Option<&Path>) -> any
             reload_tx,
         });
 
-        let app = Router::new()
-            .route("/", get(dashboard::index))
-            .route("/pages", get(pages::list))
-            .route("/pages/new", get(pages::new_form).post(pages::create))
-            .route("/pages/{*path}", get(pages::edit).post(pages::save))
-            .route("/pages/delete/{*path}", post(pages::delete))
-            .route("/sections", get(sections::list))
-            .route(
-                "/sections/{*path}",
-                get(sections::edit).post(sections::save),
-            )
-            .route("/config", get(config::edit).post(config::save))
-            .route("/assets", get(assets::list))
-            .route("/assets/upload", post(assets::upload))
-            .route("/build", post(build::trigger))
-            .route("/preview/render", post(build::render_preview))
-            .with_state(state);
+        let app = app(state);
 
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
         let listener = match tokio::net::TcpListener::bind(addr).await {
@@ -146,6 +151,9 @@ pub(crate) fn validate_path(base: &Path, user_path: &str) -> Result<PathBuf, Str
 
     Ok(canonical)
 }
+
+#[cfg(test)]
+mod integration_tests;
 
 #[cfg(test)]
 mod tests {
