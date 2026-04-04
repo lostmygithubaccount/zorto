@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 use crate::serve;
+use crate::skill;
 use crate::templates;
 use zorto_core::site;
 
@@ -105,6 +106,12 @@ enum Commands {
         #[arg(long)]
         deny_warnings: bool,
     },
+
+    /// Install zorto skill files for AI agents
+    Skill {
+        #[command(subcommand)]
+        command: Option<skill::SkillCommands>,
+    },
 }
 
 /// Run the zorto CLI with the given arguments.
@@ -117,6 +124,15 @@ where
     T: Into<std::ffi::OsString> + Clone,
 {
     let cli = Cli::parse_from(args);
+
+    // Handle skill command before resolving root/sandbox (no site context needed)
+    if matches!(&cli.command, Some(Commands::Skill { .. })) {
+        let Some(Commands::Skill { command }) = cli.command else {
+            unreachable!();
+        };
+        return skill::handle_skill(command);
+    }
+
     let root = std::fs::canonicalize(&cli.root)?;
     let sandbox = resolve_sandbox(&cli.sandbox)?;
 
@@ -198,6 +214,7 @@ where
             site.check(deny_warnings)?;
             println!("Site check passed.");
         }
+        Commands::Skill { .. } => unreachable!("handled above"),
     }
 
     Ok(())
@@ -236,4 +253,29 @@ fn init_site(target: &std::path::Path, template: &str) -> anyhow::Result<()> {
         target.display()
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn parse_skill_install() {
+        let cli = Cli::parse_from(["zorto", "skill", "install", "--target", "/tmp/skills"]);
+        assert!(matches!(cli.command, Some(Commands::Skill { .. })));
+    }
+
+    #[test]
+    fn parse_skill_install_all() {
+        let cli = Cli::parse_from([
+            "zorto",
+            "skill",
+            "install",
+            "--target",
+            "/tmp/skills",
+            "--all",
+        ]);
+        assert!(matches!(cli.command, Some(Commands::Skill { .. })));
+    }
 }
