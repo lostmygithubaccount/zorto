@@ -122,33 +122,18 @@ impl Theme {
     /// Get all template files for this theme as `(name, content)` pairs.
     ///
     /// Template names use forward slashes (e.g. `"macros/post.html"`).
-    /// All themes share the same base templates from zorto. The dkdc theme
-    /// has its own base.html (identical structure, different default theme name
-    /// in Tera config references).
+    /// All themes share the same base templates from zorto. Themes only
+    /// differ in CSS, not in HTML structure.
     #[allow(unreachable_patterns)]
     pub fn templates(&self) -> Vec<(&'static str, &'static str)> {
-        match self {
-            #[cfg(feature = "theme-dkdc")]
-            Self::Dkdc => vec![
-                (
-                    "base.html",
-                    include_str!("../themes/dkdc/templates/base.html"),
-                ),
-                Self::PAGE_HTML,
-                Self::SECTION_HTML,
-                Self::INDEX_HTML,
-                Self::NOT_FOUND_HTML,
-                Self::POST_MACRO_HTML,
-            ],
-            _ => vec![
-                Self::BASE_HTML,
-                Self::PAGE_HTML,
-                Self::SECTION_HTML,
-                Self::INDEX_HTML,
-                Self::NOT_FOUND_HTML,
-                Self::POST_MACRO_HTML,
-            ],
-        }
+        vec![
+            Self::BASE_HTML,
+            Self::PAGE_HTML,
+            Self::SECTION_HTML,
+            Self::INDEX_HTML,
+            Self::NOT_FOUND_HTML,
+            Self::POST_MACRO_HTML,
+        ]
     }
 
     /// Shared SCSS partials included in every theme.
