@@ -2361,4 +2361,323 @@ mod tests {
         let input = "+++\ntitle = \"<script>alert('xss')</script>\"\n+++\nSafe body";
         assert_eq!(strip_toml_frontmatter(input).trim(), "Safe body");
     }
+
+    // --- Additional built-in shortcode tests ---
+
+    #[test]
+    fn test_flow_shortcode_basic() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = r#"{{ flow(steps="Write:Markdown|Parse:Find blocks|Render:HTML") }}"#;
+        let result = process_shortcodes(input, &dir, tmp.path(), tmp.path()).unwrap();
+        assert!(result.contains("cv-flow"));
+        assert!(result.contains("Write"));
+        assert!(result.contains("Markdown"));
+        assert!(result.contains("Parse"));
+        assert!(result.contains("Render"));
+        assert!(result.contains("\u{2192}")); // arrow
+    }
+
+    #[test]
+    fn test_flow_shortcode_missing_steps_errors() {
+        let result = builtin_flow(r#""#);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("requires a `steps`")
+        );
+    }
+
+    #[test]
+    fn test_flow_shortcode_with_caption() {
+        let result = builtin_flow(r#"steps="A|B", caption="Build pipeline""#).unwrap();
+        assert!(result.contains("cv-caption"));
+        assert!(result.contains("Build pipeline"));
+    }
+
+    #[test]
+    fn test_layers_shortcode_basic() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = r#"{{ layers(items="Identity:Who?:base|Build:What?:feeds") }}"#;
+        let result = process_shortcodes(input, &dir, tmp.path(), tmp.path()).unwrap();
+        assert!(result.contains("cv-layers"));
+        assert!(result.contains("Identity"));
+        assert!(result.contains("Who?"));
+        assert!(result.contains("base"));
+        assert!(result.contains("Build"));
+    }
+
+    #[test]
+    fn test_layers_shortcode_missing_items_errors() {
+        let result = builtin_layers(r#""#);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("requires an `items`")
+        );
+    }
+
+    #[test]
+    fn test_compare_shortcode_basic() {
+        let result = builtin_compare(
+            r#"left_title="Section", left="A directory", right_title="Page", right="A file""#,
+        )
+        .unwrap();
+        assert!(result.contains("cv-compare"));
+        assert!(result.contains("Section"));
+        assert!(result.contains("A directory"));
+        assert!(result.contains("Page"));
+        assert!(result.contains("A file"));
+        // Default styles
+        assert!(result.contains("cv-compare__card--accent"));
+        assert!(result.contains("cv-compare__card--green"));
+    }
+
+    #[test]
+    fn test_compare_shortcode_missing_left_errors() {
+        let result = builtin_compare(r#"right="only right""#);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("requires a `left`")
+        );
+    }
+
+    #[test]
+    fn test_compare_shortcode_missing_right_errors() {
+        let result = builtin_compare(r#"left="only left""#);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("requires a `right`")
+        );
+    }
+
+    #[test]
+    fn test_compare_shortcode_custom_styles() {
+        let result = builtin_compare(
+            r#"left_title="A", left="a", right_title="B", right="b", left_style="muted", right_style="accent""#,
+        )
+        .unwrap();
+        assert!(result.contains("cv-compare__card--muted"));
+        assert!(result.contains("cv-compare__card--accent"));
+    }
+
+    #[test]
+    fn test_cascade_shortcode_basic() {
+        let result = builtin_cascade(
+            r#"items="Default:Theme templates:fallback|Override:Your templates:wins""#,
+        )
+        .unwrap();
+        assert!(result.contains("cv-cascade"));
+        assert!(result.contains("Default"));
+        assert!(result.contains("Theme templates"));
+        assert!(result.contains("Override"));
+        // Last item is the winner
+        assert!(result.contains("cv-cascade__level--winner"));
+        assert!(result.contains("cv-cascade__badge--wins"));
+    }
+
+    #[test]
+    fn test_cascade_shortcode_missing_items_errors() {
+        let result = builtin_cascade(r#""#);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("requires an `items`")
+        );
+    }
+
+    #[test]
+    fn test_tree_shortcode_basic() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = "{% tree() %}content/\n  _index.md\n  posts/\n    hello.md{% end %}";
+        let result = process_shortcodes(input, &dir, tmp.path(), tmp.path()).unwrap();
+        assert!(result.contains("cv-tree"));
+        assert!(result.contains("content/"));
+        assert!(result.contains("_index.md"));
+        assert!(result.contains("hello.md"));
+    }
+
+    #[test]
+    fn test_tree_shortcode_missing_body_errors() {
+        let result = builtin_tree(r#""#, None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("requires a body"));
+    }
+
+    #[test]
+    fn test_mermaid_missing_body_errors() {
+        let result = builtin_mermaid(None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("requires a body"));
+    }
+
+    #[test]
+    fn test_mermaid_escapes_html() {
+        let result = builtin_mermaid(Some("A --> B<script>")).unwrap();
+        assert!(result.contains("&lt;script&gt;"));
+        assert!(!result.contains("<script>"));
+    }
+
+    #[test]
+    fn test_details_missing_summary_errors() {
+        let result = builtin_details(r#""#, Some("body"));
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("requires a `summary`")
+        );
+    }
+
+    #[test]
+    fn test_details_missing_body_errors() {
+        let result = builtin_details(r#"summary="Click""#, None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("requires a body"));
+    }
+
+    #[test]
+    fn test_details_escapes_summary_html() {
+        let result =
+            builtin_details(r#"summary="<script>alert(1)</script>""#, Some("safe body")).unwrap();
+        assert!(!result.contains("<script>"));
+        assert!(result.contains("&lt;script&gt;"));
+    }
+
+    #[test]
+    fn test_figure_missing_src_errors() {
+        let result = builtin_figure(r#"alt="no src""#);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("requires a `src`"));
+    }
+
+    #[test]
+    fn test_figure_with_width() {
+        let result = builtin_figure(r#"src="/img/pic.png", width="80%""#).unwrap();
+        assert!(result.contains("width: 80%"));
+    }
+
+    #[test]
+    fn test_figure_no_caption() {
+        let result = builtin_figure(r#"src="/img/pic.png""#).unwrap();
+        assert!(!result.contains("figcaption"));
+    }
+
+    #[test]
+    fn test_youtube_missing_id_errors() {
+        let result = builtin_youtube(r#""#);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("requires an `id`"));
+    }
+
+    #[test]
+    fn test_youtube_escapes_id() {
+        let result = builtin_youtube(r#"id="x\" onload=\"alert(1)""#).unwrap();
+        assert!(!result.contains("onload"));
+    }
+
+    #[test]
+    fn test_note_all_types() {
+        for note_type in &["info", "warning", "danger", "tip"] {
+            let result = builtin_note(&format!(r#"type="{note_type}""#), Some("body")).unwrap();
+            assert!(result.contains(&format!("callout--{note_type}")));
+        }
+    }
+
+    #[test]
+    fn test_note_missing_body_errors() {
+        let result = builtin_note(r#"type="info""#, None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("requires a body"));
+    }
+
+    #[test]
+    fn test_tabs_missing_body_errors() {
+        let result = builtin_tabs(r#"labels="A|B""#, None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("requires a body"));
+    }
+
+    // --- Nested shortcode test ---
+
+    #[test]
+    fn test_nested_body_shortcodes() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        // Nest a note inside a details
+        let input =
+            r#"{% details(summary="Expand") %}{% note(type="info") %}Inner note{% end %}{% end %}"#;
+        let result = process_shortcodes(input, &dir, tmp.path(), tmp.path()).unwrap();
+        assert!(result.contains("<details"));
+        assert!(result.contains("callout callout--info"));
+        assert!(result.contains("Inner note"));
+    }
+
+    // --- Custom template shortcode tests ---
+
+    #[test]
+    fn test_custom_shortcode_with_body() {
+        let tmp = TempDir::new().unwrap();
+        let dir = setup_shortcode_dir(
+            &tmp,
+            "wrapper",
+            r#"<div class="{{ cls }}">{{ body }}</div>"#,
+        );
+        let input = r#"{% wrapper(cls="highlight") %}wrapped content{% end %}"#;
+        let result = process_shortcodes(input, &dir, tmp.path(), tmp.path()).unwrap();
+        assert!(result.contains(r#"<div class="highlight">wrapped content</div>"#));
+    }
+
+    #[test]
+    fn test_custom_shortcode_multiple_args() {
+        let tmp = TempDir::new().unwrap();
+        let dir = setup_shortcode_dir(
+            &tmp,
+            "badge",
+            r#"<span class="{{ color }}">{{ text }}</span>"#,
+        );
+        let input = r#"{{ badge(color="red", text="New") }}"#;
+        let result = process_shortcodes(input, &dir, tmp.path(), tmp.path()).unwrap();
+        assert!(result.contains(r#"<span class="red">New</span>"#));
+    }
+
+    // --- parse_args edge cases ---
+
+    #[test]
+    fn test_parse_args_empty() {
+        let args = parse_args("");
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn test_parse_args_mixed_quotes() {
+        let args = parse_args(r#"a="double", b='single'"#);
+        assert_eq!(args.get("a").unwrap(), "double");
+        assert_eq!(args.get("b").unwrap(), "single");
+    }
+
+    #[test]
+    fn test_parse_args_spaces_in_values() {
+        let args = parse_args(r#"title="Hello World""#);
+        assert_eq!(args.get("title").unwrap(), "Hello World");
+    }
 }
