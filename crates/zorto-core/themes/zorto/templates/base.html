@@ -320,6 +320,7 @@
       <input type="text" class="search-modal__input" id="search-input" placeholder="Search..." autocomplete="off" autofocus>
       <kbd class="search-modal__kbd">Esc</kbd>
     </div>
+    <div class="search-modal__status" id="search-status"></div>
     <div class="search-modal__results" id="search-results"></div>
   </div>
 </div>
@@ -329,37 +330,84 @@
   if (!modal) return;
   var input = document.getElementById('search-input');
   var resultsEl = document.getElementById('search-results');
+  var statusEl = document.getElementById('search-status');
   var backdrop = modal.querySelector('.search-modal__backdrop');
   var db = null;
   var SQL = null;
-  var loading = false;
+  var dbLoading = false;
+  var dbReady = false;
   var debounceTimer = null;
+  var selectedIdx = -1;
 
   function openModal() {
     modal.removeAttribute('hidden');
     input.value = '';
     resultsEl.innerHTML = '';
+    statusEl.textContent = '';
+    selectedIdx = -1;
     setTimeout(function() { input.focus(); }, 50);
+    if (!dbReady && !dbLoading) {
+      statusEl.textContent = 'Loading search index...';
+      initDB().then(function() { statusEl.textContent = ''; });
+    }
   }
 
   function closeModal() {
     modal.setAttribute('hidden', '');
     input.value = '';
     resultsEl.innerHTML = '';
+    statusEl.textContent = '';
+    selectedIdx = -1;
+  }
+
+  function getResultLinks() {
+    return resultsEl.querySelectorAll('.search-modal__result');
+  }
+
+  function updateSelection() {
+    var links = getResultLinks();
+    links.forEach(function(el, i) {
+      el.classList.toggle('search-modal__result--selected', i === selectedIdx);
+    });
+    if (selectedIdx >= 0 && links[selectedIdx]) {
+      links[selectedIdx].scrollIntoView({ block: 'nearest' });
+    }
   }
 
   // Open on button click
   var toggleBtn = document.querySelector('.search-toggle');
   if (toggleBtn) toggleBtn.addEventListener('click', openModal);
 
-  // Open on Ctrl+K / Cmd+K
+  // Keyboard shortcuts
   document.addEventListener('keydown', function(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
       e.preventDefault();
       if (modal.hasAttribute('hidden')) openModal(); else closeModal();
+      return;
     }
-    if (e.key === 'Escape' && !modal.hasAttribute('hidden')) {
+    if (modal.hasAttribute('hidden')) return;
+    if (e.key === 'Escape') {
       closeModal();
+      return;
+    }
+    var links = getResultLinks();
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (links.length > 0) {
+        selectedIdx = (selectedIdx + 1) % links.length;
+        updateSelection();
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (links.length > 0) {
+        selectedIdx = selectedIdx <= 0 ? links.length - 1 : selectedIdx - 1;
+        updateSelection();
+      }
+    } else if (e.key === 'Enter') {
+      if (selectedIdx >= 0 && links[selectedIdx]) {
+        e.preventDefault();
+        links[selectedIdx].click();
+      }
     }
   });
 
@@ -368,8 +416,8 @@
 
   async function initDB() {
     if (db) return db;
-    if (loading) return null;
-    loading = true;
+    if (dbLoading) return null;
+    dbLoading = true;
     try {
       if (!SQL) {
         var sqlPromise = window.initSqlJs || null;
@@ -387,19 +435,23 @@
       var response = await fetch('/search.db');
       var buf = await response.arrayBuffer();
       db = new SQL.Database(new Uint8Array(buf));
+      dbReady = true;
       return db;
     } catch(err) {
       console.error('Search init failed:', err);
+      statusEl.textContent = '';
       resultsEl.innerHTML = '<div class="search-modal__empty">Failed to load search index.</div>';
       return null;
     } finally {
-      loading = false;
+      dbLoading = false;
     }
   }
 
   async function doSearch(query) {
     if (!query || query.length < 2) {
       resultsEl.innerHTML = '';
+      statusEl.textContent = '';
+      selectedIdx = -1;
       return;
     }
     var database = await initDB();
@@ -407,31 +459,67 @@
     try {
       var term = query.trim().toLowerCase();
       var stmt = database.prepare(
-        "SELECT title, url, substr(content, max(1, instr(lower(content), lower(?1)) - 40), 100) as snip FROM pages WHERE lower(content) LIKE '%' || lower(?1) || '%' OR lower(title) LIKE '%' || lower(?1) || '%' LIMIT 10"
+        "SELECT title, url, description, content, " +
+        "CASE WHEN title_lower = ?1 THEN 100 " +
+        "     WHEN title_lower LIKE ?1 || '%' THEN 80 " +
+        "     WHEN title_lower LIKE '%' || ?1 || '%' THEN 60 " +
+        "     ELSE 0 END + " +
+        "CASE WHEN description_lower LIKE '%' || ?1 || '%' THEN 20 ELSE 0 END + " +
+        "CASE WHEN content_lower LIKE '%' || ?1 || '%' THEN 10 ELSE 0 END as score " +
+        "FROM pages " +
+        "WHERE title_lower LIKE '%' || ?1 || '%' " +
+        "   OR description_lower LIKE '%' || ?1 || '%' " +
+        "   OR content_lower LIKE '%' || ?1 || '%' " +
+        "ORDER BY score DESC LIMIT 10"
       );
       stmt.bind([term]);
       var html = '';
       var count = 0;
+      var re = new RegExp('(' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
       while (stmt.step()) {
         var row = stmt.getAsObject();
         count++;
-        // Highlight the query term in the snippet
-        var snippet = escapeHtml(row.snip || '');
-        var re = new RegExp('(' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+        // Build snippet: prefer description, fall back to content around first match
+        var snippet = '';
+        var desc = row.description || '';
+        var content = row.content || '';
+        if (desc) {
+          snippet = escapeHtml(desc);
+        } else if (content) {
+          var lower = content.toLowerCase();
+          var pos = lower.indexOf(term);
+          if (pos >= 0) {
+            var start = Math.max(0, pos - 40);
+            var raw = content.substring(start, start + 120);
+            snippet = (start > 0 ? '...' : '') + escapeHtml(raw.trim()) + (start + 120 < content.length ? '...' : '');
+          } else {
+            snippet = escapeHtml(content.substring(0, 120).trim()) + (content.length > 120 ? '...' : '');
+          }
+        }
+        // Highlight matching terms in title and snippet
+        var titleHtml = escapeHtml(row.title).replace(re, '<mark>$1</mark>');
         snippet = snippet.replace(re, '<mark>$1</mark>');
+        // Format URL for display
+        var displayUrl = row.url.replace(/^https?:\/\/[^/]+/, '');
         html += '<a class="search-modal__result" href="' + row.url + '">' +
-          '<div class="search-modal__result-title">' + escapeHtml(row.title) + '</div>' +
+          '<div class="search-modal__result-title">' + titleHtml + '</div>' +
+          '<div class="search-modal__result-url">' + escapeHtml(displayUrl) + '</div>' +
           '<div class="search-modal__result-snippet">' + snippet + '</div>' +
           '</a>';
       }
       stmt.free();
+      selectedIdx = -1;
       if (count === 0) {
-        html = '<div class="search-modal__empty">No results found.</div>';
+        statusEl.textContent = '';
+        resultsEl.innerHTML = '<div class="search-modal__empty">No results found.</div>';
+      } else {
+        statusEl.textContent = count + ' result' + (count === 1 ? '' : 's');
+        resultsEl.innerHTML = html;
       }
-      resultsEl.innerHTML = html;
     } catch(err) {
       console.error('Search query failed:', err);
-      resultsEl.innerHTML = '<div class="search-modal__empty">No results found.</div>';
+      statusEl.textContent = '';
+      resultsEl.innerHTML = '<div class="search-modal__empty">Search failed.</div>';
     }
   }
 
@@ -443,7 +531,7 @@
 
   input.addEventListener('input', function() {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(function() { doSearch(input.value); }, 200);
+    debounceTimer = setTimeout(function() { doSearch(input.value); }, 100);
   });
 })();
 </script>
