@@ -235,5 +235,15 @@ def test_build_invalid_root_fails():
 
 
 def test_all_exports():
-    expected = {"build", "Config", "load", "main", "Page", "run_cli", "Section", "Site", "version"}
+    expected = {
+        "build",
+        "Config",
+        "load",
+        "main",
+        "Page",
+        "run_cli",
+        "Section",
+        "Site",
+        "version",
+    }
     assert set(zorto.__all__) == expected
