@@ -36,6 +36,10 @@ I want to ship a desktop app (iced GUI) and web app (TBD) that will make it even
 
 Currently, the executable code blocks are quite limited. I want to add support for freezing pages (i.e. caching the results), visualizations through common Python libraries, and perhaps more languages. This is an extremely powerful feature to continue building on.
 
+## Built-in search
+
+I want Zorto to ship with built-in full-text search — no external services, no API keys. The plan is a WASM-based search index generated at build time, so search works entirely client-side with zero dependencies. Exact technology used TBD.
+
 ## Ease of use
 
 I want Zorto to be the easiest to use SSG for people & agents in this new era of AI. Docs must be excellent. Website creation should be easy.
