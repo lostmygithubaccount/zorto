@@ -22,6 +22,7 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
+pub mod cache;
 pub mod config;
 pub mod content;
 pub mod markdown;

@@ -63,6 +63,9 @@ ureq = "3"
 # Temp dirs (for theme SCSS merging)
 tempfile = "3"
 
+# Hashing (for code block cache)
+sha2 = "0.10"
+
 # Utilities
 anyhow = "1"
 chrono = "0.4"

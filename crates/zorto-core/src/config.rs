@@ -54,6 +54,9 @@ pub struct Config {
     /// External content directories to load as pages/sections.
     #[serde(default, skip_serializing)]
     pub content_dirs: Vec<ContentDirConfig>,
+    /// Code block execution cache configuration.
+    #[serde(default, skip_serializing)]
+    pub cache: CacheConfig,
 }
 
 /// Where to insert anchor links on headings.
@@ -116,6 +119,14 @@ impl Default for MarkdownConfig {
             smart_punctuation: false,
         }
     }
+}
+
+/// Configuration for code block execution caching.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct CacheConfig {
+    /// Enable caching of executable code block results (default: `false`).
+    #[serde(default)]
+    pub enable: bool,
 }
 
 /// A taxonomy definition from `[[taxonomies]]` in `config.toml`.
