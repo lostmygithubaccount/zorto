@@ -26,6 +26,9 @@ python-packages = ["zorto"]
 python-source = "py"
 manifest-path = "crates/zorto-py/Cargo.toml"
 
+[tool.ty]
+exclude = ["tests/"]
+
 [build-system]
 requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
