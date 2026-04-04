@@ -1,8 +1,8 @@
-//! Search index generation using SQLite FTS5.
+//! Search index generation using SQLite.
 //!
-//! At build time, generates a `search.db` file containing a full-text search
-//! index of all site pages. The client-side uses sql.js (SQLite compiled to
-//! WASM) to query this database in the browser.
+//! At build time, generates a `search.db` file containing a search index of all
+//! site pages. Uses a regular table with LIKE queries for broad compatibility
+//! (including sql.js WASM which lacks FTS5 support).
 
 use std::path::Path;
 
@@ -61,10 +61,11 @@ fn strip_html(html: &str) -> String {
     collapsed.trim().to_string()
 }
 
-/// Generate a SQLite FTS5 search index at `output_dir/search.db`.
+/// Generate a SQLite search index at `output_dir/search.db`.
 ///
-/// The database contains a single FTS5 virtual table `pages` with columns:
+/// The database contains a `pages` table with columns:
 /// `title`, `url`, `description`, `content` (stripped HTML).
+/// Uses a regular table (not FTS5) for sql.js WASM compatibility.
 pub fn generate_search_index<'a>(
     pages: impl IntoIterator<Item = &'a Page>,
     sections: impl IntoIterator<Item = &'a Section>,
@@ -79,8 +80,12 @@ pub fn generate_search_index<'a>(
 
     let conn = rusqlite::Connection::open(&db_path)?;
 
-    // Create FTS5 virtual table
-    conn.execute_batch("CREATE VIRTUAL TABLE pages USING fts5(title, url, description, content);")?;
+    // Create regular table with indexes for LIKE queries
+    conn.execute_batch(
+        "CREATE TABLE pages (title TEXT, url TEXT, description TEXT, content TEXT);
+         CREATE INDEX idx_pages_title ON pages(title);
+         CREATE INDEX idx_pages_content ON pages(content);",
+    )?;
 
     let mut stmt = conn
         .prepare("INSERT INTO pages (title, url, description, content) VALUES (?1, ?2, ?3, ?4)")?;
@@ -111,9 +116,6 @@ pub fn generate_search_index<'a>(
             plain_text
         ])?;
     }
-
-    // Optimize the FTS index
-    conn.execute_batch("INSERT INTO pages(pages) VALUES('optimize');")?;
 
     Ok(())
 }
@@ -181,10 +183,10 @@ mod tests {
             .unwrap();
         assert_eq!(count, 1);
 
-        // Test FTS5 search
+        // Test LIKE search
         let title: String = conn
             .query_row(
-                "SELECT title FROM pages WHERE pages MATCH 'hello'",
+                "SELECT title FROM pages WHERE lower(content) LIKE '%hello%'",
                 [],
                 |row| row.get(0),
             )

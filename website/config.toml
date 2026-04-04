@@ -7,6 +7,7 @@ generate_feed = true
 generate_llms_txt = true
 generate_md_files = true
 compile_all_themes = true
+generate_search = true
 
 [[content_dirs]]
 path = "../docs"

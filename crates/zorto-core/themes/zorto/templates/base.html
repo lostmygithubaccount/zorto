@@ -405,20 +405,23 @@
     var database = await initDB();
     if (!database) return;
     try {
-      // Escape query for FTS5: wrap each term in double quotes
-      var terms = query.trim().split(/\s+/).map(function(t) { return '"' + t.replace(/"/g, '') + '"'; }).join(' ');
+      var term = query.trim().toLowerCase();
       var stmt = database.prepare(
-        "SELECT title, url, snippet(pages, 3, '<mark>', '</mark>', '...', 30) as snip FROM pages WHERE pages MATCH ? ORDER BY rank LIMIT 10"
+        "SELECT title, url, substr(content, max(1, instr(lower(content), lower(?1)) - 40), 100) as snip FROM pages WHERE lower(content) LIKE '%' || lower(?1) || '%' OR lower(title) LIKE '%' || lower(?1) || '%' LIMIT 10"
       );
-      stmt.bind([terms]);
+      stmt.bind([term]);
       var html = '';
       var count = 0;
       while (stmt.step()) {
         var row = stmt.getAsObject();
         count++;
+        // Highlight the query term in the snippet
+        var snippet = escapeHtml(row.snip || '');
+        var re = new RegExp('(' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+        snippet = snippet.replace(re, '<mark>$1</mark>');
         html += '<a class="search-modal__result" href="' + row.url + '">' +
           '<div class="search-modal__result-title">' + escapeHtml(row.title) + '</div>' +
-          '<div class="search-modal__result-snippet">' + row.snip + '</div>' +
+          '<div class="search-modal__result-snippet">' + snippet + '</div>' +
           '</a>';
       }
       stmt.free();
@@ -427,7 +430,7 @@
       }
       resultsEl.innerHTML = html;
     } catch(err) {
-      // If FTS5 match fails (bad syntax), show no results
+      console.error('Search query failed:', err);
       resultsEl.innerHTML = '<div class="search-modal__empty">No results found.</div>';
     }
   }
