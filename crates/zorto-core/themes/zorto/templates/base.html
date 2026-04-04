@@ -7,7 +7,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
     <meta name="robots" content="noodp"/>
     <style>html.theme-swapping{opacity:0!important}</style>
-    <link rel="stylesheet" href="/style.css" id="theme-stylesheet">
     <script>
       (function() {
         var saved = localStorage.getItem('theme');
@@ -17,22 +16,13 @@
         }
         var siteTheme = localStorage.getItem('site-theme');
         var defaultTheme = '{{ config.theme | default(value="zorto") }}';
-        if (siteTheme && siteTheme !== defaultTheme) {
-          document.documentElement.classList.add('theme-swapping');
-          var link = document.getElementById('theme-stylesheet');
-          var newLink = document.createElement('link');
-          newLink.rel = 'stylesheet';
-          newLink.id = 'theme-stylesheet';
-          newLink.href = '/style-' + siteTheme + '.css';
-          newLink.onload = function() {
-            link.remove();
-            document.documentElement.classList.remove('theme-swapping');
-          };
-          link.insertAdjacentElement('afterend', newLink);
-          setTimeout(function() { document.documentElement.classList.remove('theme-swapping'); }, 2000);
-        }
+        var href = (siteTheme && siteTheme !== defaultTheme)
+          ? '/style-' + siteTheme + '.css'
+          : '/style.css';
+        document.write('<link rel="stylesheet" href="' + href + '" id="theme-stylesheet">');
       })();
     </script>
+    <noscript><link rel="stylesheet" href="/style.css" id="theme-stylesheet"></noscript>
     {%- if config.markdown.highlight_code and config.markdown.highlight_theme == "css" %}
     <link rel="stylesheet" href="/syntax-dark.css">
     {%- endif %}
