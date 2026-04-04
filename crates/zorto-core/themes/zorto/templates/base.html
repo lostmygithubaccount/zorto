@@ -6,9 +6,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
     <meta name="robots" content="noodp"/>
-    <style>html.theme-swapping{opacity:0!important}</style>
+    <style>html.theme-swapping{opacity:0!important}html.no-transitions,html.no-transitions *{transition:none!important}</style>
     <script>
       (function() {
+        document.documentElement.classList.add('no-transitions');
         var saved = localStorage.getItem('theme');
         var preferLight = window.matchMedia('(prefers-color-scheme: light)').matches;
         if (saved === 'light' || (!saved && preferLight)) {
@@ -298,5 +299,6 @@
 {%- endif %}
 {%- endif %}
 {%- block extra_body %}{% endblock extra_body %}
+<script>requestAnimationFrame(function(){document.documentElement.classList.remove('no-transitions')})</script>
 </body>
 </html>
