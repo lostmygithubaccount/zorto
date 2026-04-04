@@ -14,4 +14,7 @@ if ! command -v uv &>/dev/null; then
     curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
 
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+uv sync --no-install-project
+
 echo "Setup complete!"
