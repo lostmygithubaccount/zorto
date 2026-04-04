@@ -7,6 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
     <meta name="robots" content="noodp"/>
     <style>html.theme-swapping{opacity:0!important}html.no-transitions,html.no-transitions *{transition:none!important}</style>
+    <link rel="stylesheet" href="/style.css" id="theme-stylesheet">
     <script>
       (function() {
         document.documentElement.classList.add('no-transitions');
@@ -17,13 +18,11 @@
         }
         var siteTheme = localStorage.getItem('site-theme');
         var defaultTheme = '{{ config.theme | default(value="zorto") }}';
-        var href = (siteTheme && siteTheme !== defaultTheme)
-          ? '/style-' + siteTheme + '.css'
-          : '/style.css';
-        document.write('<link rel="stylesheet" href="' + href + '" id="theme-stylesheet">');
+        if (siteTheme && siteTheme !== defaultTheme) {
+          document.getElementById('theme-stylesheet').href = '/style-' + siteTheme + '.css';
+        }
       })();
     </script>
-    <noscript><link rel="stylesheet" href="/style.css" id="theme-stylesheet"></noscript>
     {%- if config.markdown.highlight_code and config.markdown.highlight_theme == "css" %}
     <link rel="stylesheet" href="/syntax-dark.css">
     {%- endif %}
