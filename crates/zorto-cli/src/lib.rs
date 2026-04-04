@@ -10,6 +10,7 @@ pub use zorto_core::site;
 
 mod cli;
 pub(crate) mod serve;
+mod skill;
 mod templates;
 
 /// Run the zorto CLI with the given arguments.
