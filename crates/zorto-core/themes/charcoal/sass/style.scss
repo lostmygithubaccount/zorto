@@ -1,0 +1,34 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&display=swap');
+
+// charcoal theme: dark grey/silver color scheme
+
+:root {
+  --accent: rgb(156, 163, 175);
+  --accent-alpha-70: rgba(156, 163, 175, .7);
+  --accent-alpha-20: rgba(156, 163, 175, .2);
+  --accent-secondary: rgb(209, 213, 219);
+  --accent-secondary-alpha-20: rgba(209, 213, 219, .2);
+  --background: #111114;
+  --background-raised: #1a1a1e;
+  --color: #d4d4d8;
+  --color-muted: rgba(212, 212, 216, .5);
+  --border-color: rgba(156, 163, 175, .15);
+  --code-bg: rgba(0, 0, 0, 0.3);
+  --max-width: 1200px;
+}
+
+[data-theme="light"] {
+  --background: #f4f4f5;
+  --background-raised: #ffffff;
+  --color: #18181b;
+  --color-muted: rgba(24, 24, 27, .5);
+  --border-color: rgba(156, 163, 175, .15);
+  --code-bg: #e4e4e7;
+}
+
+$phone-max-width: 683px;
+$tablet-max-width: 899px;
+$nav-collapse-width: 600px;
+
+@import 'structure';
+@import 'components';

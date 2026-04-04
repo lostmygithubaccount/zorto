@@ -13,7 +13,7 @@ categories = ["web-programming"]
 readme = "../../README.md"
 
 [features]
-default = ["embed-python", "theme-zorto", "theme-dkdc", "theme-default", "theme-ember", "theme-forest", "theme-ocean", "theme-rose", "theme-slate"]
+default = ["embed-python", "theme-zorto", "theme-dkdc", "theme-default", "theme-ember", "theme-forest", "theme-ocean", "theme-rose", "theme-slate", "theme-midnight", "theme-sunset", "theme-mint", "theme-plum", "theme-sand", "theme-arctic", "theme-lime", "theme-charcoal"]
 embed-python = ["python", "pyo3/auto-initialize"]
 python = ["dep:pyo3"]
 theme-zorto = []
@@ -24,6 +24,14 @@ theme-forest = []
 theme-ocean = []
 theme-rose = []
 theme-slate = []
+theme-midnight = []
+theme-sunset = []
+theme-mint = []
+theme-plum = []
+theme-sand = []
+theme-arctic = []
+theme-lime = []
+theme-charcoal = []
 
 [dependencies]
 # Templating
