@@ -2,6 +2,15 @@ use std::path::Path;
 #[cfg(feature = "python")]
 use std::sync::Once;
 
+/// A single visualization captured from a Python code block.
+#[derive(Debug, Clone)]
+pub struct VizOutput {
+    /// `"img"` for base64 data-URI images, `"html"` for inline HTML (plotly/altair).
+    pub kind: String,
+    /// The data-URI string (for img) or raw HTML fragment (for html).
+    pub data: String,
+}
+
 /// A detected executable code block
 #[derive(Debug, Clone)]
 pub struct ExecutableBlock {
@@ -10,6 +19,7 @@ pub struct ExecutableBlock {
     pub file_ref: Option<String>,
     pub output: Option<String>,
     pub error: Option<String>,
+    pub viz: Vec<VizOutput>,
 }
 
 /// Execute all pending code blocks for a page.
@@ -31,11 +41,12 @@ pub fn execute_blocks(
                 #[cfg(feature = "python")]
                 {
                     match execute_python(block, working_dir, site_root) {
-                        Ok((stdout, stderr)) => {
+                        Ok((stdout, stderr, viz)) => {
                             block.output = Some(stdout);
                             if !stderr.is_empty() {
                                 block.error = Some(stderr);
                             }
+                            block.viz = viz;
                         }
                         Err(e) => {
                             let msg = format!("Python execution error: {e}");
@@ -142,12 +153,62 @@ pub(crate) fn activate_venv(py: pyo3::Python<'_>, site_root: &Path) -> pyo3::PyR
 /// executed code. `chdir` is process-global state, so this is not safe to call
 /// from multiple threads concurrently. Page rendering is currently sequential,
 /// so this is fine — but must be revisited if parallel rendering is added.
+/// Python code injected after user code to detect visualization objects.
+///
+/// Checks `sys.modules` first to avoid importing anything the user didn't use.
+/// Produces a `_zorto_viz` list of `(kind, data)` tuples that Rust reads back.
+#[cfg(feature = "python")]
+const VIZ_DETECTION_CODE: &str = r#"
+import sys as _sys
+_zorto_viz = []
+
+# matplotlib (also covers seaborn which uses matplotlib under the hood)
+if 'matplotlib' in _sys.modules or 'matplotlib.pyplot' in _sys.modules:
+    try:
+        import matplotlib.pyplot as _plt
+        for _fig_num in _plt.get_fignums():
+            import io as _io, base64 as _b64
+            _buf = _io.BytesIO()
+            _plt.figure(_fig_num).savefig(_buf, format='png', bbox_inches='tight', dpi=100)
+            _buf.seek(0)
+            _zorto_viz.append(('img', 'data:image/png;base64,' + _b64.b64encode(_buf.read()).decode()))
+            _buf.close()
+        _plt.close('all')
+    except Exception as _e:
+        import sys; print(f'zorto: warning: matplotlib capture failed: {_e}', file=sys.stderr)
+
+# plotly
+if 'plotly' in _sys.modules:
+    try:
+        import plotly.graph_objects as _go
+        for _name, _obj in list(locals().items()):
+            if not _name.startswith('_') and isinstance(_obj, _go.Figure):
+                _zorto_viz.append(('html', _obj.to_html(full_html=False, include_plotlyjs='cdn')))
+    except Exception as _e:
+        import sys; print(f'zorto: warning: plotly capture failed: {_e}', file=sys.stderr)
+
+# altair
+if 'altair' in _sys.modules:
+    try:
+        import altair as _alt
+        _alt_types = (_alt.Chart,)
+        for _cls_name in ('LayerChart', 'HConcatChart', 'VConcatChart'):
+            _cls = getattr(_alt, _cls_name, None)
+            if _cls is not None:
+                _alt_types = _alt_types + (_cls,)
+        for _name, _obj in list(locals().items()):
+            if not _name.startswith('_') and isinstance(_obj, _alt_types):
+                _zorto_viz.append(('html', _obj.to_html()))
+    except Exception as _e:
+        import sys; print(f'zorto: warning: altair capture failed: {_e}', file=sys.stderr)
+"#;
+
 #[cfg(feature = "python")]
 fn execute_python(
     block: &ExecutableBlock,
     working_dir: &Path,
     site_root: &Path,
-) -> anyhow::Result<(String, String)> {
+) -> anyhow::Result<(String, String, Vec<VizOutput>)> {
     use pyo3::prelude::*;
     use std::ffi::CString;
 
@@ -160,44 +221,66 @@ fn execute_python(
     let code_cstr = CString::new(code.as_bytes())?;
     let site_root = site_root.to_path_buf();
 
-    let result = Python::attach(|py: Python<'_>| -> PyResult<(String, String)> {
-        // Activate venv if present (once per process)
-        activate_venv(py, &site_root)?;
+    let result = Python::attach(
+        |py: Python<'_>| -> PyResult<(String, String, Vec<VizOutput>)> {
+            // Activate venv if present (once per process)
+            activate_venv(py, &site_root)?;
 
-        // Set up stdout/stderr capture
-        let sys = py.import("sys")?;
-        let io = py.import("io")?;
-        let stdout_capture = io.call_method0("StringIO")?;
-        let stderr_capture = io.call_method0("StringIO")?;
+            // Set up stdout/stderr capture
+            let sys = py.import("sys")?;
+            let io = py.import("io")?;
+            let stdout_capture = io.call_method0("StringIO")?;
+            let stderr_capture = io.call_method0("StringIO")?;
 
-        let old_stdout = sys.getattr("stdout")?;
-        let old_stderr = sys.getattr("stderr")?;
+            let old_stdout = sys.getattr("stdout")?;
+            let old_stderr = sys.getattr("stderr")?;
 
-        sys.setattr("stdout", &stdout_capture)?;
-        sys.setattr("stderr", &stderr_capture)?;
+            sys.setattr("stdout", &stdout_capture)?;
+            sys.setattr("stderr", &stderr_capture)?;
 
-        // Set working directory
-        let os = py.import("os")?;
-        os.call_method1("chdir", (working_dir.to_string_lossy().as_ref(),))?;
+            // Set working directory
+            let os = py.import("os")?;
+            os.call_method1("chdir", (working_dir.to_string_lossy().as_ref(),))?;
 
-        // Execute
-        let exec_result = py.run(code_cstr.as_c_str(), None, None);
+            // Execute user code
+            let exec_result = py.run(code_cstr.as_c_str(), None, None);
 
-        // Restore stdout/stderr
-        sys.setattr("stdout", &old_stdout)?;
-        sys.setattr("stderr", &old_stderr)?;
+            // Detect visualizations (only if user code succeeded)
+            let mut viz = Vec::new();
+            if exec_result.is_ok() {
+                let viz_code = CString::new(VIZ_DETECTION_CODE)?;
+                if let Err(e) = py.run(viz_code.as_c_str(), None, None) {
+                    eprintln!("zorto: viz detection error: {e}");
+                } else {
+                    // Read _zorto_viz from __main__ namespace
+                    if let Ok(main_mod) = py.import("__main__") {
+                        if let Ok(viz_list) = main_mod.getattr("_zorto_viz") {
+                            if let Ok(items) = viz_list.extract::<Vec<(String, String)>>() {
+                                for (kind, data) in items {
+                                    viz.push(VizOutput { kind, data });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
-        // Get captured output
-        let stdout: String = stdout_capture.call_method0("getvalue")?.extract()?;
-        let stderr: String = stderr_capture.call_method0("getvalue")?.extract()?;
+            // Restore stdout/stderr
+            sys.setattr("stdout", &old_stdout)?;
+            sys.setattr("stderr", &old_stderr)?;
 
-        if let Err(e) = exec_result {
-            let err_msg = format!("{stderr}\n{e}");
-            Ok((stdout, err_msg.trim().to_string()))
-        } else {
-            Ok((stdout, stderr))
-        }
-    })?;
+            // Get captured output
+            let stdout: String = stdout_capture.call_method0("getvalue")?.extract()?;
+            let stderr: String = stderr_capture.call_method0("getvalue")?.extract()?;
+
+            if let Err(e) = exec_result {
+                let err_msg = format!("{stderr}\n{e}");
+                Ok((stdout, err_msg.trim().to_string(), viz))
+            } else {
+                Ok((stdout, stderr, viz))
+            }
+        },
+    )?;
 
     Ok(result)
 }
@@ -236,6 +319,7 @@ mod tests {
             file_ref: None,
             output: None,
             error: None,
+            viz: Vec::new(),
         }];
         execute_blocks(&mut blocks, tmp.path(), tmp.path());
         assert_eq!(blocks[0].output.as_deref(), Some("hello\n"));
@@ -251,6 +335,7 @@ mod tests {
             file_ref: None,
             output: None,
             error: None,
+            viz: Vec::new(),
         }];
         execute_blocks(&mut blocks, tmp.path(), tmp.path());
         assert_eq!(blocks[0].output.as_deref(), Some(""));
@@ -267,6 +352,7 @@ mod tests {
             file_ref: Some("script.sh".into()),
             output: None,
             error: None,
+            viz: Vec::new(),
         }];
         execute_blocks(&mut blocks, tmp.path(), tmp.path());
         assert_eq!(blocks[0].output.as_deref(), Some("from-file\n"));
