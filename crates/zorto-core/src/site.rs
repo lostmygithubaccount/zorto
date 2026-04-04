@@ -149,6 +149,15 @@ impl Site {
             self.generate_llms_full_txt()?;
         }
 
+        // Generate search index
+        if self.config.generate_search {
+            crate::search::generate_search_index(
+                self.pages.values(),
+                self.sections.values(),
+                &self.output_dir,
+            )?;
+        }
+
         // Copy co-located assets
         self.copy_colocated_assets()?;
 

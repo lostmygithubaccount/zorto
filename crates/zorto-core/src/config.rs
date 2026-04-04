@@ -42,6 +42,13 @@ pub struct Config {
     /// Taxonomy definitions (default: a single `"tags"` taxonomy).
     #[serde(default, skip_serializing)]
     pub taxonomies: Vec<TaxonomyConfig>,
+    /// Generate a SQLite FTS5 search index at `/search.db` (default: `false`).
+    ///
+    /// When enabled, a `search.db` file is generated at build time containing
+    /// a full-text search index of all pages. The client-side uses sql.js
+    /// (SQLite WASM) to query the database in the browser.
+    #[serde(default)]
+    pub generate_search: bool,
     /// Generate `.md` output files alongside HTML for every page (default: `false`).
     #[serde(default)]
     pub generate_md_files: bool,
@@ -393,6 +400,7 @@ name = "categories"
         assert!(!config.generate_feed);
         assert!(config.generate_sitemap);
         assert!(config.generate_llms_txt);
+        assert!(!config.generate_search);
         assert!(!config.generate_md_files);
         assert!(!config.compile_all_themes);
         assert_eq!(config.default_language, "en");

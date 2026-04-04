@@ -32,5 +32,6 @@ pub(crate) mod execute;
 pub(crate) mod links;
 pub mod lint;
 pub(crate) mod sass;
+pub mod search;
 pub(crate) mod shortcodes;
 pub(crate) mod templates;

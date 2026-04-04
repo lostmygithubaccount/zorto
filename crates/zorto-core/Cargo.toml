@@ -63,6 +63,9 @@ ureq = "3"
 # Temp dirs (for theme SCSS merging)
 tempfile = "3"
 
+# Search index (SQLite FTS5)
+rusqlite = { version = "0.34", features = ["bundled"] }
+
 # Utilities
 anyhow = "1"
 chrono = "0.4"
