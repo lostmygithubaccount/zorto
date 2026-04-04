@@ -243,11 +243,20 @@ impl Site {
 
     /// Render all templates and write output
     fn render_templates(&self, tera: &tera::Tera) -> anyhow::Result<()> {
-        // Clean and create output dir
+        // Clean and create output dir.
+        // Retry once on failure — during preview mode the dev server may hold
+        // file handles that temporarily prevent deletion (macOS "Directory not
+        // empty" / ENOTEMPTY race). If the retry also fails, proceed without
+        // cleaning so the rebuild still succeeds with overwritten files.
         if self.output_dir.exists() {
-            std::fs::remove_dir_all(&self.output_dir).map_err(|e| {
-                anyhow::anyhow!("failed to clean {}: {e}", self.output_dir.display())
-            })?;
+            if let Err(_first) = std::fs::remove_dir_all(&self.output_dir) {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                if let Err(_second) = std::fs::remove_dir_all(&self.output_dir) {
+                    // Could not clean output dir — proceed anyway (files will
+                    // be overwritten in place). This avoids hard failures during
+                    // live-reload rebuilds.
+                }
+            }
         }
         std::fs::create_dir_all(&self.output_dir)
             .map_err(|e| anyhow::anyhow!("failed to create {}: {e}", self.output_dir.display()))?;
