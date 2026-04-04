@@ -6,15 +6,20 @@
 //! files, not in HTML templates.
 
 use regex::Regex;
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::LazyLock;
 
-/// A lint warning produced by the template linter.
+use crate::content::{Page, Section, section_key_for};
+
+/// A lint warning produced by the linter.
 #[derive(Debug)]
 pub struct LintWarning {
-    /// Relative path to the template file.
+    /// The lint rule that triggered (e.g. `"hardcoded-string"`, `"broken-link"`).
+    pub rule: String,
+    /// Relative path to the file.
     pub file: String,
-    /// 1-based line number.
+    /// 1-based line number (0 if not applicable).
     pub line: usize,
     /// The offending text snippet.
     pub text: String,
@@ -24,11 +29,19 @@ pub struct LintWarning {
 
 impl std::fmt::Display for LintWarning {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "warning[hardcoded-string]: {}:{}: \"{}\" -- {}",
-            self.file, self.line, self.text, self.message
-        )
+        if self.line > 0 {
+            write!(
+                f,
+                "warning[{}]: {}:{}: \"{}\" -- {}",
+                self.rule, self.file, self.line, self.text, self.message
+            )
+        } else {
+            write!(
+                f,
+                "warning[{}]: {}: \"{}\" -- {}",
+                self.rule, self.file, self.text, self.message
+            )
+        }
     }
 }
 
@@ -130,6 +143,7 @@ fn lint_template_content(file: &str, content: &str, warnings: &mut Vec<LintWarni
             }
 
             warnings.push(LintWarning {
+                rule: "hardcoded-string".to_string(),
                 file: file.to_string(),
                 line: line_num,
                 text: word.to_string(),
@@ -143,6 +157,179 @@ fn lint_template_content(file: &str, content: &str, warnings: &mut Vec<LintWarni
 fn remove_blocks(content: &str, tag: &str) -> String {
     let re = Regex::new(&format!(r"(?si)<{tag}[\s>].*?</{tag}>")).unwrap();
     re.replace_all(content, " ").to_string()
+}
+
+/// Regex to match `@/` internal links in markdown content.
+static CONTENT_LINK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"@/([^)#\s]+\.md)(#[^)\s]+)?").unwrap());
+
+/// Regex to match image references in markdown: `![alt](path)` and HTML `<img src="path">`.
+static MD_IMAGE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"!\[[^\]]*\]\((/[^)]+)\)|<img[^>]+src="(/[^"]+)""#).unwrap());
+
+/// Lint `@/` internal links: verify they resolve to a known page or section.
+///
+/// Returns warnings for any `@/path.md` links that don't match a loaded page or section.
+pub fn lint_internal_links(
+    pages: &HashMap<String, Page>,
+    sections: &HashMap<String, Section>,
+) -> Vec<LintWarning> {
+    let mut warnings = Vec::new();
+
+    // Check pages
+    for page in pages.values() {
+        for (line_idx, line) in page.raw_content.lines().enumerate() {
+            for caps in CONTENT_LINK_RE.captures_iter(line) {
+                let link_path = &caps[1];
+                if !pages.contains_key(link_path) && !sections.contains_key(link_path) {
+                    warnings.push(LintWarning {
+                        rule: "broken-link".to_string(),
+                        file: page.relative_path.clone(),
+                        line: line_idx + 1,
+                        text: format!("@/{link_path}"),
+                        message: "internal link target does not exist".to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    // Check sections
+    for section in sections.values() {
+        for (line_idx, line) in section.raw_content.lines().enumerate() {
+            for caps in CONTENT_LINK_RE.captures_iter(line) {
+                let link_path = &caps[1];
+                if !pages.contains_key(link_path) && !sections.contains_key(link_path) {
+                    warnings.push(LintWarning {
+                        rule: "broken-link".to_string(),
+                        file: section.relative_path.clone(),
+                        line: line_idx + 1,
+                        text: format!("@/{link_path}"),
+                        message: "internal link target does not exist".to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    warnings
+}
+
+/// Lint frontmatter: check required fields.
+///
+/// - All pages must have a `title`
+/// - Pages in date-sorted sections must have a `date`
+/// - Dates must be valid format (YYYY-MM-DD, YYYY-MM-DDThh:mm:ss, or RFC 3339)
+pub fn lint_frontmatter(
+    pages: &HashMap<String, Page>,
+    sections: &HashMap<String, Section>,
+) -> Vec<LintWarning> {
+    let mut warnings = Vec::new();
+
+    for page in pages.values() {
+        // Title is required for all pages
+        if page.title.is_empty() {
+            warnings.push(LintWarning {
+                rule: "missing-title".to_string(),
+                file: page.relative_path.clone(),
+                line: 0,
+                text: String::new(),
+                message: "page is missing required `title` in frontmatter".to_string(),
+            });
+        }
+
+        // Date is required for pages in date-sorted sections
+        let section_key = section_key_for(&page.relative_path);
+        let in_date_section = sections
+            .get(&section_key)
+            .is_some_and(|s| matches!(s.sort_by, Some(crate::config::SortBy::Date)));
+        if in_date_section && page.date.is_none() {
+            warnings.push(LintWarning {
+                rule: "missing-date".to_string(),
+                file: page.relative_path.clone(),
+                line: 0,
+                text: String::new(),
+                message: "page in date-sorted section is missing required `date` in frontmatter"
+                    .to_string(),
+            });
+        }
+
+        // Validate date format if present
+        if let Some(ref date_str) = page.date {
+            if !is_valid_date(date_str) {
+                warnings.push(LintWarning {
+                    rule: "invalid-date".to_string(),
+                    file: page.relative_path.clone(),
+                    line: 0,
+                    text: date_str.clone(),
+                    message: "date is not a valid format (expected YYYY-MM-DD, YYYY-MM-DDThh:mm:ss, or RFC 3339)".to_string(),
+                });
+            }
+        }
+    }
+
+    warnings
+}
+
+/// Check if a date string is a valid format.
+fn is_valid_date(s: &str) -> bool {
+    // RFC 3339 / offset datetime
+    if chrono::DateTime::parse_from_rfc3339(s).is_ok() {
+        return true;
+    }
+    // Naive datetime
+    if chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S").is_ok() {
+        return true;
+    }
+    // Date only
+    if chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").is_ok() {
+        return true;
+    }
+    false
+}
+
+/// Lint missing assets: check that images referenced with absolute paths exist in static/.
+///
+/// Checks `![alt](/path/to/image.png)` and `<img src="/path/to/image.png">` patterns.
+/// Only checks paths starting with `/` (site-relative) — external URLs are skipped.
+pub fn lint_missing_assets(
+    pages: &HashMap<String, Page>,
+    sections: &HashMap<String, Section>,
+    static_dir: &Path,
+) -> Vec<LintWarning> {
+    let mut warnings = Vec::new();
+
+    let check_content = |raw_content: &str, file: &str, warnings: &mut Vec<LintWarning>| {
+        for (line_idx, line) in raw_content.lines().enumerate() {
+            for caps in MD_IMAGE_RE.captures_iter(line) {
+                // Group 1 is markdown image, group 2 is HTML img
+                let path = caps.get(1).or_else(|| caps.get(2)).map(|m| m.as_str());
+                if let Some(asset_path) = path {
+                    // Strip leading / to make it relative to static/
+                    let relative = asset_path.trim_start_matches('/');
+                    if !static_dir.join(relative).exists() {
+                        warnings.push(LintWarning {
+                            rule: "missing-asset".to_string(),
+                            file: file.to_string(),
+                            line: line_idx + 1,
+                            text: asset_path.to_string(),
+                            message: "referenced image does not exist in static/".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    };
+
+    for page in pages.values() {
+        check_content(&page.raw_content, &page.relative_path, &mut warnings);
+    }
+
+    for section in sections.values() {
+        check_content(&section.raw_content, &section.relative_path, &mut warnings);
+    }
+
+    warnings
 }
 
 #[cfg(test)]
@@ -231,6 +418,297 @@ mod tests {
     #[test]
     fn test_lint_nonexistent_dir() {
         let warnings = lint_templates(Path::new("/nonexistent"));
+        assert!(warnings.is_empty());
+    }
+
+    // --- Internal link tests ---
+
+    use crate::content::{Frontmatter, build_page, build_section};
+
+    fn make_page(relative_path: &str, raw_content: &str) -> Page {
+        let mut fm = Frontmatter::default();
+        fm.title = Some("Test".to_string());
+        fm.date = Some(toml::Value::String("2025-01-01".to_string()));
+        let mut page = build_page(fm, String::new(), relative_path, "https://example.com");
+        page.raw_content = raw_content.to_string();
+        page
+    }
+
+    fn make_section_with(relative_path: &str, raw_content: &str) -> Section {
+        let fm = Frontmatter::default();
+        let mut section = build_section(fm, String::new(), relative_path, "https://example.com");
+        section.raw_content = raw_content.to_string();
+        section
+    }
+
+    #[test]
+    fn test_lint_broken_internal_link() {
+        let mut pages = HashMap::new();
+        pages.insert(
+            "posts/hello.md".into(),
+            make_page("posts/hello.md", "Check [missing](@/posts/nonexistent.md)"),
+        );
+        let sections = HashMap::new();
+        let warnings = lint_internal_links(&pages, &sections);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].rule, "broken-link");
+        assert!(warnings[0].text.contains("nonexistent"));
+    }
+
+    #[test]
+    fn test_lint_valid_internal_link() {
+        let mut pages = HashMap::new();
+        pages.insert(
+            "posts/hello.md".into(),
+            make_page("posts/hello.md", "See [other](@/posts/other.md)"),
+        );
+        pages.insert(
+            "posts/other.md".into(),
+            make_page("posts/other.md", "Other page"),
+        );
+        let sections = HashMap::new();
+        let warnings = lint_internal_links(&pages, &sections);
+        assert!(
+            warnings.is_empty(),
+            "Valid link should not warn: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn test_lint_internal_link_to_section() {
+        let mut pages = HashMap::new();
+        pages.insert(
+            "posts/hello.md".into(),
+            make_page("posts/hello.md", "See [blog](@/posts/_index.md)"),
+        );
+        let mut sections = HashMap::new();
+        sections.insert(
+            "posts/_index.md".into(),
+            make_section_with("posts/_index.md", ""),
+        );
+        let warnings = lint_internal_links(&pages, &sections);
+        assert!(
+            warnings.is_empty(),
+            "Link to section should not warn: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn test_lint_broken_link_in_section() {
+        let pages = HashMap::new();
+        let mut sections = HashMap::new();
+        sections.insert(
+            "posts/_index.md".into(),
+            make_section_with("posts/_index.md", "See [missing](@/posts/gone.md)"),
+        );
+        let warnings = lint_internal_links(&pages, &sections);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].rule, "broken-link");
+    }
+
+    // --- Frontmatter validation tests ---
+
+    #[test]
+    fn test_lint_missing_title() {
+        let mut pages = HashMap::new();
+        let fm = Frontmatter::default(); // no title
+        let page = build_page(fm, "content".into(), "about.md", "https://example.com");
+        pages.insert("about.md".into(), page);
+        let sections = HashMap::new();
+        let warnings = lint_frontmatter(&pages, &sections);
+        assert!(
+            warnings.iter().any(|w| w.rule == "missing-title"),
+            "Should warn about missing title: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn test_lint_with_title_no_warning() {
+        let mut pages = HashMap::new();
+        let mut fm = Frontmatter::default();
+        fm.title = Some("About".to_string());
+        let page = build_page(fm, "content".into(), "about.md", "https://example.com");
+        pages.insert("about.md".into(), page);
+        let sections = HashMap::new();
+        let warnings = lint_frontmatter(&pages, &sections);
+        assert!(
+            !warnings.iter().any(|w| w.rule == "missing-title"),
+            "Should not warn with title set: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn test_lint_missing_date_in_date_section() {
+        let mut pages = HashMap::new();
+        let mut fm = Frontmatter::default();
+        fm.title = Some("Post".to_string());
+        // No date set
+        let page = build_page(
+            fm,
+            "content".into(),
+            "posts/no-date.md",
+            "https://example.com",
+        );
+        pages.insert("posts/no-date.md".into(), page);
+
+        let mut sections = HashMap::new();
+        let mut sfm = Frontmatter::default();
+        sfm.sort_by = Some(crate::config::SortBy::Date);
+        let section = build_section(sfm, String::new(), "posts/_index.md", "https://example.com");
+        sections.insert("posts/_index.md".into(), section);
+
+        let warnings = lint_frontmatter(&pages, &sections);
+        assert!(
+            warnings.iter().any(|w| w.rule == "missing-date"),
+            "Should warn about missing date in date-sorted section: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn test_lint_date_not_required_in_title_section() {
+        let mut pages = HashMap::new();
+        let mut fm = Frontmatter::default();
+        fm.title = Some("Item".to_string());
+        // No date, but section is title-sorted
+        let page = build_page(
+            fm,
+            "content".into(),
+            "items/thing.md",
+            "https://example.com",
+        );
+        pages.insert("items/thing.md".into(), page);
+
+        let mut sections = HashMap::new();
+        let mut sfm = Frontmatter::default();
+        sfm.sort_by = Some(crate::config::SortBy::Title);
+        let section = build_section(sfm, String::new(), "items/_index.md", "https://example.com");
+        sections.insert("items/_index.md".into(), section);
+
+        let warnings = lint_frontmatter(&pages, &sections);
+        assert!(
+            !warnings.iter().any(|w| w.rule == "missing-date"),
+            "Should not require date in title-sorted section: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn test_lint_invalid_date_format() {
+        let mut pages = HashMap::new();
+        let mut fm = Frontmatter::default();
+        fm.title = Some("Post".to_string());
+        fm.date = Some(toml::Value::String("not-a-date".to_string()));
+        let page = build_page(fm, "content".into(), "posts/bad.md", "https://example.com");
+        pages.insert("posts/bad.md".into(), page);
+        let sections = HashMap::new();
+        let warnings = lint_frontmatter(&pages, &sections);
+        assert!(
+            warnings.iter().any(|w| w.rule == "invalid-date"),
+            "Should warn about invalid date: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn test_lint_valid_date_formats() {
+        assert!(is_valid_date("2025-01-15"));
+        assert!(is_valid_date("2025-01-15T10:30:00"));
+        assert!(is_valid_date("2025-01-15T10:30:00Z"));
+        assert!(is_valid_date("2025-01-15T10:30:00+05:00"));
+        assert!(!is_valid_date("Jan 15, 2025"));
+        assert!(!is_valid_date("2025/01/15"));
+        assert!(!is_valid_date("garbage"));
+    }
+
+    // --- Missing asset tests ---
+
+    #[test]
+    fn test_lint_missing_image() {
+        let tmp = TempDir::new().unwrap();
+        let static_dir = tmp.path().join("static");
+        std::fs::create_dir_all(&static_dir).unwrap();
+
+        let mut pages = HashMap::new();
+        pages.insert(
+            "posts/hello.md".into(),
+            make_page("posts/hello.md", "![photo](/img/missing.png)"),
+        );
+        let sections = HashMap::new();
+        let warnings = lint_missing_assets(&pages, &sections, &static_dir);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].rule, "missing-asset");
+        assert!(warnings[0].text.contains("missing.png"));
+    }
+
+    #[test]
+    fn test_lint_existing_image() {
+        let tmp = TempDir::new().unwrap();
+        let static_dir = tmp.path().join("static");
+        let img_dir = static_dir.join("img");
+        std::fs::create_dir_all(&img_dir).unwrap();
+        std::fs::write(img_dir.join("photo.png"), "fake png").unwrap();
+
+        let mut pages = HashMap::new();
+        pages.insert(
+            "posts/hello.md".into(),
+            make_page("posts/hello.md", "![photo](/img/photo.png)"),
+        );
+        let sections = HashMap::new();
+        let warnings = lint_missing_assets(&pages, &sections, &static_dir);
+        assert!(
+            warnings.is_empty(),
+            "Should not warn for existing image: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn test_lint_html_img_tag() {
+        let tmp = TempDir::new().unwrap();
+        let static_dir = tmp.path().join("static");
+        std::fs::create_dir_all(&static_dir).unwrap();
+
+        let mut pages = HashMap::new();
+        pages.insert(
+            "posts/hello.md".into(),
+            make_page(
+                "posts/hello.md",
+                r#"<img src="/img/missing.jpg" alt="photo">"#,
+            ),
+        );
+        let sections = HashMap::new();
+        let warnings = lint_missing_assets(&pages, &sections, &static_dir);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].rule, "missing-asset");
+    }
+
+    #[test]
+    fn test_lint_missing_asset_in_section() {
+        let tmp = TempDir::new().unwrap();
+        let static_dir = tmp.path().join("static");
+        std::fs::create_dir_all(&static_dir).unwrap();
+
+        let pages = HashMap::new();
+        let mut sections = HashMap::new();
+        sections.insert(
+            "_index.md".into(),
+            make_section_with("_index.md", "![banner](/img/banner.png)"),
+        );
+        let warnings = lint_missing_assets(&pages, &sections, &static_dir);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].rule, "missing-asset");
+    }
+
+    #[test]
+    fn test_lint_no_images_no_warnings() {
+        let tmp = TempDir::new().unwrap();
+        let static_dir = tmp.path().join("static");
+        std::fs::create_dir_all(&static_dir).unwrap();
+
+        let mut pages = HashMap::new();
+        pages.insert(
+            "posts/hello.md".into(),
+            make_page("posts/hello.md", "Just text, no images."),
+        );
+        let sections = HashMap::new();
+        let warnings = lint_missing_assets(&pages, &sections, &static_dir);
         assert!(warnings.is_empty());
     }
 }

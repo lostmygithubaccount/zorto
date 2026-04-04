@@ -473,8 +473,28 @@ impl Site {
         let templates_dir = self.root.join("templates");
         let _tera = templates::setup_tera(&templates_dir, &self.config, &self.sections)?;
 
+        let mut warnings = Vec::new();
+
         // Lint templates
-        let warnings = crate::lint::lint_templates(&templates_dir);
+        warnings.extend(crate::lint::lint_templates(&templates_dir));
+
+        // Lint internal links
+        warnings.extend(crate::lint::lint_internal_links(
+            &self.pages,
+            &self.sections,
+        ));
+
+        // Lint frontmatter
+        warnings.extend(crate::lint::lint_frontmatter(&self.pages, &self.sections));
+
+        // Lint missing assets
+        let static_dir = self.root.join("static");
+        warnings.extend(crate::lint::lint_missing_assets(
+            &self.pages,
+            &self.sections,
+            &static_dir,
+        ));
+
         for w in &warnings {
             eprintln!("{w}");
         }
