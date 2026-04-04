@@ -721,6 +721,8 @@ fn render_markdown_content(
     content_dir: &Path,
     no_exec: bool,
 ) -> anyhow::Result<String> {
+    use crate::cache;
+
     let mut exec_blocks = Vec::new();
     let html = markdown::render_markdown(
         content,
@@ -730,14 +732,60 @@ fn render_markdown_content(
     );
 
     if !exec_blocks.is_empty() && !no_exec {
+        let cache_enabled = config.cache.enable;
+        let page_cache = if cache_enabled {
+            cache::load_page_cache(root, key)
+        } else {
+            None
+        };
+
         let working_dir = Path::new(key)
             .parent()
             .map(|p| content_dir.join(p))
             .filter(|p| p.exists())
             .unwrap_or_else(|| root.to_path_buf());
-        let errors = execute::execute_blocks(&mut exec_blocks, &working_dir, root);
-        for err in &errors {
-            eprintln!("warning: {key}: {err}");
+
+        let mut new_cache = cache::PageCache::default();
+        let mut any_executed = false;
+
+        for (idx, block) in exec_blocks.iter_mut().enumerate() {
+            let source_hash = cache::hash_source(&block.source);
+            let idx_key = idx.to_string();
+
+            // Check cache for a hit
+            let cache_hit = page_cache
+                .as_ref()
+                .and_then(|pc| pc.blocks.get(&idx_key).filter(|cb| cb.hash == source_hash));
+
+            if let Some(cached) = cache_hit {
+                block.output = cached.output.clone();
+                block.error = cached.error.clone();
+            } else {
+                // Execute this single block
+                let errors =
+                    execute::execute_blocks(std::slice::from_mut(block), &working_dir, root);
+                for err in &errors {
+                    eprintln!("warning: {key}: {err}");
+                }
+                any_executed = true;
+            }
+
+            // Record in new cache regardless
+            new_cache.blocks.insert(
+                idx_key,
+                cache::CachedBlock {
+                    hash: source_hash,
+                    output: block.output.clone(),
+                    error: block.error.clone(),
+                },
+            );
+        }
+
+        // Write cache if enabled and we executed anything (or cache didn't exist yet)
+        if cache_enabled && (any_executed || page_cache.is_none()) {
+            if let Err(e) = cache::save_page_cache(root, key, &new_cache) {
+                eprintln!("warning: failed to write cache for {key}: {e}");
+            }
         }
     }
 

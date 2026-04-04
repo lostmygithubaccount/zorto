@@ -80,11 +80,15 @@ enum Commands {
         interface: String,
     },
 
-    /// Remove output directory
+    /// Remove output directory and/or cache
     Clean {
         /// Output directory to remove
         #[arg(short, long, default_value = "public")]
         output: PathBuf,
+
+        /// Also clear the code block execution cache (.zorto/cache/)
+        #[arg(long)]
+        cache: bool,
     },
 
     /// Initialize a new site
@@ -189,11 +193,15 @@ where
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(serve::serve(&cfg))?;
         }
-        Commands::Clean { output } => {
+        Commands::Clean { output, cache } => {
             let output = resolve_output(&root, output);
             if output.exists() {
                 std::fs::remove_dir_all(&output)?;
                 println!("Removed {}", output.display());
+            }
+            if cache {
+                zorto_core::cache::clear_cache(&root)?;
+                println!("Cleared code block cache");
             }
         }
         Commands::Init { name, template } => {
