@@ -57,7 +57,9 @@
     {%- endif %}
     {%- if config.compile_all_themes %}
     {%- for name in ["zorto", "dkdc", "default", "ember", "forest", "ocean", "rose", "slate"] %}
+    {%- if name != config.theme | default(value="zorto") %}
     <link rel="prefetch" href="/style-{{ name }}.css" as="style">
+    {%- endif %}
     {%- endfor %}
     {%- endif %}
     {%- block extra_head %}{% endblock extra_head %}
@@ -197,16 +199,11 @@
     var href = (name === defaultTheme) ? '/style.css' : '/style-' + name + '.css';
     if (styleLink.getAttribute('href') !== href) {
       document.documentElement.classList.add('theme-swapping');
-      var newLink = document.createElement('link');
-      newLink.rel = 'stylesheet';
-      newLink.id = 'theme-stylesheet';
-      newLink.href = href;
-      newLink.onload = function() {
-        styleLink.remove();
-        styleLink = newLink;
+      styleLink.onload = function() {
         document.documentElement.classList.remove('theme-swapping');
+        styleLink.onload = null;
       };
-      styleLink.insertAdjacentElement('afterend', newLink);
+      styleLink.href = href;
       setTimeout(function() { document.documentElement.classList.remove('theme-swapping'); }, 2000);
     }
     localStorage.setItem('site-theme', name);
