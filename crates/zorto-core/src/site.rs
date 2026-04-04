@@ -1073,4 +1073,469 @@ description = "A site for testing"
             "2025-01-15T10:30:00-05:00"
         );
     }
+
+    // --- Full site build pipeline tests ---
+
+    #[test]
+    fn test_build_includes_drafts_when_enabled() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, true).unwrap();
+        site.build().unwrap();
+        // Draft page should be included
+        assert!(output.join("posts/draft/index.html").exists());
+    }
+
+    #[test]
+    fn test_build_excludes_drafts_by_default() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+        assert!(!output.join("posts/draft/index.html").exists());
+    }
+
+    #[test]
+    fn test_build_page_content_rendered() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+        let html = std::fs::read_to_string(output.join("posts/hello/index.html")).unwrap();
+        assert!(html.contains("Hello World"));
+        assert!(html.contains("Hello content"));
+    }
+
+    #[test]
+    fn test_build_section_pages_populated() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+        // The posts section HTML should exist
+        assert!(output.join("posts/index.html").exists());
+    }
+
+    #[test]
+    fn test_build_multiple_pages() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        // Add more pages
+        std::fs::write(
+            root.join("content/posts/second.md"),
+            "+++\ntitle = \"Second Post\"\ndate = \"2025-02-01\"\n+++\nSecond content",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("content/posts/third.md"),
+            "+++\ntitle = \"Third Post\"\ndate = \"2025-03-01\"\n+++\nThird content",
+        )
+        .unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        assert!(output.join("posts/hello/index.html").exists());
+        assert!(output.join("posts/second/index.html").exists());
+        assert!(output.join("posts/third/index.html").exists());
+    }
+
+    #[test]
+    fn test_build_nested_sections() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+
+        // Create nested section: posts/tutorials/
+        let tutorials = root.join("content/posts/tutorials");
+        std::fs::create_dir_all(&tutorials).unwrap();
+        std::fs::write(
+            tutorials.join("_index.md"),
+            "+++\ntitle = \"Tutorials\"\n+++\n",
+        )
+        .unwrap();
+        std::fs::write(
+            tutorials.join("intro.md"),
+            "+++\ntitle = \"Intro Tutorial\"\n+++\nTutorial content",
+        )
+        .unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        assert!(output.join("posts/tutorials/index.html").exists());
+        assert!(output.join("posts/tutorials/intro/index.html").exists());
+    }
+
+    #[test]
+    fn test_build_static_nested_dirs() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+
+        // Create nested static files
+        let img_dir = root.join("static/img");
+        std::fs::create_dir_all(&img_dir).unwrap();
+        std::fs::write(img_dir.join("logo.png"), "fake png").unwrap();
+        std::fs::write(root.join("static/robots.txt"), "User-agent: *").unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        assert!(output.join("style.css").exists());
+        assert!(output.join("img/logo.png").exists());
+        assert!(output.join("robots.txt").exists());
+    }
+
+    #[test]
+    fn test_build_sass_compilation() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+
+        // Create sass directory with SCSS (use a unique filename to avoid static/ conflict)
+        let sass_dir = root.join("sass");
+        std::fs::create_dir_all(&sass_dir).unwrap();
+        std::fs::write(
+            sass_dir.join("custom.scss"),
+            "$color: #333;\nbody { color: $color; }",
+        )
+        .unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        let css_path = output.join("custom.css");
+        assert!(css_path.exists());
+        let css = std::fs::read_to_string(css_path).unwrap();
+        assert!(css.contains("color"));
+    }
+
+    #[test]
+    fn test_build_sass_disabled() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        std::fs::write(
+            root.join("config.toml"),
+            "base_url = \"https://example.com\"\ntitle = \"Test\"\ncompile_sass = false\n",
+        )
+        .unwrap();
+
+        let sass_dir = root.join("sass");
+        std::fs::create_dir_all(&sass_dir).unwrap();
+        std::fs::write(sass_dir.join("style.scss"), "body { color: red; }").unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        // SCSS should not be compiled
+        // (style.css from static/ might exist, but not from sass/)
+        // The static style.css was copied, but let's check there's no sass-compiled output
+        // by verifying it doesn't contain sass content
+        let static_css = std::fs::read_to_string(output.join("style.css")).unwrap();
+        assert!(!static_css.contains("color: red"));
+    }
+
+    #[test]
+    fn test_build_feed_generation() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        std::fs::write(
+            root.join("config.toml"),
+            "base_url = \"https://example.com\"\ntitle = \"Test\"\ngenerate_feed = true\n",
+        )
+        .unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        assert!(output.join("atom.xml").exists());
+        let atom = std::fs::read_to_string(output.join("atom.xml")).unwrap();
+        assert!(atom.contains("https://example.com"));
+        assert!(atom.contains("Hello World"));
+    }
+
+    #[test]
+    fn test_build_feed_disabled_by_default() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+        assert!(!output.join("atom.xml").exists());
+    }
+
+    #[test]
+    fn test_build_sitemap_content() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        let sitemap = std::fs::read_to_string(output.join("sitemap.xml")).unwrap();
+        assert!(sitemap.contains("https://example.com/posts/hello/"));
+        assert!(sitemap.contains("<urlset"));
+    }
+
+    #[test]
+    fn test_build_page_with_aliases() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        std::fs::write(
+            root.join("content/posts/hello.md"),
+            "+++\ntitle = \"Hello\"\ndate = \"2025-01-01\"\naliases = [\"/old-hello/\"]\n+++\nContent",
+        )
+        .unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        // Alias redirect should exist
+        let alias_html = std::fs::read_to_string(output.join("old-hello/index.html")).unwrap();
+        assert!(alias_html.contains("meta http-equiv=\"refresh\""));
+        assert!(alias_html.contains("https://example.com/posts/hello/"));
+    }
+
+    #[test]
+    fn test_build_md_file_generation() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        std::fs::write(
+            root.join("config.toml"),
+            "base_url = \"https://example.com\"\ntitle = \"Test\"\ngenerate_md_files = true\n",
+        )
+        .unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        let md_path = output.join("posts/hello.md");
+        assert!(md_path.exists());
+        let md = std::fs::read_to_string(md_path).unwrap();
+        assert!(md.contains("# Hello World"));
+        assert!(md.contains("Hello content"));
+    }
+
+    #[test]
+    fn test_build_colocated_content() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+
+        // Create co-located content
+        let post_dir = root.join("content/posts/my-post");
+        std::fs::create_dir_all(&post_dir).unwrap();
+        std::fs::write(
+            post_dir.join("index.md"),
+            "+++\ntitle = \"My Post\"\ndate = \"2025-03-01\"\n+++\nCo-located content",
+        )
+        .unwrap();
+        std::fs::write(post_dir.join("diagram.svg"), "<svg></svg>").unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        assert!(output.join("posts/my-post/index.html").exists());
+        // Co-located asset should be copied
+        assert!(output.join("posts/my-post/diagram.svg").exists());
+    }
+
+    #[test]
+    fn test_build_custom_page_template() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+
+        // Add custom template
+        std::fs::write(
+            root.join("templates/custom.html"),
+            r#"{% extends "base.html" %}{% block content %}CUSTOM: {{ page.title }}{% endblock %}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("content/special.md"),
+            "+++\ntitle = \"Special\"\ntemplate = \"custom.html\"\n+++\nContent",
+        )
+        .unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        let html = std::fs::read_to_string(output.join("special/index.html")).unwrap();
+        assert!(html.contains("CUSTOM: Special"));
+    }
+
+    #[test]
+    fn test_build_404_template() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+
+        std::fs::write(
+            root.join("templates/404.html"),
+            r#"{% extends "base.html" %}{% block content %}Not found{% endblock %}"#,
+        )
+        .unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        assert!(output.join("404.html").exists());
+        let html = std::fs::read_to_string(output.join("404.html")).unwrap();
+        assert!(html.contains("Not found"));
+    }
+
+    #[test]
+    fn test_build_taxonomy_pages() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+
+        // Add taxonomy templates (must create the subdirectory)
+        let tags_dir = root.join("templates/tags");
+        std::fs::create_dir_all(&tags_dir).unwrap();
+        std::fs::write(
+            tags_dir.join("list.html"),
+            r#"{% extends "base.html" %}{% block content %}Tags: {% for term in terms %}{{ term.name }}{% endfor %}{% endblock %}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            tags_dir.join("single.html"),
+            r#"{% extends "base.html" %}{% block content %}Tag: {{ term.name }}{% endblock %}"#,
+        )
+        .unwrap();
+
+        // Add tagged page
+        std::fs::write(
+            root.join("content/posts/hello.md"),
+            "+++\ntitle = \"Hello\"\ndate = \"2025-01-01\"\ntags = [\"rust\", \"web\"]\n+++\nTagged content",
+        )
+        .unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        assert!(output.join("tags/index.html").exists());
+        assert!(output.join("tags/rust/index.html").exists());
+        assert!(output.join("tags/web/index.html").exists());
+    }
+
+    #[test]
+    fn test_build_content_dir_scanning() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+
+        // Set up an external docs directory
+        let docs = root.parent().unwrap().join("docs");
+        std::fs::create_dir_all(&docs).unwrap();
+        std::fs::write(docs.join("README.md"), "# Documentation\n\nDocs overview.").unwrap();
+        std::fs::write(docs.join("install.md"), "# Installation\n\nInstall steps.").unwrap();
+
+        std::fs::write(
+            root.join("config.toml"),
+            r#"
+base_url = "https://example.com"
+title = "Test"
+
+[[content_dirs]]
+path = "../docs"
+url_prefix = "docs"
+"#,
+        )
+        .unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        // Set sandbox to parent dir so include can access ../docs
+        site.sandbox = Some(root.parent().unwrap().to_path_buf());
+        site.build().unwrap();
+
+        assert!(output.join("docs/index.html").exists());
+        assert!(output.join("docs/install/index.html").exists());
+    }
+
+    #[test]
+    fn test_build_paginated_section() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+
+        // Set up paginated section
+        std::fs::write(
+            root.join("content/posts/_index.md"),
+            "+++\ntitle = \"Blog\"\nsort_by = \"date\"\npaginate_by = 1\n+++\n",
+        )
+        .unwrap();
+
+        // Add another page so we have 2 pages (1 non-draft)
+        std::fs::write(
+            root.join("content/posts/second.md"),
+            "+++\ntitle = \"Second\"\ndate = \"2025-02-01\"\n+++\nSecond",
+        )
+        .unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        // Should have paginated pages
+        assert!(output.join("posts/index.html").exists());
+        assert!(output.join("posts/page/2/index.html").exists());
+    }
+
+    #[test]
+    fn test_build_no_static_dir() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        // Remove static dir
+        std::fs::remove_dir_all(root.join("static")).unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        // Should not error
+        site.build().unwrap();
+        assert!(output.join("index.html").exists());
+    }
+
+    #[test]
+    fn test_build_empty_content() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("site");
+        let content = root.join("content");
+        let templates = root.join("templates");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::create_dir_all(&templates).unwrap();
+
+        std::fs::write(
+            root.join("config.toml"),
+            r#"base_url = "https://example.com""#,
+        )
+        .unwrap();
+        std::fs::write(content.join("_index.md"), "+++\ntitle = \"Home\"\n+++\n").unwrap();
+        std::fs::write(
+            templates.join("base.html"),
+            "<!DOCTYPE html><html><body>{% block content %}{% endblock %}</body></html>",
+        )
+        .unwrap();
+        std::fs::write(
+            templates.join("index.html"),
+            r#"{% extends "base.html" %}{% block content %}Home{% endblock %}"#,
+        )
+        .unwrap();
+
+        let output = tmp.path().join("public");
+        let mut site = Site::load(&root, &output, false).unwrap();
+        site.build().unwrap();
+
+        assert!(output.join("index.html").exists());
+    }
 }

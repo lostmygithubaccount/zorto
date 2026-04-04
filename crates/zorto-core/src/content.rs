@@ -1138,4 +1138,523 @@ Content goes here"#;
     fn test_strip_inline_markdown_plain_text() {
         assert_eq!(strip_inline_markdown("just plain text"), "just plain text");
     }
+
+    // --- Additional frontmatter variant tests ---
+
+    #[test]
+    fn test_parse_frontmatter_empty_frontmatter() {
+        let input = "+++\n+++\nBody only";
+        let (fm, body) = parse_frontmatter(input).unwrap();
+        assert!(fm.title.is_none());
+        assert!(fm.date.is_none());
+        assert!(!fm.draft);
+        assert_eq!(body, "Body only");
+    }
+
+    #[test]
+    fn test_parse_frontmatter_extra_fields_ignored() {
+        let input = "+++\ntitle = \"Hello\"\nunknown_field = 42\nanother = true\n+++\nBody";
+        let (fm, body) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.title.as_deref(), Some("Hello"));
+        assert_eq!(body, "Body");
+        // Extra fields are captured in `rest`
+        assert!(fm.rest.contains_key("unknown_field"));
+        assert!(fm.rest.contains_key("another"));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_missing_optional_fields() {
+        let input = "+++\ntitle = \"Only title\"\n+++\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.title.as_deref(), Some("Only title"));
+        assert!(fm.date.is_none());
+        assert!(fm.author.is_none());
+        assert!(fm.description.is_none());
+        assert!(!fm.draft);
+        assert!(fm.slug.is_none());
+        assert!(fm.template.is_none());
+        assert!(fm.aliases.is_empty());
+        assert!(fm.sort_by.is_none());
+        assert!(fm.paginate_by.is_none());
+    }
+
+    #[test]
+    fn test_parse_frontmatter_invalid_toml() {
+        let input = "+++\ntitle = \n+++\nBody";
+        let result = parse_frontmatter(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_frontmatter_empty_body() {
+        let input = "+++\ntitle = \"No body\"\n+++\n";
+        let (fm, body) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.title.as_deref(), Some("No body"));
+        assert_eq!(body, "");
+    }
+
+    #[test]
+    fn test_parse_frontmatter_multiline_body() {
+        let input = "+++\ntitle = \"T\"\n+++\nLine 1\nLine 2\nLine 3";
+        let (_, body) = parse_frontmatter(input).unwrap();
+        assert_eq!(body, "Line 1\nLine 2\nLine 3");
+    }
+
+    #[test]
+    fn test_parse_frontmatter_extra_table() {
+        let input = "+++\ntitle = \"T\"\n\n[extra]\ncolor = \"blue\"\ncount = 5\n+++\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        let extra = toml_to_json(&fm.extra);
+        assert_eq!(extra["color"], serde_json::json!("blue"));
+        assert_eq!(extra["count"], serde_json::json!(5));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_multiple_taxonomies() {
+        let input = "+++\ntitle = \"T\"\ntags = [\"a\", \"b\"]\ncategories = [\"c\"]\n+++\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert!(fm.rest.contains_key("tags"));
+        assert!(fm.rest.contains_key("categories"));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_sort_by_title() {
+        let input = "+++\nsort_by = \"title\"\n+++\n";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.sort_by, Some(SortBy::Title));
+    }
+
+    // --- Section hierarchy tests ---
+
+    #[test]
+    fn test_section_key_for_nested() {
+        assert_eq!(section_key_for("a/b/c.md"), "a/b/_index.md");
+    }
+
+    #[test]
+    fn test_section_key_for_root() {
+        assert_eq!(section_key_for("hello.md"), "_index.md");
+    }
+
+    #[test]
+    fn test_section_key_for_colocated() {
+        assert_eq!(section_key_for("posts/my-post/index.md"), "posts/_index.md");
+    }
+
+    #[test]
+    fn test_section_key_for_deeply_nested_colocated() {
+        assert_eq!(
+            section_key_for("blog/2025/my-post/index.md"),
+            "blog/2025/_index.md"
+        );
+    }
+
+    #[test]
+    fn test_build_section_deeply_nested() {
+        let fm = Frontmatter {
+            title: Some("Deep".into()),
+            ..Default::default()
+        };
+        let section = build_section(fm, "body".into(), "a/b/c/_index.md", "https://example.com");
+        assert_eq!(section.path, "/a/b/c/");
+        assert_eq!(section.permalink, "https://example.com/a/b/c/");
+    }
+
+    #[test]
+    fn test_build_section_empty_content() {
+        let fm = Frontmatter {
+            title: Some("Empty".into()),
+            ..Default::default()
+        };
+        let section = build_section(fm, "".into(), "empty/_index.md", "https://example.com");
+        assert_eq!(section.raw_content, "");
+        assert!(section.pages.is_empty());
+    }
+
+    #[test]
+    fn test_build_section_with_sort_by() {
+        let fm = Frontmatter {
+            title: Some("Sorted".into()),
+            sort_by: Some(SortBy::Title),
+            ..Default::default()
+        };
+        let section = build_section(fm, "body".into(), "sorted/_index.md", "https://example.com");
+        assert_eq!(section.sort_by, Some(SortBy::Title));
+    }
+
+    #[test]
+    fn test_build_section_with_paginate_by() {
+        let fm = Frontmatter {
+            paginate_by: Some(10),
+            ..Default::default()
+        };
+        let section = build_section(fm, "".into(), "paged/_index.md", "https://example.com");
+        assert_eq!(section.paginate_by, Some(10));
+    }
+
+    #[test]
+    fn test_build_section_with_custom_template() {
+        let fm = Frontmatter {
+            template: Some("custom.html".into()),
+            ..Default::default()
+        };
+        let section = build_section(fm, "".into(), "custom/_index.md", "https://example.com");
+        assert_eq!(section.template.as_deref(), Some("custom.html"));
+    }
+
+    // --- assign_pages_to_sections tests ---
+
+    #[test]
+    fn test_assign_pages_to_sections_basic() {
+        let mut sections = HashMap::new();
+        let fm = Frontmatter {
+            title: Some("Blog".into()),
+            ..Default::default()
+        };
+        sections.insert(
+            "posts/_index.md".to_string(),
+            build_section(fm, "".into(), "posts/_index.md", "https://example.com"),
+        );
+
+        let mut pages = HashMap::new();
+        let fm = Frontmatter {
+            title: Some("Post A".into()),
+            date: Some(toml::Value::String("2025-01-01".into())),
+            ..Default::default()
+        };
+        pages.insert(
+            "posts/a.md".to_string(),
+            build_page(fm, "body a".into(), "posts/a.md", "https://example.com"),
+        );
+        let fm = Frontmatter {
+            title: Some("Post B".into()),
+            date: Some(toml::Value::String("2025-02-01".into())),
+            ..Default::default()
+        };
+        pages.insert(
+            "posts/b.md".to_string(),
+            build_page(fm, "body b".into(), "posts/b.md", "https://example.com"),
+        );
+
+        assign_pages_to_sections(&mut sections, &pages);
+        let section = sections.get("posts/_index.md").unwrap();
+        assert_eq!(section.pages.len(), 2);
+        // Default sort is by date descending
+        assert_eq!(section.pages[0].title, "Post B"); // newer
+        assert_eq!(section.pages[1].title, "Post A"); // older
+    }
+
+    #[test]
+    fn test_assign_pages_to_sections_sort_by_title() {
+        let mut sections = HashMap::new();
+        let fm = Frontmatter {
+            title: Some("Docs".into()),
+            sort_by: Some(SortBy::Title),
+            ..Default::default()
+        };
+        sections.insert(
+            "docs/_index.md".to_string(),
+            build_section(fm, "".into(), "docs/_index.md", "https://example.com"),
+        );
+
+        let mut pages = HashMap::new();
+        for name in ["Zeta", "Alpha", "Mid"] {
+            let fm = Frontmatter {
+                title: Some(name.into()),
+                ..Default::default()
+            };
+            let slug = name.to_lowercase();
+            pages.insert(
+                format!("docs/{slug}.md"),
+                build_page(
+                    fm,
+                    "body".into(),
+                    &format!("docs/{slug}.md"),
+                    "https://example.com",
+                ),
+            );
+        }
+
+        assign_pages_to_sections(&mut sections, &pages);
+        let section = sections.get("docs/_index.md").unwrap();
+        assert_eq!(section.pages.len(), 3);
+        assert_eq!(section.pages[0].title, "Alpha");
+        assert_eq!(section.pages[1].title, "Mid");
+        assert_eq!(section.pages[2].title, "Zeta");
+    }
+
+    #[test]
+    fn test_assign_pages_orphan_page_no_section() {
+        // Pages without a matching section just don't get assigned
+        let mut sections = HashMap::new();
+        let fm = Frontmatter::default();
+        sections.insert(
+            "_index.md".to_string(),
+            build_section(fm, "".into(), "_index.md", "https://example.com"),
+        );
+
+        let mut pages = HashMap::new();
+        let fm = Frontmatter {
+            title: Some("Orphan".into()),
+            ..Default::default()
+        };
+        pages.insert(
+            "nonexistent-section/orphan.md".to_string(),
+            build_page(
+                fm,
+                "body".into(),
+                "nonexistent-section/orphan.md",
+                "https://example.com",
+            ),
+        );
+
+        assign_pages_to_sections(&mut sections, &pages);
+        // Root section should have no pages (orphan's section doesn't exist)
+        let root = sections.get("_index.md").unwrap();
+        assert!(root.pages.is_empty());
+    }
+
+    // --- Taxonomy tests ---
+
+    #[test]
+    fn test_build_page_multiple_taxonomies() {
+        let mut rest = HashMap::new();
+        rest.insert(
+            "tags".to_string(),
+            toml::Value::Array(vec![toml::Value::String("rust".into())]),
+        );
+        rest.insert(
+            "categories".to_string(),
+            toml::Value::Array(vec![toml::Value::String("tutorial".into())]),
+        );
+        rest.insert(
+            "series".to_string(),
+            toml::Value::Array(vec![
+                toml::Value::String("part1".into()),
+                toml::Value::String("part2".into()),
+            ]),
+        );
+        let fm = Frontmatter {
+            rest,
+            ..Default::default()
+        };
+        let page = build_page(fm, "body".into(), "test.md", "https://example.com");
+        assert_eq!(page.taxonomies.len(), 3);
+        assert_eq!(page.taxonomies["tags"], vec!["rust"]);
+        assert_eq!(page.taxonomies["categories"], vec!["tutorial"]);
+        assert_eq!(page.taxonomies["series"], vec!["part1", "part2"]);
+    }
+
+    #[test]
+    fn test_build_page_empty_taxonomy_array() {
+        let mut rest = HashMap::new();
+        rest.insert("tags".to_string(), toml::Value::Array(vec![]));
+        let fm = Frontmatter {
+            rest,
+            ..Default::default()
+        };
+        let page = build_page(fm, "body".into(), "test.md", "https://example.com");
+        // Empty arrays are not included in taxonomies
+        assert!(!page.taxonomies.contains_key("tags"));
+    }
+
+    #[test]
+    fn test_build_page_non_array_rest_field_ignored() {
+        // Non-array rest values should not become taxonomies
+        let mut rest = HashMap::new();
+        rest.insert(
+            "custom_string".to_string(),
+            toml::Value::String("value".into()),
+        );
+        rest.insert("custom_int".to_string(), toml::Value::Integer(42));
+        let fm = Frontmatter {
+            rest,
+            ..Default::default()
+        };
+        let page = build_page(fm, "body".into(), "test.md", "https://example.com");
+        assert!(page.taxonomies.is_empty());
+    }
+
+    // --- Content loading from disk tests ---
+
+    #[test]
+    fn test_load_content_empty_dir() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let content_dir = tmp.path().join("content");
+        std::fs::create_dir_all(&content_dir).unwrap();
+        let loaded = load_content(&content_dir, "https://example.com").unwrap();
+        assert!(loaded.sections.is_empty());
+        assert!(loaded.pages.is_empty());
+        assert!(loaded.assets.is_empty());
+    }
+
+    #[test]
+    fn test_load_content_with_sections_and_pages() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let content_dir = tmp.path().join("content");
+        let posts = content_dir.join("posts");
+        std::fs::create_dir_all(&posts).unwrap();
+
+        std::fs::write(
+            content_dir.join("_index.md"),
+            "+++\ntitle = \"Home\"\n+++\nWelcome",
+        )
+        .unwrap();
+        std::fs::write(posts.join("_index.md"), "+++\ntitle = \"Blog\"\n+++\n").unwrap();
+        std::fs::write(
+            posts.join("first.md"),
+            "+++\ntitle = \"First Post\"\n+++\nHello",
+        )
+        .unwrap();
+
+        let loaded = load_content(&content_dir, "https://example.com").unwrap();
+        assert_eq!(loaded.sections.len(), 2);
+        assert_eq!(loaded.pages.len(), 1);
+        assert!(loaded.sections.contains_key("_index.md"));
+        assert!(loaded.sections.contains_key("posts/_index.md"));
+        assert!(loaded.pages.contains_key("posts/first.md"));
+    }
+
+    #[test]
+    fn test_load_content_colocated_assets() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let content_dir = tmp.path().join("content");
+        let post_dir = content_dir.join("posts").join("my-post");
+        std::fs::create_dir_all(&post_dir).unwrap();
+
+        std::fs::write(
+            post_dir.join("index.md"),
+            "+++\ntitle = \"My Post\"\n+++\nContent",
+        )
+        .unwrap();
+        std::fs::write(post_dir.join("image.png"), "fake png").unwrap();
+
+        let loaded = load_content(&content_dir, "https://example.com").unwrap();
+        assert_eq!(loaded.pages.len(), 1);
+        assert_eq!(loaded.assets.len(), 1);
+        assert!(loaded.assets[0].to_string_lossy().contains("image.png"));
+    }
+
+    #[test]
+    fn test_load_content_no_frontmatter_page() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let content_dir = tmp.path().join("content");
+        std::fs::create_dir_all(&content_dir).unwrap();
+
+        std::fs::write(content_dir.join("plain.md"), "Just plain markdown").unwrap();
+
+        let loaded = load_content(&content_dir, "https://example.com").unwrap();
+        assert_eq!(loaded.pages.len(), 1);
+        let page = loaded.pages.get("plain.md").unwrap();
+        assert_eq!(page.title, "");
+        assert_eq!(page.raw_content, "Just plain markdown");
+    }
+
+    // --- extract_title_description tests ---
+
+    #[test]
+    fn test_extract_title_description_basic() {
+        let content = "# My Title\n\nThis is the description paragraph.\n\n## Next section";
+        let (title, desc) = extract_title_description(content);
+        assert_eq!(title.as_deref(), Some("My Title"));
+        assert_eq!(desc.as_deref(), Some("This is the description paragraph."));
+    }
+
+    #[test]
+    fn test_extract_title_description_no_title() {
+        let content = "No heading here, just text.\n\nMore text.";
+        let (title, desc) = extract_title_description(content);
+        assert!(title.is_none());
+        assert_eq!(desc.as_deref(), Some("No heading here, just text."));
+    }
+
+    #[test]
+    fn test_extract_title_description_no_description() {
+        let content = "# Title Only\n\n## Subheading\n\n- List item";
+        let (title, desc) = extract_title_description(content);
+        assert_eq!(title.as_deref(), Some("Title Only"));
+        assert!(desc.is_none());
+    }
+
+    #[test]
+    fn test_extract_title_description_strips_markdown() {
+        let content = "# Title\n\nSee [link](https://example.com) and **bold** text.";
+        let (_, desc) = extract_title_description(content);
+        assert_eq!(desc.as_deref(), Some("See link and bold text."));
+    }
+
+    // --- title_from_filename tests ---
+
+    #[test]
+    fn test_title_from_filename_basic() {
+        assert_eq!(title_from_filename("add-blog"), "Add blog");
+    }
+
+    #[test]
+    fn test_title_from_filename_single_word() {
+        assert_eq!(title_from_filename("overview"), "Overview");
+    }
+
+    // --- Page building edge cases ---
+
+    #[test]
+    fn test_build_page_reading_time_long() {
+        let body = "word ".repeat(1000);
+        let fm = Frontmatter::default();
+        let page = build_page(fm, body, "test.md", "https://example.com");
+        assert_eq!(page.word_count, 1000);
+        assert_eq!(page.reading_time, 5); // 1000/200
+    }
+
+    #[test]
+    fn test_build_page_aliases() {
+        let fm = Frontmatter {
+            aliases: vec!["/old/".into(), "/legacy/".into()],
+            ..Default::default()
+        };
+        let page = build_page(fm, "body".into(), "new.md", "https://example.com");
+        assert_eq!(page.aliases, vec!["/old/", "/legacy/"]);
+    }
+
+    #[test]
+    fn test_build_page_custom_template() {
+        let fm = Frontmatter {
+            template: Some("custom.html".into()),
+            ..Default::default()
+        };
+        let page = build_page(fm, "body".into(), "test.md", "https://example.com");
+        assert_eq!(page.template.as_deref(), Some("custom.html"));
+    }
+
+    // --- URL path helper tests ---
+
+    #[test]
+    fn test_page_url_path_empty_parent() {
+        assert_eq!(page_url_path("", "hello"), "/hello/");
+    }
+
+    #[test]
+    fn test_page_url_path_nested() {
+        assert_eq!(page_url_path("a/b", "slug"), "/a/b/slug/");
+    }
+
+    #[test]
+    fn test_section_url_path_root() {
+        assert_eq!(section_url_path(""), "/");
+    }
+
+    #[test]
+    fn test_section_url_path_nested() {
+        assert_eq!(section_url_path("docs/api"), "/docs/api/");
+    }
+
+    #[test]
+    fn test_parent_dir_nested() {
+        assert_eq!(parent_dir("a/b/c.md"), "a/b");
+    }
+
+    #[test]
+    fn test_parent_dir_root() {
+        assert_eq!(parent_dir("file.md"), "");
+    }
 }

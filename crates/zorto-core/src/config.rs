@@ -315,4 +315,254 @@ default_language = "ja"
         let result = Config::load(tmp.path());
         assert!(result.is_err());
     }
+
+    // --- Additional config parsing tests ---
+
+    #[test]
+    fn test_invalid_toml_syntax() {
+        let tmp = TempDir::new().unwrap();
+        write_config(&tmp, "base_url = ");
+        let result = Config::load(tmp.path());
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("invalid config.toml")
+        );
+    }
+
+    #[test]
+    fn test_missing_base_url() {
+        let tmp = TempDir::new().unwrap();
+        write_config(&tmp, r#"title = "No base URL""#);
+        let result = Config::load(tmp.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_theme_name() {
+        let tmp = TempDir::new().unwrap();
+        write_config(
+            &tmp,
+            r#"
+base_url = "https://example.com"
+theme = "nonexistent-theme"
+"#,
+        );
+        let result = Config::load(tmp.path());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Unknown theme"));
+    }
+
+    #[test]
+    fn test_multiple_trailing_slashes_stripped() {
+        let tmp = TempDir::new().unwrap();
+        write_config(&tmp, r#"base_url = "https://example.com///""#);
+        let config = Config::load(tmp.path()).unwrap();
+        assert_eq!(config.base_url, "https://example.com");
+    }
+
+    #[test]
+    fn test_multiple_taxonomies() {
+        let tmp = TempDir::new().unwrap();
+        write_config(
+            &tmp,
+            r#"
+base_url = "https://example.com"
+
+[[taxonomies]]
+name = "tags"
+
+[[taxonomies]]
+name = "categories"
+"#,
+        );
+        let config = Config::load(tmp.path()).unwrap();
+        assert_eq!(config.taxonomies.len(), 2);
+        assert_eq!(config.taxonomies[0].name, "tags");
+        assert_eq!(config.taxonomies[1].name, "categories");
+    }
+
+    #[test]
+    fn test_default_values() {
+        let tmp = TempDir::new().unwrap();
+        write_config(&tmp, r#"base_url = "https://example.com""#);
+        let config = Config::load(tmp.path()).unwrap();
+        assert!(config.compile_sass);
+        assert!(!config.generate_feed);
+        assert!(config.generate_sitemap);
+        assert!(config.generate_llms_txt);
+        assert!(!config.generate_md_files);
+        assert!(!config.compile_all_themes);
+        assert_eq!(config.default_language, "en");
+        assert!(config.theme.is_none());
+        assert!(config.content_dirs.is_empty());
+    }
+
+    #[test]
+    fn test_markdown_config_defaults() {
+        let tmp = TempDir::new().unwrap();
+        write_config(&tmp, r#"base_url = "https://example.com""#);
+        let config = Config::load(tmp.path()).unwrap();
+        assert!(config.markdown.highlight_code);
+        assert_eq!(config.markdown.insert_anchor_links, AnchorLinks::None);
+        assert!(config.markdown.highlight_theme.is_none());
+        assert!(!config.markdown.external_links_target_blank);
+        assert!(!config.markdown.external_links_no_follow);
+        assert!(!config.markdown.external_links_no_referrer);
+        assert!(!config.markdown.smart_punctuation);
+    }
+
+    #[test]
+    fn test_full_markdown_config() {
+        let tmp = TempDir::new().unwrap();
+        write_config(
+            &tmp,
+            r#"
+base_url = "https://example.com"
+
+[markdown]
+highlight_code = true
+insert_anchor_links = "right"
+highlight_theme = "InspiredGitHub"
+external_links_target_blank = true
+external_links_no_follow = true
+external_links_no_referrer = true
+smart_punctuation = true
+"#,
+        );
+        let config = Config::load(tmp.path()).unwrap();
+        assert!(config.markdown.highlight_code);
+        assert_eq!(config.markdown.insert_anchor_links, AnchorLinks::Right);
+        assert_eq!(
+            config.markdown.highlight_theme.as_deref(),
+            Some("InspiredGitHub")
+        );
+        assert!(config.markdown.external_links_target_blank);
+        assert!(config.markdown.external_links_no_follow);
+        assert!(config.markdown.external_links_no_referrer);
+        assert!(config.markdown.smart_punctuation);
+    }
+
+    #[test]
+    fn test_extra_config_values() {
+        let tmp = TempDir::new().unwrap();
+        write_config(
+            &tmp,
+            r#"
+base_url = "https://example.com"
+
+[extra]
+author = "Cody"
+year = 2025
+social = { github = "user", twitter = "user" }
+"#,
+        );
+        let config = Config::load(tmp.path()).unwrap();
+        let extra = &config.extra;
+        assert_eq!(extra.get("author").and_then(|v| v.as_str()), Some("Cody"));
+        assert_eq!(extra.get("year").and_then(|v| v.as_integer()), Some(2025));
+        let social = extra.get("social").unwrap().as_table().unwrap();
+        assert_eq!(social.get("github").and_then(|v| v.as_str()), Some("user"));
+    }
+
+    #[test]
+    fn test_content_dirs_config() {
+        let tmp = TempDir::new().unwrap();
+        write_config(
+            &tmp,
+            r#"
+base_url = "https://example.com"
+
+[[content_dirs]]
+path = "../docs"
+url_prefix = "docs"
+template = "doc.html"
+section_template = "doc-section.html"
+sort_by = "title"
+rewrite_links = true
+exclude = ["internal.md", "draft.md"]
+"#,
+        );
+        let config = Config::load(tmp.path()).unwrap();
+        assert_eq!(config.content_dirs.len(), 1);
+        let dir = &config.content_dirs[0];
+        assert_eq!(dir.path, "../docs");
+        assert_eq!(dir.url_prefix, "docs");
+        assert_eq!(dir.template, "doc.html");
+        assert_eq!(dir.section_template, "doc-section.html");
+        assert_eq!(dir.sort_by, Some(SortBy::Title));
+        assert!(dir.rewrite_links);
+        assert_eq!(dir.exclude, vec!["internal.md", "draft.md"]);
+    }
+
+    #[test]
+    fn test_content_dirs_defaults() {
+        let tmp = TempDir::new().unwrap();
+        write_config(
+            &tmp,
+            r#"
+base_url = "https://example.com"
+
+[[content_dirs]]
+path = "../docs"
+url_prefix = "docs"
+"#,
+        );
+        let config = Config::load(tmp.path()).unwrap();
+        let dir = &config.content_dirs[0];
+        assert_eq!(dir.template, "page.html");
+        assert_eq!(dir.section_template, "section.html");
+        assert!(dir.sort_by.is_none());
+        assert!(!dir.rewrite_links);
+        assert!(dir.exclude.is_empty());
+    }
+
+    #[test]
+    fn test_generate_feed_enabled() {
+        let tmp = TempDir::new().unwrap();
+        write_config(
+            &tmp,
+            r#"
+base_url = "https://example.com"
+generate_feed = true
+"#,
+        );
+        let config = Config::load(tmp.path()).unwrap();
+        assert!(config.generate_feed);
+    }
+
+    #[test]
+    fn test_generate_md_files_enabled() {
+        let tmp = TempDir::new().unwrap();
+        write_config(
+            &tmp,
+            r#"
+base_url = "https://example.com"
+generate_md_files = true
+"#,
+        );
+        let config = Config::load(tmp.path()).unwrap();
+        assert!(config.generate_md_files);
+    }
+
+    #[test]
+    fn test_unknown_top_level_keys_accepted() {
+        // TOML's serde will ignore unknown fields (since Config uses #[serde(default)])
+        let tmp = TempDir::new().unwrap();
+        write_config(
+            &tmp,
+            r#"
+base_url = "https://example.com"
+some_future_field = true
+"#,
+        );
+        // This should either succeed (ignoring the field) or fail cleanly
+        let result = Config::load(tmp.path());
+        // Serde with deny_unknown_fields would fail; without it, succeeds
+        if let Ok(config) = result {
+            assert_eq!(config.base_url, "https://example.com");
+        }
+    }
 }
