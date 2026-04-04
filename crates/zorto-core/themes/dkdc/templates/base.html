@@ -10,16 +10,25 @@
     <link rel="stylesheet" href="/style.css" id="theme-stylesheet">
     <script>
       (function() {
-        document.documentElement.classList.add('no-transitions');
+        var html = document.documentElement;
+        html.classList.add('no-transitions');
         var saved = localStorage.getItem('theme');
         var preferLight = window.matchMedia('(prefers-color-scheme: light)').matches;
         if (saved === 'light' || (!saved && preferLight)) {
-          document.documentElement.setAttribute('data-theme', 'light');
+          html.setAttribute('data-theme', 'light');
         }
         var siteTheme = localStorage.getItem('site-theme');
         var defaultTheme = '{{ config.theme | default(value="zorto") }}';
+        var styleLink = document.getElementById('theme-stylesheet');
         if (siteTheme && siteTheme !== defaultTheme) {
-          document.getElementById('theme-stylesheet').href = '/style-' + siteTheme + '.css';
+          styleLink.href = '/style-' + siteTheme + '.css';
+          // Remove no-transitions only after the new stylesheet has loaded
+          styleLink.onload = function() {
+            requestAnimationFrame(function(){ html.classList.remove('no-transitions'); });
+            styleLink.onload = null;
+          };
+          // Safety timeout in case onload doesn't fire (e.g. cached stylesheet)
+          setTimeout(function() { html.classList.remove('no-transitions'); }, 500);
         }
       })();
     </script>
@@ -298,6 +307,14 @@
 {%- endif %}
 {%- endif %}
 {%- block extra_body %}{% endblock extra_body %}
-<script>requestAnimationFrame(function(){document.documentElement.classList.remove('no-transitions')})</script>
+<script>
+// For default theme (no stylesheet swap), remove no-transitions now.
+// For non-default themes, the head script's onload/timeout handles it.
+if (!document.documentElement.classList.contains('no-transitions') ||
+    !localStorage.getItem('site-theme') ||
+    localStorage.getItem('site-theme') === '{{ config.theme | default(value="zorto") }}') {
+  requestAnimationFrame(function(){ document.documentElement.classList.remove('no-transitions'); });
+}
+</script>
 </body>
 </html>
