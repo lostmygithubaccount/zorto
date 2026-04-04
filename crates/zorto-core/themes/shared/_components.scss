@@ -507,24 +507,7 @@
 // Search
 // ========================================
 
-.search-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-muted);
-  padding: 6px;
-  transition: color 0.2s;
-
-  &:hover { color: var(--color); }
-
-  svg {
-    width: 20px;
-    height: 20px;
-  }
-}
+// .search-toggle is styled via .navbar__icon-link (see _structure.scss)
 
 .search-modal {
   position: fixed;

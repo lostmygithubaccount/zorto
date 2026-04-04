@@ -499,11 +499,9 @@
         // Highlight matching terms in title and snippet
         var titleHtml = escapeHtml(row.title).replace(re, '<mark>$1</mark>');
         snippet = snippet.replace(re, '<mark>$1</mark>');
-        // Format URL for display
-        var displayUrl = row.url.replace(/^https?:\/\/[^/]+/, '');
-        html += '<a class="search-modal__result" href="' + displayUrl + '">' +
+        html += '<a class="search-modal__result" href="' + row.url + '">' +
           '<div class="search-modal__result-title">' + titleHtml + '</div>' +
-          '<div class="search-modal__result-url">' + escapeHtml(displayUrl) + '</div>' +
+          '<div class="search-modal__result-url">' + escapeHtml(row.url) + '</div>' +
           '<div class="search-modal__result-snippet">' + snippet + '</div>' +
           '</a>';
       }

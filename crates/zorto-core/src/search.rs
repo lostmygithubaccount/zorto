@@ -68,9 +68,31 @@ fn strip_html(html: &str) -> String {
 /// columns (`title_lower`, `description_lower`, `content_lower`) for
 /// efficient case-insensitive ranked search at query time.
 /// Uses a regular table (not FTS5) for sql.js WASM compatibility.
+/// Convert a permalink to a relative path by stripping the base URL.
+fn to_relative_url(permalink: &str, base_url: &str) -> String {
+    if let Some(path) = permalink.strip_prefix(base_url) {
+        if path.is_empty() {
+            "/".to_string()
+        } else if path.starts_with('/') {
+            path.to_string()
+        } else {
+            format!("/{path}")
+        }
+    } else {
+        // Fallback: try to extract path from full URL
+        if let Some(pos) = permalink.find("://") {
+            if let Some(slash_pos) = permalink[pos + 3..].find('/') {
+                return permalink[pos + 3 + slash_pos..].to_string();
+            }
+        }
+        permalink.to_string()
+    }
+}
+
 pub fn generate_search_index<'a>(
     pages: impl IntoIterator<Item = &'a Page>,
     sections: impl IntoIterator<Item = &'a Section>,
+    base_url: &str,
     output_dir: &Path,
 ) -> anyhow::Result<()> {
     let db_path = output_dir.join("search.db");
@@ -106,9 +128,10 @@ pub fn generate_search_index<'a>(
     for page in pages {
         let plain_text = strip_html(&page.content);
         let description = page.description.as_deref().unwrap_or("");
+        let url = to_relative_url(&page.permalink, base_url);
         stmt.execute(rusqlite::params![
             page.title,
-            page.permalink,
+            url,
             description,
             plain_text,
             page.title.to_lowercase(),
@@ -124,9 +147,10 @@ pub fn generate_search_index<'a>(
         }
         let plain_text = strip_html(&section.content);
         let description = section.description.as_deref().unwrap_or("");
+        let url = to_relative_url(&section.permalink, base_url);
         stmt.execute(rusqlite::params![
             section.title,
-            section.permalink,
+            url,
             description,
             plain_text,
             section.title.to_lowercase(),
@@ -229,7 +253,13 @@ mod tests {
         )];
         let sections: Vec<Section> = vec![];
 
-        generate_search_index(pages.iter(), sections.iter(), tmp.path()).unwrap();
+        generate_search_index(
+            pages.iter(),
+            sections.iter(),
+            "https://example.com",
+            tmp.path(),
+        )
+        .unwrap();
 
         let db_path = tmp.path().join("search.db");
         assert!(db_path.exists());
@@ -245,6 +275,12 @@ mod tests {
             .query_row("SELECT title_lower FROM pages", [], |row| row.get(0))
             .unwrap();
         assert_eq!(title_lower, "test page");
+
+        // Verify URL is stored as relative path
+        let url: String = conn
+            .query_row("SELECT url FROM pages", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(url, "/test/");
     }
 
     #[test]
@@ -265,7 +301,7 @@ mod tests {
             ),
         ];
 
-        generate_search_index(pages.iter(), std::iter::empty(), tmp.path()).unwrap();
+        generate_search_index(pages.iter(), std::iter::empty(), "", tmp.path()).unwrap();
         let conn = rusqlite::Connection::open(tmp.path().join("search.db")).unwrap();
 
         let results = ranked_search(&conn, "theme");
@@ -294,7 +330,7 @@ mod tests {
             ),
         ];
 
-        generate_search_index(pages.iter(), std::iter::empty(), tmp.path()).unwrap();
+        generate_search_index(pages.iter(), std::iter::empty(), "", tmp.path()).unwrap();
         let conn = rusqlite::Connection::open(tmp.path().join("search.db")).unwrap();
 
         let results = ranked_search(&conn, "themes");
@@ -314,7 +350,7 @@ mod tests {
             "<p>HELLO WORLD content</p>",
         )];
 
-        generate_search_index(pages.iter(), std::iter::empty(), tmp.path()).unwrap();
+        generate_search_index(pages.iter(), std::iter::empty(), "", tmp.path()).unwrap();
         let conn = rusqlite::Connection::open(tmp.path().join("search.db")).unwrap();
 
         // Search with different cases
@@ -329,7 +365,7 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let pages = vec![make_page("Test", "/test/", None, "<p>Content</p>")];
 
-        generate_search_index(pages.iter(), std::iter::empty(), tmp.path()).unwrap();
+        generate_search_index(pages.iter(), std::iter::empty(), "", tmp.path()).unwrap();
         let conn = rusqlite::Connection::open(tmp.path().join("search.db")).unwrap();
 
         let results = ranked_search(&conn, "");
@@ -349,7 +385,7 @@ mod tests {
             "<p>Using % and ' and \" in code</p>",
         )];
 
-        generate_search_index(pages.iter(), std::iter::empty(), tmp.path()).unwrap();
+        generate_search_index(pages.iter(), std::iter::empty(), "", tmp.path()).unwrap();
         let conn = rusqlite::Connection::open(tmp.path().join("search.db")).unwrap();
 
         // These should not crash

@@ -155,6 +155,7 @@ impl Site {
             crate::search::generate_search_index(
                 self.pages.values(),
                 self.sections.values(),
+                &self.config.base_url,
                 &self.output_dir,
             )?;
         }
