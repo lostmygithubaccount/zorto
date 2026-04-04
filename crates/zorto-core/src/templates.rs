@@ -79,7 +79,10 @@ pub fn setup_tera(
                 // is empty (all templates come from the theme). Any other
                 // parse error is a real problem.
                 if !msg.contains("No files matched") {
-                    return Err(anyhow::anyhow!("template error: {e}"));
+                    return Err(anyhow::anyhow!(
+                        "failed to parse templates in {}: {e}",
+                        templates_dir.display()
+                    ));
                 }
             }
         }

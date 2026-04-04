@@ -21,3 +21,6 @@ toml = "0.8"
 walkdir = "2"
 slug = "0.1"
 chrono = "0.4"
+
+[dev-dependencies]
+tempfile = "3.27.0"

@@ -34,7 +34,9 @@ pub fn resolve_internal_links(
                 return format!("{}{anchor}", section.permalink);
             }
 
-            errors.push(format!("unresolved internal link: @/{path}"));
+            errors.push(format!(
+                "unresolved internal link: @/{path} (no matching page or section found)"
+            ));
             format!("@/{path}{anchor}")
         })
         .to_string();

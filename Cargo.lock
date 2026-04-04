@@ -2638,6 +2638,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slug",
+ "tempfile",
  "tokio",
  "toml",
  "walkdir",

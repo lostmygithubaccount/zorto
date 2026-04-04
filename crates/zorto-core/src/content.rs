@@ -193,9 +193,9 @@ pub fn parse_frontmatter(content: &str) -> anyhow::Result<(Frontmatter, String)>
     }
 
     let rest = &content[3..];
-    let end = rest
-        .find("\n+++")
-        .ok_or_else(|| anyhow::anyhow!("Unclosed frontmatter"))?;
+    let end = rest.find("\n+++").ok_or_else(|| {
+        anyhow::anyhow!("unclosed TOML frontmatter: missing closing '+++' delimiter")
+    })?;
     let frontmatter_str = &rest[..end];
     let body = &rest[end + 4..]; // skip \n+++
     let body = body.strip_prefix('\n').unwrap_or(body);
@@ -361,7 +361,13 @@ pub fn load_content(content_dir: &Path, base_url: &str) -> anyhow::Result<Loaded
         let path = entry.path();
         let relative = path
             .strip_prefix(content_dir)
-            .expect("walkdir entry is under content_dir")
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "content entry {} is outside content directory {}",
+                    path.display(),
+                    content_dir.display()
+                )
+            })?
             .to_string_lossy()
             .to_string();
 
@@ -371,19 +377,21 @@ pub fn load_content(content_dir: &Path, base_url: &str) -> anyhow::Result<Loaded
 
         let filename = path
             .file_name()
-            .expect("non-directory entry has a filename")
+            .ok_or_else(|| anyhow::anyhow!("content entry has no filename: {}", path.display()))?
             .to_string_lossy();
 
         if filename == "_index.md" {
             let content = std::fs::read_to_string(path)
                 .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", path.display()))?;
-            let (fm, body) = parse_frontmatter(&content)?;
+            let (fm, body) = parse_frontmatter(&content)
+                .map_err(|e| e.context(format!("in {}", path.display())))?;
             let section = build_section(fm, body, &relative, base_url);
             sections.insert(relative, section);
         } else if filename.ends_with(".md") {
             let content = std::fs::read_to_string(path)
                 .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", path.display()))?;
-            let (fm, body) = parse_frontmatter(&content)?;
+            let (fm, body) = parse_frontmatter(&content)
+                .map_err(|e| e.context(format!("in {}", path.display())))?;
             let page = build_page(fm, body, &relative, base_url);
             pages.insert(relative, page);
         } else {
@@ -440,7 +448,13 @@ pub fn load_content_dir(
         // Relative path within the external dir (e.g. "getting-started/installation.md")
         let rel_in_dir = path
             .strip_prefix(dir)
-            .expect("walkdir entry is under dir")
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "content entry {} is outside directory {}",
+                    path.display(),
+                    dir.display()
+                )
+            })?
             .to_string_lossy()
             .to_string();
 
@@ -985,5 +999,143 @@ Content goes here"#;
         let result = toml_to_json(&toml::Value::Table(table));
         assert_eq!(result["key"], serde_json::json!("value"));
         assert_eq!(result["nums"], serde_json::json!([1, 2]));
+    }
+
+    // --- Frontmatter security tests ---
+
+    #[test]
+    fn test_parse_frontmatter_special_chars_in_values() {
+        let input = "+++\ntitle = \"Hello <script>alert('xss')</script>\"\n+++\nBody";
+        let (fm, body) = parse_frontmatter(input).unwrap();
+        assert_eq!(
+            fm.title.as_deref(),
+            Some("Hello <script>alert('xss')</script>")
+        );
+        assert_eq!(body, "Body");
+    }
+
+    #[test]
+    fn test_parse_frontmatter_injection_in_keys() {
+        // TOML keys with special characters should either parse correctly or error
+        let input = "+++\n\"key with spaces\" = \"value\"\n+++\nBody";
+        let (fm, body) = parse_frontmatter(input).unwrap();
+        assert_eq!(body, "Body");
+        assert!(fm.rest.contains_key("key with spaces"));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_unclosed() {
+        let input = "+++\ntitle = \"Oops\"\nNo closing delimiter";
+        let result = parse_frontmatter(input);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("unclosed TOML frontmatter")
+        );
+    }
+
+    #[test]
+    fn test_parse_frontmatter_bom_handling() {
+        let input = "\u{feff}+++\ntitle = \"BOM\"\n+++\nBody";
+        let (fm, body) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.title.as_deref(), Some("BOM"));
+        assert_eq!(body, "Body");
+    }
+
+    #[test]
+    fn test_parse_frontmatter_nested_delimiters() {
+        // Content containing +++ after the frontmatter should not confuse parser
+        let input = "+++\ntitle = \"Test\"\n+++\nBody with +++ in it";
+        let (fm, body) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.title.as_deref(), Some("Test"));
+        assert_eq!(body, "Body with +++ in it");
+    }
+
+    #[test]
+    fn test_parse_frontmatter_multiline_string() {
+        let input = "+++\ntitle = \"Line1\\nLine2\"\n+++\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        // TOML parses \n as an actual newline character
+        assert_eq!(fm.title.as_deref(), Some("Line1\nLine2"));
+    }
+
+    // --- strip_inline_markdown security tests ---
+
+    #[test]
+    fn test_strip_inline_markdown_basic_link() {
+        assert_eq!(strip_inline_markdown("[text](https://example.com)"), "text");
+    }
+
+    #[test]
+    fn test_strip_inline_markdown_bold_italic() {
+        assert_eq!(
+            strip_inline_markdown("**bold** and *italic*"),
+            "bold and italic"
+        );
+    }
+
+    #[test]
+    fn test_strip_inline_markdown_code() {
+        assert_eq!(strip_inline_markdown("use `code` here"), "use code here");
+    }
+
+    #[test]
+    fn test_strip_inline_markdown_non_ascii() {
+        assert_eq!(
+            strip_inline_markdown("café résumé naïve"),
+            "café résumé naïve"
+        );
+    }
+
+    #[test]
+    fn test_strip_inline_markdown_emoji() {
+        assert_eq!(
+            strip_inline_markdown("Hello 🌍 World 🎉"),
+            "Hello 🌍 World 🎉"
+        );
+    }
+
+    #[test]
+    fn test_strip_inline_markdown_cjk() {
+        assert_eq!(strip_inline_markdown("日本語テスト"), "日本語テスト");
+    }
+
+    #[test]
+    fn test_strip_inline_markdown_cjk_with_formatting() {
+        assert_eq!(
+            strip_inline_markdown("**日本語**と[リンク](https://example.jp)"),
+            "日本語とリンク"
+        );
+    }
+
+    #[test]
+    fn test_strip_inline_markdown_emoji_in_link() {
+        assert_eq!(
+            strip_inline_markdown("[🔗 link text](https://example.com)"),
+            "🔗 link text"
+        );
+    }
+
+    #[test]
+    fn test_strip_inline_markdown_nested_brackets() {
+        // Edge case: brackets inside link text
+        assert_eq!(strip_inline_markdown("[a [b] c](url)"), "a [b] c");
+    }
+
+    #[test]
+    fn test_strip_inline_markdown_strikethrough() {
+        assert_eq!(strip_inline_markdown("~~deleted~~ text"), "deleted text");
+    }
+
+    #[test]
+    fn test_strip_inline_markdown_empty_string() {
+        assert_eq!(strip_inline_markdown(""), "");
+    }
+
+    #[test]
+    fn test_strip_inline_markdown_plain_text() {
+        assert_eq!(strip_inline_markdown("just plain text"), "just plain text");
     }
 }

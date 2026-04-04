@@ -1732,7 +1732,10 @@ fn render_shortcode(
 ) -> anyhow::Result<String> {
     let template_path = shortcode_dir.join(format!("{name}.html"));
     if !template_path.exists() {
-        return Err(anyhow::anyhow!("shortcode template not found: {name}.html"));
+        return Err(anyhow::anyhow!(
+            "shortcode template not found: {name}.html (expected at {})",
+            template_path.display()
+        ));
     }
 
     let template_content = std::fs::read_to_string(&template_path)?;
@@ -2151,5 +2154,211 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result, "See [config](/docs/reference/config/) for details.");
+    }
+
+    // --- Security tests for include shortcode ---
+
+    #[test]
+    fn test_include_rejects_http_urls() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = process_shortcodes(
+            r#"{{ include(path="http://evil.com/payload.txt") }}"#,
+            &dir,
+            tmp.path(),
+            tmp.path(),
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("only https://"),
+            "expected https-only error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_include_sandbox_escape_blocked() {
+        let tmp = TempDir::new().unwrap();
+        let sandbox = tmp.path().join("sandbox");
+        let outside = tmp.path().join("outside");
+        std::fs::create_dir_all(&sandbox).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("secret.txt"), "top secret").unwrap();
+        let dir = sandbox.join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = process_shortcodes(
+            r#"{{ include(path="../outside/secret.txt") }}"#,
+            &dir,
+            &sandbox,
+            &sandbox,
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("sandbox boundary") || err.contains("cannot resolve"),
+            "expected sandbox escape error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_include_path_traversal_blocked() {
+        let tmp = TempDir::new().unwrap();
+        let site = tmp.path().join("site");
+        std::fs::create_dir_all(&site).unwrap();
+        let dir = site.join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        // Try to escape via ../../etc/passwd
+        let result = process_shortcodes(
+            r#"{{ include(path="../../etc/passwd") }}"#,
+            &dir,
+            &site,
+            &site,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_include_missing_path_arg() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = process_shortcodes(r#"{{ include() }}"#, &dir, tmp.path(), tmp.path());
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("requires a `path` argument")
+        );
+    }
+
+    #[test]
+    fn test_include_valid_local_file() {
+        let tmp = TempDir::new().unwrap();
+        let site = tmp.path().join("site");
+        std::fs::create_dir_all(&site).unwrap();
+        std::fs::write(site.join("data.txt"), "hello world").unwrap();
+        let dir = site.join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let result =
+            process_shortcodes(r#"{{ include(path="data.txt") }}"#, &dir, &site, tmp.path())
+                .unwrap();
+        assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn test_include_strip_frontmatter() {
+        let tmp = TempDir::new().unwrap();
+        let site = tmp.path().join("site");
+        std::fs::create_dir_all(&site).unwrap();
+        std::fs::write(
+            site.join("page.md"),
+            "+++\ntitle = \"T\"\n+++\nContent here",
+        )
+        .unwrap();
+        let dir = site.join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = process_shortcodes(
+            r#"{{ include(path="page.md", strip_frontmatter="true") }}"#,
+            &dir,
+            &site,
+            tmp.path(),
+        )
+        .unwrap();
+        assert_eq!(result.trim(), "Content here");
+    }
+
+    // --- Security tests for gist shortcode ---
+
+    #[test]
+    fn test_gist_valid_url() {
+        let result = builtin_gist(r#"url="https://gist.github.com/user/abc123""#).unwrap();
+        assert!(result.contains("gist.github.com/user/abc123.js"));
+        assert!(result.starts_with("<div class=\"gist\">"));
+    }
+
+    #[test]
+    fn test_gist_rejects_non_github_url() {
+        let result = builtin_gist(r#"url="https://evil.com/malicious.js""#);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("gist.github.com"));
+    }
+
+    #[test]
+    fn test_gist_rejects_http_url() {
+        let result = builtin_gist(r#"url="http://gist.github.com/user/abc""#);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_gist_rejects_javascript_url() {
+        let result = builtin_gist(r#"url="javascript:alert(1)""#);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_gist_missing_url() {
+        let result = builtin_gist(r#""#);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("requires a `url` argument")
+        );
+    }
+
+    #[test]
+    fn test_gist_html_escapes_url() {
+        let result =
+            builtin_gist(r#"url="https://gist.github.com/user/abc"><script>alert(1)</script>""#);
+        // Should either reject the URL or escape the HTML
+        if let Ok(html) = result {
+            assert!(!html.contains("<script>"));
+        }
+    }
+
+    #[test]
+    fn test_gist_with_file_param() {
+        let result =
+            builtin_gist(r#"url="https://gist.github.com/user/abc123", file="test.py""#).unwrap();
+        assert!(result.contains("?file=test.py"));
+    }
+
+    #[test]
+    fn test_gist_file_param_html_escaped() {
+        let result = builtin_gist(
+            r#"url="https://gist.github.com/user/abc", file="<script>alert(1)</script>""#,
+        )
+        .unwrap();
+        assert!(!result.contains("<script>"));
+        assert!(result.contains("&lt;script&gt;"));
+    }
+
+    // --- strip_toml_frontmatter tests ---
+
+    #[test]
+    fn test_strip_toml_frontmatter_basic() {
+        let input = "+++\ntitle = \"Test\"\n+++\nBody content";
+        assert_eq!(strip_toml_frontmatter(input).trim(), "Body content");
+    }
+
+    #[test]
+    fn test_strip_toml_frontmatter_no_frontmatter() {
+        let input = "Just plain content";
+        assert_eq!(strip_toml_frontmatter(input), "Just plain content");
+    }
+
+    #[test]
+    fn test_strip_toml_frontmatter_unclosed() {
+        let input = "+++\ntitle = \"Oops\"\nNo closing";
+        assert_eq!(strip_toml_frontmatter(input), input);
+    }
+
+    #[test]
+    fn test_strip_toml_frontmatter_special_chars() {
+        let input = "+++\ntitle = \"<script>alert('xss')</script>\"\n+++\nSafe body";
+        assert_eq!(strip_toml_frontmatter(input).trim(), "Safe body");
     }
 }

@@ -175,7 +175,11 @@ impl Site {
         for (key, content) in resolved_pages {
             self.pages
                 .get_mut(&key)
-                .expect("page key was just iterated")
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "internal error: page key '{key}' disappeared during link resolution"
+                    )
+                })?
                 .raw_content = content;
         }
 
@@ -195,7 +199,11 @@ impl Site {
         for (key, content) in resolved_sections {
             self.sections
                 .get_mut(&key)
-                .expect("section key was just iterated")
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "internal error: section key '{key}' disappeared during link resolution"
+                    )
+                })?
                 .raw_content = content;
         }
 

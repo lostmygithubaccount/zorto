@@ -184,8 +184,9 @@ impl Config {
     pub fn load(root: &Path) -> anyhow::Result<Self> {
         let config_path = root.join("config.toml");
         let content = std::fs::read_to_string(&config_path)
-            .map_err(|e| anyhow::anyhow!("Failed to read config.toml: {e}"))?;
-        let mut config: Config = toml::from_str(&content)?;
+            .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", config_path.display()))?;
+        let mut config: Config =
+            toml::from_str(&content).map_err(|e| anyhow::anyhow!("invalid config.toml: {e}"))?;
 
         // Default taxonomy is tags if none specified
         if config.taxonomies.is_empty() {

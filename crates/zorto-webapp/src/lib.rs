@@ -146,3 +146,85 @@ pub(crate) fn validate_path(base: &Path, user_path: &str) -> Result<PathBuf, Str
 
     Ok(canonical)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_validate_path_normal() {
+        let tmp = TempDir::new().unwrap();
+        let base = tmp.path();
+        std::fs::write(base.join("file.txt"), "hello").unwrap();
+        let result = validate_path(base, "file.txt");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_path_traversal_blocked() {
+        let tmp = TempDir::new().unwrap();
+        let base = tmp.path().join("subdir");
+        std::fs::create_dir_all(&base).unwrap();
+        let result = validate_path(&base, "../../../etc/passwd");
+        let err = result.unwrap_err();
+        assert!(err.contains("Path traversal detected") || err.contains("does not exist"));
+    }
+
+    #[test]
+    fn test_validate_path_dotdot_traversal() {
+        let tmp = TempDir::new().unwrap();
+        let parent = tmp.path();
+        let base = parent.join("site");
+        let outside = parent.join("secret");
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("data.txt"), "secret").unwrap();
+        let result = validate_path(&base, "../secret/data.txt");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_path_new_file_in_base() {
+        let tmp = TempDir::new().unwrap();
+        let base = tmp.path();
+        // File doesn't exist yet, but parent does — should succeed
+        let result = validate_path(base, "new_file.txt");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_path_subdirectory() {
+        let tmp = TempDir::new().unwrap();
+        let base = tmp.path();
+        let sub = base.join("sub");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(sub.join("file.txt"), "data").unwrap();
+        let result = validate_path(base, "sub/file.txt");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_path_nonexistent_base() {
+        let result = validate_path(Path::new("/nonexistent/base/dir"), "file.txt");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    #[test]
+    fn test_validate_path_symlink_escape() {
+        let tmp = TempDir::new().unwrap();
+        let base = tmp.path().join("site");
+        let outside = tmp.path().join("outside");
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("secret.txt"), "secret data").unwrap();
+        // Create a symlink inside base pointing outside
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&outside, base.join("escape")).unwrap();
+            let result = validate_path(&base, "escape/secret.txt");
+            assert!(result.is_err(), "symlink escape should be blocked");
+        }
+    }
+}
