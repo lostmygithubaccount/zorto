@@ -18,7 +18,7 @@ Returns the full permalink for a content path or static file.
 
 **Content paths** use the `@/` prefix to reference files in the `content/` directory:
 
-<pre><code>&#123;&#123; get_url(path="@/posts/hello.md") &#125;&#125;
+<pre><code>&#123;&#123; get_url(path="posts/hello.md") &#125;&#125;
 &lt;!-- https://example.com/posts/hello/ --&gt;
 
 &#123;&#123; get_url(path="@/posts/_index.md") &#125;&#125;
