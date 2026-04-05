@@ -14,6 +14,13 @@ Step-by-step guides for common Zorto tasks.
 - [Organize content with sections](organize-content.md): nested sections, templates, external content
 - [Set up multiple authors](multiple-authors.md): taxonomies and frontmatter
 
+## Visualizations
+
+- [Create charts with matplotlib](matplotlib.md): static line charts, bar charts, subplots
+- [Create interactive charts with plotly](plotly.md): hover, zoom, and pan
+- [Create charts with altair](altair.md): declarative statistical visualizations
+- [Create charts with seaborn](seaborn.md): distribution plots, box plots, heatmaps
+
 ## Customization
 
 - [Customize your theme](customize-theme.md): override templates, styles, and shortcodes

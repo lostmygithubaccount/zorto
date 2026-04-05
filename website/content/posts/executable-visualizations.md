@@ -60,6 +60,7 @@ Statistical visualizations built on matplotlib — automatically captured:
 ```{python}
 import matplotlib
 matplotlib.use('Agg')
+import seaborn as sns
 import matplotlib.pyplot as plt
 import random
 
@@ -67,7 +68,7 @@ random.seed(42)
 data = [random.gauss(0, 1) for _ in range(500)]
 
 plt.figure(figsize=(8, 4))
-plt.hist(data, bins=30, color='#7c3aed', alpha=0.7, edgecolor='white')
+sns.histplot(data, bins=30, kde=True, color='#7c3aed', alpha=0.7, edgecolor='white')
 plt.title('Normal distribution (n=500)')
 plt.xlabel('Value')
 plt.ylabel('Frequency')
