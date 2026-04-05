@@ -6,7 +6,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
     <meta name="robots" content="noodp"/>
-    <style>html.theme-swapping{opacity:0!important}html.no-transitions,html.no-transitions *{transition:none!important}</style>
+    <style>html{opacity:0!important}html.css-ready{opacity:1!important}html.no-transitions,html.no-transitions *{transition:none!important}</style>
     <link rel="stylesheet" href="/style.css" id="theme-stylesheet">
     <script>
       (function() {
@@ -21,20 +21,19 @@
         var defaultTheme = '{{ config.theme | default(value="zorto") }}';
         var styleLink = document.getElementById('theme-stylesheet');
         if (siteTheme && siteTheme !== defaultTheme) {
-          // Hide page completely until correct theme CSS loads (prevents FOUC)
-          html.classList.add('theme-swapping');
           styleLink.href = '/style-' + siteTheme + '.css';
-          styleLink.onload = function() {
-            html.classList.remove('theme-swapping');
-            requestAnimationFrame(function(){ html.classList.remove('no-transitions'); });
-            styleLink.onload = null;
-          };
-          // Safety timeout — show page even if onload doesn't fire
-          setTimeout(function() {
-            html.classList.remove('theme-swapping');
-            html.classList.remove('no-transitions');
-          }, 800);
         }
+        // Show page only after the correct stylesheet has loaded
+        styleLink.onload = function() {
+          html.classList.add('css-ready');
+          requestAnimationFrame(function(){ html.classList.remove('no-transitions'); });
+          styleLink.onload = null;
+        };
+        // Safety timeout — show page even if onload doesn't fire (e.g. cached)
+        setTimeout(function() {
+          html.classList.add('css-ready');
+          html.classList.remove('no-transitions');
+        }, 1500);
       })();
     </script>
     {%- if config.markdown.highlight_code and config.markdown.highlight_theme == "css" %}
@@ -225,13 +224,13 @@
   function applySiteTheme(name) {
     var href = (name === defaultTheme) ? '/style.css' : '/style-' + name + '.css';
     if (styleLink.getAttribute('href') !== href) {
-      document.documentElement.classList.add('theme-swapping');
+      document.documentElement.classList.remove('css-ready');
       styleLink.onload = function() {
-        document.documentElement.classList.remove('theme-swapping');
+        document.documentElement.classList.add('css-ready');
         styleLink.onload = null;
       };
       styleLink.href = href;
-      setTimeout(function() { document.documentElement.classList.remove('theme-swapping'); }, 2000);
+      setTimeout(function() { document.documentElement.classList.add('css-ready'); }, 2000);
     }
     localStorage.setItem('site-theme', name);
     currentSiteTheme = name;
@@ -563,13 +562,12 @@
 {%- endif %}
 {%- block extra_body %}{% endblock extra_body %}
 <script>
-// For default theme (no stylesheet swap), remove no-transitions now.
-// For non-default themes, the head script's onload/timeout handles it.
-if (!document.documentElement.classList.contains('no-transitions') ||
-    !localStorage.getItem('site-theme') ||
-    localStorage.getItem('site-theme') === '{{ config.theme | default(value="zorto") }}') {
-  requestAnimationFrame(function(){ document.documentElement.classList.remove('no-transitions'); });
+// Fallback: if by the time the body is fully parsed the CSS still hasn't
+// triggered onload (e.g. cached stylesheet), show the page now.
+if (!document.documentElement.classList.contains('css-ready')) {
+  document.documentElement.classList.add('css-ready');
 }
+requestAnimationFrame(function(){ document.documentElement.classList.remove('no-transitions'); });
 </script>
 </body>
 </html>
