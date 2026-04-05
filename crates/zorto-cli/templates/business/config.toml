@@ -1,9 +1,9 @@
 # Site configuration — edit these values for your business
 base_url = "https://example.com"
 title = "My Business"
+theme = "default"
 generate_llms_txt = false
 
-compile_sass = true
 slugify.paths = "safe"
 
 [markdown]

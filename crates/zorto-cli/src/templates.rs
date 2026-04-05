@@ -85,26 +85,6 @@ const BLOG_FILES: &[TemplateFile] = &[
         content: include_str!("../templates/blog/content/posts/getting-started.md"),
         executable: false,
     },
-    TemplateFile {
-        path: "templates/base.html",
-        content: include_str!("../templates/blog/templates/base.html"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "templates/index.html",
-        content: include_str!("../templates/blog/templates/index.html"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "templates/section.html",
-        content: include_str!("../templates/blog/templates/section.html"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "templates/page.html",
-        content: include_str!("../templates/blog/templates/page.html"),
-        executable: false,
-    },
 ];
 
 // ── Docs template ───────────────────────────────────────────────────────
@@ -140,26 +120,6 @@ const DOCS_FILES: &[TemplateFile] = &[
         content: include_str!("../templates/docs/content/guide/configuration.md"),
         executable: false,
     },
-    TemplateFile {
-        path: "templates/base.html",
-        content: include_str!("../templates/docs/templates/base.html"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "templates/index.html",
-        content: include_str!("../templates/docs/templates/index.html"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "templates/section.html",
-        content: include_str!("../templates/docs/templates/section.html"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "templates/page.html",
-        content: include_str!("../templates/docs/templates/page.html"),
-        executable: false,
-    },
 ];
 
 // ── Business template ────────────────────────────────────────────────────
@@ -174,41 +134,6 @@ const BUSINESS_FILES: &[TemplateFile] = &[
         path: "content/_index.md",
         content: include_str!("../templates/business/content/_index.md"),
         executable: false,
-    },
-    TemplateFile {
-        path: "templates/base.html",
-        content: include_str!("../templates/business/templates/base.html"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "templates/index.html",
-        content: include_str!("../templates/business/templates/index.html"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "templates/page.html",
-        content: include_str!("../templates/business/templates/page.html"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "templates/404.html",
-        content: include_str!("../templates/business/templates/404.html"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "sass/style.scss",
-        content: include_str!("../templates/business/sass/style.scss"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "bin/build",
-        content: include_str!("../templates/business/bin/build"),
-        executable: true,
-    },
-    TemplateFile {
-        path: "bin/preview",
-        content: include_str!("../templates/business/bin/preview"),
-        executable: true,
     },
 ];
 
