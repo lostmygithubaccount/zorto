@@ -2,6 +2,8 @@
 
 use crate::escape;
 
+const DEFAULT_BASE_URL: &str = "http://localhost:1111";
+
 const CSS: &str = r#"
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { background: #111118; }
@@ -184,7 +186,7 @@ pub fn page(title: &str, site_title: &str, active: &str, body: &str) -> String {
       {nav_html}
     </nav>
     <div class="sidebar-bottom">
-      <a href="http://localhost:1111" target="_blank" class="btn" style="width: 100%; text-align: center; margin-bottom: 8px;">View Site</a>
+      <a href="{base_url}" target="_blank" class="btn" style="width: 100%; text-align: center; margin-bottom: 8px;">View Site</a>
       <form method="POST" action="/build">
         <button type="submit" class="btn btn-success" style="width: 100%;"
                 hx-post="/build" hx-target="#build-status" hx-swap="innerHTML">
@@ -201,5 +203,6 @@ pub fn page(title: &str, site_title: &str, active: &str, body: &str) -> String {
 </html>"##,
         title = escape(title),
         site_title = escape(site_title),
+        base_url = DEFAULT_BASE_URL,
     )
 }

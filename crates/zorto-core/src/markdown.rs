@@ -28,6 +28,8 @@ static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(|| {
 static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
 static FILE_ATTR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"file="([^"]+)""#).unwrap());
 
+const DEFAULT_HIGHLIGHT_THEME: &str = "base16-ocean.dark";
+
 /// Render markdown to HTML with all processing steps.
 pub fn render_markdown(
     content: &str,
@@ -288,14 +290,14 @@ fn highlight_code(code: &str, lang: &str, config: &MarkdownConfig) -> String {
     let theme_name = config
         .highlight_theme
         .as_deref()
-        .unwrap_or("base16-ocean.dark");
+        .unwrap_or(DEFAULT_HIGHLIGHT_THEME);
     let syntax = ss
         .find_syntax_by_token(lang)
         .unwrap_or_else(|| ss.find_syntax_plain_text());
     let theme = ts
         .themes
         .get(theme_name)
-        .unwrap_or(&ts.themes["base16-ocean.dark"]);
+        .unwrap_or(&ts.themes[DEFAULT_HIGHLIGHT_THEME]);
 
     highlighted_html_for_string(code, ss, syntax, theme).unwrap_or_else(|_| fallback())
 }

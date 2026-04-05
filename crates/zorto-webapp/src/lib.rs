@@ -16,6 +16,9 @@ mod onboarding;
 mod pages;
 mod sections;
 
+const DEFAULT_WEBAPP_PORT: u16 = 1112;
+const RELOAD_CHANNEL_CAPACITY: usize = 16;
+
 pub(crate) struct AppState {
     pub root: PathBuf,
     pub output_dir: PathBuf,
@@ -84,8 +87,8 @@ pub(crate) fn app(state: Arc<AppState>) -> Router {
 pub fn run_webapp(root: &Path, output_dir: &Path, sandbox: Option<&Path>) -> anyhow::Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
-        let port: u16 = 1112;
-        let (reload_tx, _) = broadcast::channel::<()>(16);
+        let port: u16 = DEFAULT_WEBAPP_PORT;
+        let (reload_tx, _) = broadcast::channel::<()>(RELOAD_CHANNEL_CAPACITY);
 
         let state = Arc::new(AppState {
             root: root.to_path_buf(),

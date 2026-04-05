@@ -7,6 +7,8 @@ use std::sync::Arc;
 use crate::html;
 use crate::{AppState, escape, validate_path};
 
+const DEFAULT_BASE_URL: &str = "http://localhost:1111";
+
 pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
     let site_title = state.site_title();
     let static_dir = state.root.join("static");
@@ -53,7 +55,8 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
             let thumb = if is_image {
                 // For images served from the preview server
                 format!(
-                    r#"<div class="asset-thumb-placeholder" style="background: url('http://localhost:1111/{path}') center/contain no-repeat #111118; border-radius: 4px; width: 100%; height: 100px;"></div>"#,
+                    r#"<div class="asset-thumb-placeholder" style="background: url('{base_url}/{path}') center/contain no-repeat #111118; border-radius: 4px; width: 100%; height: 100px;"></div>"#,
+                    base_url = DEFAULT_BASE_URL,
                     path = escape(path),
                 )
             } else {

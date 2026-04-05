@@ -11,6 +11,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::sync::broadcast;
 
+const RELOAD_CHANNEL_CAPACITY: usize = 16;
+const DEBOUNCE_MS: u64 = 300;
+
 const LIVERELOAD_JS: &str = r#"
 <script>
 (function() {
@@ -85,7 +88,7 @@ pub async fn serve(cfg: &ServeConfig<'_>) -> anyhow::Result<()> {
     println!("Site built successfully.");
 
     // Set up broadcast channel for live reload
-    let (reload_tx, _) = broadcast::channel::<()>(16);
+    let (reload_tx, _) = broadcast::channel::<()>(RELOAD_CHANNEL_CAPACITY);
     let state = AppState {
         reload_tx: reload_tx.clone(),
         output_dir: cfg.output_dir.to_path_buf(),
@@ -104,10 +107,10 @@ pub async fn serve(cfg: &ServeConfig<'_>) -> anyhow::Result<()> {
     }
 
     // Bridge notify events into a tokio channel so the watcher loop is fully async
-    let (watch_tx, watch_rx) = tokio::sync::mpsc::channel(16);
+    let (watch_tx, watch_rx) = tokio::sync::mpsc::channel(RELOAD_CHANNEL_CAPACITY);
     let (notify_tx, notify_rx) = std::sync::mpsc::channel();
 
-    let mut debouncer = new_debouncer(Duration::from_millis(300), notify_tx)?;
+    let mut debouncer = new_debouncer(Duration::from_millis(DEBOUNCE_MS), notify_tx)?;
     let watch_dirs = ["content", "templates", "sass", "static"];
     for dir in &watch_dirs {
         let path = cfg.root.join(dir);

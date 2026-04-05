@@ -7,6 +7,8 @@ use std::sync::Arc;
 use crate::AppState;
 use crate::html;
 
+const DEFAULT_BASE_URL: &str = "http://localhost:1111";
+
 #[derive(serde::Deserialize)]
 pub struct DashboardQuery {
     #[serde(default)]
@@ -133,7 +135,7 @@ pub async fn index(
   <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
     <a href="/pages/new" class="btn btn-primary">New Page</a>
     <a href="/config" class="btn">Edit Config</a>
-    <a href="http://localhost:1111" target="_blank" class="btn btn-success">View Site</a>
+    <a href="{base_url}" target="_blank" class="btn btn-success">View Site</a>
   </div>
 </div>
 
@@ -143,6 +145,7 @@ pub async fn index(
     {recent_html}
   </div>
 </div>"#,
+        base_url = DEFAULT_BASE_URL,
     );
 
     Html(html::page("Dashboard", &site_title, "dashboard", &body)).into_response()

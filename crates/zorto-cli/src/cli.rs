@@ -6,6 +6,12 @@ use crate::skill;
 use crate::templates;
 use zorto_core::site;
 
+const DEFAULT_OUTPUT_DIR: &str = "public";
+const DEFAULT_PREVIEW_PORT: &str = "1111";
+const DEFAULT_BIND_ADDRESS: &str = "127.0.0.1";
+const DEFAULT_BASE_URL: &str = "http://localhost:1111";
+const DEFAULT_SITE_TITLE: &str = "My Site";
+
 #[derive(Parser)]
 #[command(
     name = "zorto",
@@ -45,7 +51,7 @@ enum Commands {
     /// Build the site
     Build {
         /// Output directory
-        #[arg(short, long, default_value = "public")]
+        #[arg(short, long, default_value = DEFAULT_OUTPUT_DIR)]
         output: PathBuf,
 
         /// Include draft pages
@@ -60,11 +66,11 @@ enum Commands {
     /// Start preview server with live reload
     Preview {
         /// Output directory
-        #[arg(short, long, default_value = "public")]
+        #[arg(short, long, default_value = DEFAULT_OUTPUT_DIR)]
         output: PathBuf,
 
         /// Port number
-        #[arg(short, long, default_value = "1111")]
+        #[arg(short, long, default_value = DEFAULT_PREVIEW_PORT)]
         port: u16,
 
         /// Include draft pages
@@ -76,14 +82,14 @@ enum Commands {
         open: bool,
 
         /// Bind address
-        #[arg(long, default_value = "127.0.0.1")]
+        #[arg(long, default_value = DEFAULT_BIND_ADDRESS)]
         interface: String,
     },
 
     /// Remove output directory and/or cache
     Clean {
         /// Output directory to remove
-        #[arg(short, long, default_value = "public")]
+        #[arg(short, long, default_value = DEFAULT_OUTPUT_DIR)]
         output: PathBuf,
 
         /// Also clear the code block execution cache (.zorto/cache/)
@@ -142,7 +148,7 @@ where
 
     #[cfg(feature = "webapp")]
     if cli.webapp {
-        let output = resolve_output(&root, std::path::PathBuf::from("public"));
+        let output = resolve_output(&root, std::path::PathBuf::from(DEFAULT_OUTPUT_DIR));
         return zorto_webapp::run_webapp(&root, &output, sandbox.as_deref());
     }
 
@@ -225,7 +231,7 @@ where
             drafts,
             deny_warnings,
         } => {
-            let output = root.join("public");
+            let output = root.join(DEFAULT_OUTPUT_DIR);
             let mut site = site::Site::load(&root, &output, drafts)?;
             site.no_exec = cli.no_exec;
             site.sandbox = sandbox;
@@ -389,7 +395,7 @@ fn interactive_init(root: &std::path::Path) -> anyhow::Result<()> {
     // 4. Configuration
     let site_title: String = Input::new()
         .with_prompt("  Site title")
-        .default("My Site".to_string())
+        .default(DEFAULT_SITE_TITLE.to_string())
         .interact_text()?;
 
     let author: String = Input::new()
@@ -400,7 +406,7 @@ fn interactive_init(root: &std::path::Path) -> anyhow::Result<()> {
 
     let base_url: String = Input::new()
         .with_prompt("  Base URL")
-        .default("http://localhost:1111".to_string())
+        .default(DEFAULT_BASE_URL.to_string())
         .interact_text()?;
 
     // 5. Create the site

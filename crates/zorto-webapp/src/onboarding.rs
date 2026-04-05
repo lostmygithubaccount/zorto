@@ -9,6 +9,9 @@ use std::sync::Arc;
 
 use crate::{AppState, escape};
 
+const DEFAULT_BASE_URL: &str = "http://localhost:1111";
+const DEFAULT_SITE_TITLE: &str = "My Site";
+
 /// Wizard step 1: Welcome page.
 pub async fn welcome(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     if state.root.join("config.toml").exists() {
@@ -185,7 +188,7 @@ pub async fn configure(
     <div class="card" style="max-width: 480px; margin: 0 auto;">
       <div class="form-group">
         <label>Site Title</label>
-        <input type="text" name="title" value="My Site" required autofocus>
+        <input type="text" name="title" value="{default_title}" required autofocus>
       </div>
       <div class="form-group">
         <label>Author <span style="color: #666680; font-size: 0.7rem; text-transform: none;">(optional)</span></label>
@@ -193,7 +196,7 @@ pub async fn configure(
       </div>
       <div class="form-group">
         <label>Base URL</label>
-        <input type="text" name="base_url" value="http://localhost:1111">
+        <input type="text" name="base_url" value="{default_base_url}">
       </div>
     </div>
     <div class="wizard-nav" style="justify-content: center; margin-top: 24px;">
@@ -204,6 +207,8 @@ pub async fn configure(
 </div>"#,
         e_template = escape(template),
         e_theme = escape(theme),
+        default_title = DEFAULT_SITE_TITLE,
+        default_base_url = DEFAULT_BASE_URL,
     );
 
     Html(wizard_page("Configure", 4, &body)).into_response()
@@ -217,12 +222,12 @@ pub async fn create(
     let template = form.template.as_deref().unwrap_or("default");
     let theme = form.theme.as_deref().unwrap_or("default");
     let title = if form.title.is_empty() {
-        "My Site"
+        DEFAULT_SITE_TITLE
     } else {
         &form.title
     };
     let base_url = if form.base_url.is_empty() {
-        "http://localhost:1111"
+        DEFAULT_BASE_URL
     } else {
         &form.base_url
     };
