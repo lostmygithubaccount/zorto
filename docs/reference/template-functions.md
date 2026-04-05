@@ -18,15 +18,13 @@ Returns the full permalink for a content path or static file.
 
 **Content paths** use the `@/` prefix to reference files in the `content/` directory:
 
-```
-{{ get_url(path="posts/hello.md") }}
-<!-- resolves to: https://example.com/posts/hello/ -->
+<pre><code>&#123;&#123; get_url(path="posts/hello.md") &#125;&#125;
+&lt;!-- https://example.com/posts/hello/ --&gt;
 
-{{ get_url(path="posts/_index.md") }}
-<!-- resolves to: https://example.com/posts/ -->
-```
+&#123;&#123; get_url(path="posts/_index.md") &#125;&#125;
+&lt;!-- https://example.com/posts/ --&gt;</code></pre>
 
-Note: in content files, prefix paths with `@/` for build-time link validation.
+In content files, prefix paths with `@/` for build-time link validation.
 
 **Static file paths** are resolved relative to the site root:
 
