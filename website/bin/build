@@ -3,4 +3,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WEBSITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$WEBSITE_DIR"
-zorto --sandbox .. build "$@"
+
+# ensure Python deps are installed
+if [ ! -d .venv ] || [ pyproject.toml -nt .venv ]; then
+    uv sync
+fi
+
+# set PYTHONHOME so the embedded PyO3 interpreter finds the stdlib
+if [ -z "${PYTHONHOME:-}" ]; then
+    PYTHONHOME="$(python3 -c 'import sys; print(sys.base_prefix)')"
+    export PYTHONHOME
+fi
+
+REPO_ROOT="$(cd "$WEBSITE_DIR/.." && pwd)"
+cd "$REPO_ROOT"
+cargo run -p zorto -- --root website --sandbox . build "$@"
