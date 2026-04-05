@@ -53,7 +53,7 @@ social_links = [
 ]
 
 hero_title = "Zorto"
-hero_subtitle = "Build a site in 60 seconds. Python charts rendered inline. 16 themes. Zero config."
+hero_subtitle = "Your website is files in Git. You own them. AI agents edit them. Zorto builds them."
 hero_actions = [
   { name = "Get started", url = "/docs/getting-started/", style = "default" },
   { name = "GitHub", url = "https://github.com/dkdc-io/zorto", style = "outline", external = true },
@@ -63,7 +63,7 @@ features = [
   { name = "Executable code blocks", description = "Run Python and Bash at build time. Matplotlib, Plotly, Altair, and Seaborn charts rendered inline. Output baked into static HTML.", url = "/docs/concepts/executable-code/" },
   { name = "Fast", description = "Written in Rust. Sites build in milliseconds. Live reload with instant browser refresh during development.", url = "/docs/concepts/fast/" },
   { name = "16 themes", description = "Built-in themes with light and dark mode. Switch instantly. Override any template or style locally.", url = "/docs/concepts/themes/" },
-  { name = "AI-native", description = "Designed for AI agents. Explicit contracts via AGENTS.md, compiler-like checks, llms.txt for LLM consumption.", url = "/docs/concepts/ai-native/" },
+  { name = "AI-native", description = "Your site is markdown + config. AI agents can read, edit, and build it. AGENTS.md contracts, zorto check for validation, llms.txt for consumption.", url = "/docs/concepts/ai-native/" },
   { name = "Shortcodes & callouts", description = "Tabs, figures, diagrams, callout alerts, code includes, and more. Rich content without HTML in your markdown.", url = "/docs/concepts/shortcodes/" },
   { name = "Blog & docs", description = "Sections with date sorting, pagination, taxonomies, and search. Blog, documentation, and landing page templates included.", url = "/docs/concepts/blog/" },
   { name = "Python & Rust", description = "Install via uv, pip, or cargo. Use as a CLI, Python library, or Rust crate. MIT-licensed forever.", url = "/docs/concepts/open-source/" },
