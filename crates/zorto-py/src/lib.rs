@@ -347,7 +347,7 @@ fn build(root: &str, output_dir: Option<&str>) -> PyResult<()> {
 /// Return the zorto version string.
 ///
 /// >>> zorto.version()
-/// '0.13.3'
+/// '0.20.4'
 #[pyfunction]
 fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")

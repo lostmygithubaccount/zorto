@@ -276,8 +276,9 @@ pub fn build_page(
         }
     }
 
+    const WORDS_PER_MINUTE: usize = 200;
     let word_count = raw_content.split_whitespace().count();
-    let reading_time = (word_count / 200).max(1);
+    let reading_time = (word_count / WORDS_PER_MINUTE).max(1);
 
     let extra = toml_to_json(&fm.extra);
 
@@ -806,10 +807,10 @@ Content goes here"#;
         let input = "+++\ndate = 2025-06-15T10:30:00\n+++\n";
         let (fm, _) = parse_frontmatter(input).unwrap();
         let date_val = fm.date.unwrap();
-        match date_val {
-            toml::Value::Datetime(_) => {} // expected
-            other => panic!("Expected Datetime, got {other:?}"),
-        }
+        assert!(
+            matches!(date_val, toml::Value::Datetime(_)),
+            "Expected Datetime, got {date_val:?}"
+        );
     }
 
     #[test]
@@ -817,10 +818,10 @@ Content goes here"#;
         let input = "+++\ndate = \"2025-06-15\"\n+++\n";
         let (fm, _) = parse_frontmatter(input).unwrap();
         let date_val = fm.date.unwrap();
-        match date_val {
-            toml::Value::String(s) => assert_eq!(s, "2025-06-15"),
-            other => panic!("Expected String, got {other:?}"),
-        }
+        assert!(
+            matches!(&date_val, toml::Value::String(s) if s == "2025-06-15"),
+            "Expected String(\"2025-06-15\"), got {date_val:?}"
+        );
     }
 
     // --- Page building ---
