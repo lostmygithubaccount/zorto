@@ -96,7 +96,7 @@ enum Commands {
         /// Site directory name (defaults to current --root)
         name: Option<String>,
 
-        /// Template to use (default, business)
+        /// Template to use (default, blog, docs, business)
         #[arg(short, long, default_value = "default")]
         template: String,
     },
@@ -205,11 +205,21 @@ where
             }
         }
         Commands::Init { name, template } => {
-            let target = match name {
-                Some(n) => root.join(n),
-                None => root.clone(),
-            };
-            init_site(&target, &template)?;
+            // Detect if we should launch the interactive flow:
+            // - no explicit name was given
+            // - the default template value wasn't overridden by the user
+            // - stdin is a TTY
+            let is_interactive = name.is_none() && template == "default" && atty_stdin();
+
+            if is_interactive {
+                interactive_init(&root)?;
+            } else {
+                let target = match name {
+                    Some(n) => root.join(n),
+                    None => root.clone(),
+                };
+                init_site(&target, &template)?;
+            }
         }
         Commands::Check {
             drafts,
@@ -249,9 +259,24 @@ fn resolve_sandbox(sandbox: &Option<PathBuf>) -> anyhow::Result<Option<PathBuf>>
     }
 }
 
+/// Check if stdin is a TTY.
+fn atty_stdin() -> bool {
+    use std::io::IsTerminal;
+    std::io::stdin().is_terminal()
+}
+
 fn init_site(target: &std::path::Path, template: &str) -> anyhow::Result<()> {
     if target.join("config.toml").exists() {
-        anyhow::bail!("config.toml already exists in {}", target.display());
+        anyhow::bail!(
+            "A zorto site already exists in {} — run `zorto preview` to work with it",
+            target.display()
+        );
+    }
+    if target.join("website").join("config.toml").exists() {
+        anyhow::bail!(
+            "A zorto site already exists in {}/website/ — run `zorto --root website preview` to work with it",
+            target.display()
+        );
     }
 
     templates::write_template(target, template)?;
@@ -260,6 +285,153 @@ fn init_site(target: &std::path::Path, template: &str) -> anyhow::Result<()> {
         "Initialized new site at {} (template: {template})",
         target.display()
     );
+    Ok(())
+}
+
+/// Interactive init flow using dialoguer prompts.
+fn interactive_init(root: &std::path::Path) -> anyhow::Result<()> {
+    use dialoguer::{Input, Select};
+
+    println!();
+    println!("  Welcome to Zorto!");
+    println!("  Let's create your new site.");
+    println!();
+
+    // 1. Site name / directory
+    let name: String = Input::new()
+        .with_prompt("  Site directory name")
+        .default(".".to_string())
+        .interact_text()?;
+
+    let target = if name == "." {
+        root.to_path_buf()
+    } else {
+        root.join(&name)
+    };
+
+    // Check for existing site in target dir or website/ subdir
+    if target.join("config.toml").exists() {
+        anyhow::bail!(
+            "A zorto site already exists in {} — run `zorto preview` to work with it",
+            target.display()
+        );
+    }
+    if target.join("website").join("config.toml").exists() {
+        anyhow::bail!(
+            "A zorto site already exists in {}/website/ — run `zorto --root website preview` to work with it",
+            target.display()
+        );
+    }
+
+    // 2. Template selection
+    let template_labels: Vec<String> = templates::TEMPLATES
+        .iter()
+        .map(|t| format!("{:<12} {}", t.name, t.description))
+        .collect();
+
+    let template_idx = Select::new()
+        .with_prompt("  Template")
+        .items(&template_labels)
+        .default(0)
+        .interact()?;
+    let template_name = templates::TEMPLATES[template_idx].name;
+
+    // 3. Theme selection
+    let available_themes = zorto_core::themes::Theme::available();
+    let theme_choice = if available_themes.is_empty() {
+        None
+    } else {
+        let theme_descriptions: Vec<(&str, &str)> = available_themes
+            .iter()
+            .map(|name| {
+                let desc = match *name {
+                    "zorto" => "Blue/green with animations (Zorto brand)",
+                    "dkdc" => "Violet/cyan with animations (dkdc brand)",
+                    "default" => "Clean blue, no animations",
+                    "ember" => "Warm orange/amber",
+                    "forest" => "Natural green/lime",
+                    "ocean" => "Calm teal/blue",
+                    "rose" => "Soft pink/purple",
+                    "slate" => "Minimal monochrome",
+                    "midnight" => "Navy/silver corporate",
+                    "sunset" => "Bold red/orange",
+                    "mint" => "Modern green/cyan",
+                    "plum" => "Rich purple/magenta",
+                    "sand" => "Warm neutral/earth tones",
+                    "arctic" => "Cool blue/white",
+                    "lime" => "Bright green/yellow",
+                    "charcoal" => "Dark grey/silver",
+                    _ => "",
+                };
+                (*name, desc)
+            })
+            .collect();
+
+        let theme_labels: Vec<String> = theme_descriptions
+            .iter()
+            .map(|(name, desc)| format!("{:<12} {}", name, desc))
+            .collect();
+
+        let default_idx = available_themes
+            .iter()
+            .position(|n| *n == "default")
+            .unwrap_or(0);
+
+        let theme_idx = Select::new()
+            .with_prompt("  Theme")
+            .items(&theme_labels)
+            .default(default_idx)
+            .interact()?;
+
+        Some(available_themes[theme_idx])
+    };
+
+    // 4. Configuration
+    let site_title: String = Input::new()
+        .with_prompt("  Site title")
+        .default("My Site".to_string())
+        .interact_text()?;
+
+    let author: String = Input::new()
+        .with_prompt("  Author name")
+        .default(String::new())
+        .allow_empty(true)
+        .interact_text()?;
+
+    let base_url: String = Input::new()
+        .with_prompt("  Base URL")
+        .default("http://localhost:1111".to_string())
+        .interact_text()?;
+
+    // 5. Create the site
+    println!();
+    templates::write_template(&target, template_name)?;
+
+    // Customize the generated config with user values
+    templates::customize_config(
+        &target,
+        &site_title,
+        &base_url,
+        theme_choice,
+        if author.is_empty() {
+            None
+        } else {
+            Some(author.as_str())
+        },
+    )?;
+
+    // 6. Next steps
+    println!("  Site created at {}", target.display());
+    println!();
+    if name != "." {
+        println!("  Next steps:");
+        println!("    cd {name} && zorto preview --open");
+    } else {
+        println!("  Next steps:");
+        println!("    zorto preview --open");
+    }
+    println!();
+
     Ok(())
 }
 
