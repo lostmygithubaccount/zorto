@@ -21,14 +21,19 @@
         var defaultTheme = '{{ config.theme | default(value="zorto") }}';
         var styleLink = document.getElementById('theme-stylesheet');
         if (siteTheme && siteTheme !== defaultTheme) {
+          // Hide page completely until correct theme CSS loads (prevents FOUC)
+          html.classList.add('theme-swapping');
           styleLink.href = '/style-' + siteTheme + '.css';
-          // Remove no-transitions only after the new stylesheet has loaded
           styleLink.onload = function() {
+            html.classList.remove('theme-swapping');
             requestAnimationFrame(function(){ html.classList.remove('no-transitions'); });
             styleLink.onload = null;
           };
-          // Safety timeout in case onload doesn't fire (e.g. cached stylesheet)
-          setTimeout(function() { html.classList.remove('no-transitions'); }, 500);
+          // Safety timeout — show page even if onload doesn't fire
+          setTimeout(function() {
+            html.classList.remove('theme-swapping');
+            html.classList.remove('no-transitions');
+          }, 800);
         }
       })();
     </script>
