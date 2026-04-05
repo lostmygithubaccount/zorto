@@ -308,6 +308,7 @@ fn render_section_editor(
         .map(|(kind, msg)| {
             format!(
                 r#"<div class="flash flash-{kind}">{msg}</div>"#,
+                kind = escape(kind),
                 msg = escape(msg)
             )
         })

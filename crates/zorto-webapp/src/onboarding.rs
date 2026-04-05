@@ -159,6 +159,15 @@ pub async fn theme(
 pub async fn theme_submit(axum::Form(form): axum::Form<ThemeForm>) -> impl IntoResponse {
     let template = form.template.as_deref().unwrap_or("default");
     let theme = &form.theme;
+
+    // Validate theme against available themes
+    let available = zorto_core::themes::Theme::available();
+    let theme = if available.contains(&theme.as_str()) {
+        theme.as_str()
+    } else {
+        "default"
+    };
+
     Redirect::to(&format!(
         "/setup/configure?template={}&theme={}",
         escape(template),
@@ -286,22 +295,27 @@ fn write_site(
     let _ = std::fs::create_dir_all(root.join("static"));
 
     // Write customized config.toml
-    let safe_title = title.replace('"', "\\\"");
+    // Escape backslashes and double quotes for TOML string context
+    let escape_toml = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    let safe_title = escape_toml(title);
+    let safe_base_url = escape_toml(base_url);
+    let safe_theme = escape_toml(theme);
+    let safe_author_toml = escape_toml(author);
     let safe_author = author.replace('\'', "&#39;");
     let safe_title_html = title.replace('\'', "&#39;");
 
     let config = match template {
         "blog" => format!(
-            "base_url = \"{base_url}\"\ntitle = \"{safe_title}\"\ntheme = \"{theme}\"\ngenerate_feed = true\n\n[markdown]\nhighlight_code = true\n\n[extra]\ncopyright_html = '<a href=\"/\">{safe_title_html}</a> by {safe_author} via <a href=\"https://zorto.dev\" target=\"_blank\" rel=\"noopener\">Zorto</a>'\n"
+            "base_url = \"{safe_base_url}\"\ntitle = \"{safe_title}\"\ntheme = \"{safe_theme}\"\ngenerate_feed = true\n\n[markdown]\nhighlight_code = true\n\n[extra]\ncopyright_html = '<a href=\"/\">{safe_title_html}</a> by {safe_author} via <a href=\"https://zorto.dev\" target=\"_blank\" rel=\"noopener\">Zorto</a>'\n"
         ),
         "docs" => format!(
-            "base_url = \"{base_url}\"\ntitle = \"{safe_title}\"\ntheme = \"{theme}\"\n\n[markdown]\nhighlight_code = true\ninsert_anchor_links = \"right\"\n\n[extra]\ncopyright_html = '<a href=\"/\">{safe_title_html}</a> by {safe_author} via <a href=\"https://zorto.dev\" target=\"_blank\" rel=\"noopener\">Zorto</a>'\n"
+            "base_url = \"{safe_base_url}\"\ntitle = \"{safe_title}\"\ntheme = \"{safe_theme}\"\n\n[markdown]\nhighlight_code = true\ninsert_anchor_links = \"right\"\n\n[extra]\ncopyright_html = '<a href=\"/\">{safe_title_html}</a> by {safe_author} via <a href=\"https://zorto.dev\" target=\"_blank\" rel=\"noopener\">Zorto</a>'\n"
         ),
         "business" => format!(
-            "base_url = \"{base_url}\"\ntitle = \"{safe_title}\"\ntheme = \"{theme}\"\n\n[markdown]\nsmart_punctuation = true\nexternal_links_target_blank = true\n\n[extra]\nauthor = \"{safe_author}\"\ncopyright_html = '<a href=\"/\">{safe_title_html}</a> by {safe_author} via <a href=\"https://zorto.dev\" target=\"_blank\" rel=\"noopener\">Zorto</a>'\nhero_title = \"{safe_title}\"\nhero_subtitle = \"Welcome to our website.\"\n"
+            "base_url = \"{safe_base_url}\"\ntitle = \"{safe_title}\"\ntheme = \"{safe_theme}\"\n\n[markdown]\nsmart_punctuation = true\nexternal_links_target_blank = true\n\n[extra]\nauthor = \"{safe_author_toml}\"\ncopyright_html = '<a href=\"/\">{safe_title_html}</a> by {safe_author} via <a href=\"https://zorto.dev\" target=\"_blank\" rel=\"noopener\">Zorto</a>'\nhero_title = \"{safe_title}\"\nhero_subtitle = \"Welcome to our website.\"\n"
         ),
         _ => format!(
-            "base_url = \"{base_url}\"\ntitle = \"{safe_title}\"\ntheme = \"{theme}\"\ngenerate_feed = true\n\n[extra]\ncopyright_html = '<a href=\"/\">{safe_title_html}</a> by {safe_author} via <a href=\"https://zorto.dev\" target=\"_blank\" rel=\"noopener\">Zorto</a>'\n"
+            "base_url = \"{safe_base_url}\"\ntitle = \"{safe_title}\"\ntheme = \"{safe_theme}\"\ngenerate_feed = true\n\n[extra]\ncopyright_html = '<a href=\"/\">{safe_title_html}</a> by {safe_author} via <a href=\"https://zorto.dev\" target=\"_blank\" rel=\"noopener\">Zorto</a>'\n"
         ),
     };
 

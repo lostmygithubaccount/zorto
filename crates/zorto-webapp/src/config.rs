@@ -75,6 +75,7 @@ fn render_config_editor(site_title: &str, content: &str, flash: Option<(&str, &s
         .map(|(kind, msg)| {
             format!(
                 r#"<div class="flash flash-{kind}">{msg}</div>"#,
+                kind = escape(kind),
                 msg = escape(msg)
             )
         })
