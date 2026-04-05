@@ -156,11 +156,11 @@ pub(crate) fn activate_venv(py: pyo3::Python<'_>, site_root: &Path) -> pyo3::PyR
 /// Python code injected after user code to detect visualization objects.
 ///
 /// Checks `sys.modules` first to avoid importing anything the user didn't use.
-/// Produces a `_zorto_viz` list of `(kind, data)` tuples that Rust reads back.
+/// Produces a `__zorto_internal_viz_output__` list of `(kind, data)` tuples that Rust reads back.
 #[cfg(feature = "python")]
 const VIZ_DETECTION_CODE: &str = r#"
 import sys as _sys
-_zorto_viz = []
+__zorto_internal_viz_output__ = []
 
 # matplotlib (also covers seaborn which uses matplotlib under the hood)
 if 'matplotlib' in _sys.modules or 'matplotlib.pyplot' in _sys.modules:
@@ -171,7 +171,7 @@ if 'matplotlib' in _sys.modules or 'matplotlib.pyplot' in _sys.modules:
             _buf = _io.BytesIO()
             _plt.figure(_fig_num).savefig(_buf, format='png', bbox_inches='tight', dpi=100)
             _buf.seek(0)
-            _zorto_viz.append(('img', 'data:image/png;base64,' + _b64.b64encode(_buf.read()).decode()))
+            __zorto_internal_viz_output__.append(('img', 'data:image/png;base64,' + _b64.b64encode(_buf.read()).decode()))
             _buf.close()
         _plt.close('all')
     except Exception as _e:
@@ -183,7 +183,7 @@ if 'plotly' in _sys.modules:
         import plotly.graph_objects as _go
         for _name, _obj in list(locals().items()):
             if not _name.startswith('_') and isinstance(_obj, _go.Figure):
-                _zorto_viz.append(('html', _obj.to_html(full_html=False, include_plotlyjs='cdn')))
+                __zorto_internal_viz_output__.append(('html', _obj.to_html(full_html=False, include_plotlyjs='cdn')))
     except Exception as _e:
         import sys; print(f'zorto: warning: plotly capture failed: {_e}', file=sys.stderr)
 
@@ -198,7 +198,7 @@ if 'altair' in _sys.modules:
                 _alt_types = _alt_types + (_cls,)
         for _name, _obj in list(locals().items()):
             if not _name.startswith('_') and isinstance(_obj, _alt_types):
-                _zorto_viz.append(('html', _obj.to_html()))
+                __zorto_internal_viz_output__.append(('html', _obj.to_html()))
     except Exception as _e:
         import sys; print(f'zorto: warning: altair capture failed: {_e}', file=sys.stderr)
 "#;
@@ -252,9 +252,9 @@ fn execute_python(
                 if let Err(e) = py.run(viz_code.as_c_str(), None, None) {
                     eprintln!("zorto: viz detection error: {e}");
                 } else {
-                    // Read _zorto_viz from __main__ namespace
+                    // Read __zorto_internal_viz_output__ from __main__ namespace
                     if let Ok(main_mod) = py.import("__main__") {
-                        if let Ok(viz_list) = main_mod.getattr("_zorto_viz") {
+                        if let Ok(viz_list) = main_mod.getattr("__zorto_internal_viz_output__") {
                             if let Ok(items) = viz_list.extract::<Vec<(String, String)>>() {
                                 for (kind, data) in items {
                                     viz.push(VizOutput { kind, data });

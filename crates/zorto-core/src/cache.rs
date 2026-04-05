@@ -15,6 +15,9 @@ pub struct CachedBlock {
     pub output: Option<String>,
     /// Captured stderr / error message (may be empty).
     pub error: Option<String>,
+    /// Captured visualizations as (kind, data) tuples.
+    #[serde(default)]
+    pub viz: Vec<(String, String)>,
 }
 
 /// In-memory representation of a page's cached blocks.
@@ -105,6 +108,7 @@ mod tests {
                 hash: hash_source("echo hello"),
                 output: Some("hello\n".to_string()),
                 error: None,
+                viz: Vec::new(),
             },
         );
 
@@ -114,6 +118,7 @@ mod tests {
         let block = &loaded.blocks["0"];
         assert_eq!(block.output.as_deref(), Some("hello\n"));
         assert!(block.error.is_none());
+        assert!(block.viz.is_empty());
     }
 
     #[test]
@@ -168,6 +173,7 @@ mod tests {
                 hash: source_hash.clone(),
                 output: Some("cached\n".to_string()),
                 error: None,
+                viz: Vec::new(),
             },
         );
         save_page_cache(tmp.path(), page_key, &cache).unwrap();

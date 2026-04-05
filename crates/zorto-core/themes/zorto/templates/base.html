@@ -456,7 +456,7 @@
   }
 
   async function doSearch(query) {
-    if (!query || query.length < 2) {
+    if (!query || query.length < 3) {
       resultsEl.innerHTML = '';
       statusEl.textContent = '';
       selectedIdx = -1;
@@ -465,19 +465,19 @@
     var database = await initDB();
     if (!database) return;
     try {
-      var term = query.trim().toLowerCase();
+      var term = query.trim().toLowerCase().replace(/%/g, '\\%').replace(/_/g, '\\_');
       var stmt = database.prepare(
         "SELECT title, url, description, content, " +
         "CASE WHEN title_lower = ?1 THEN 100 " +
-        "     WHEN title_lower LIKE ?1 || '%' THEN 80 " +
-        "     WHEN title_lower LIKE '%' || ?1 || '%' THEN 60 " +
+        "     WHEN title_lower LIKE ?1 || '%' ESCAPE '\\' THEN 80 " +
+        "     WHEN title_lower LIKE '%' || ?1 || '%' ESCAPE '\\' THEN 60 " +
         "     ELSE 0 END + " +
-        "CASE WHEN description_lower LIKE '%' || ?1 || '%' THEN 20 ELSE 0 END + " +
-        "CASE WHEN content_lower LIKE '%' || ?1 || '%' THEN 10 ELSE 0 END as score " +
+        "CASE WHEN description_lower LIKE '%' || ?1 || '%' ESCAPE '\\' THEN 20 ELSE 0 END + " +
+        "CASE WHEN content_lower LIKE '%' || ?1 || '%' ESCAPE '\\' THEN 10 ELSE 0 END as score " +
         "FROM pages " +
-        "WHERE title_lower LIKE '%' || ?1 || '%' " +
-        "   OR description_lower LIKE '%' || ?1 || '%' " +
-        "   OR content_lower LIKE '%' || ?1 || '%' " +
+        "WHERE title_lower LIKE '%' || ?1 || '%' ESCAPE '\\' " +
+        "   OR description_lower LIKE '%' || ?1 || '%' ESCAPE '\\' " +
+        "   OR content_lower LIKE '%' || ?1 || '%' ESCAPE '\\' " +
         "ORDER BY score DESC LIMIT 10"
       );
       stmt.bind([term]);

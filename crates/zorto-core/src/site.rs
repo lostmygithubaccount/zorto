@@ -793,6 +793,14 @@ fn render_markdown_content(
             if let Some(cached) = cache_hit {
                 block.output = cached.output.clone();
                 block.error = cached.error.clone();
+                block.viz = cached
+                    .viz
+                    .iter()
+                    .map(|(k, d)| execute::VizOutput {
+                        kind: k.clone(),
+                        data: d.clone(),
+                    })
+                    .collect();
             } else {
                 // Execute this single block
                 let errors =
@@ -810,6 +818,11 @@ fn render_markdown_content(
                     hash: source_hash,
                     output: block.output.clone(),
                     error: block.error.clone(),
+                    viz: block
+                        .viz
+                        .iter()
+                        .map(|v| (v.kind.clone(), v.data.clone()))
+                        .collect(),
                 },
             );
         }
