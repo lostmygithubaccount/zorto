@@ -63,11 +63,11 @@ pub fn compile_all_theme_styles(
     output_dir: &Path,
     active_theme: Option<&Theme>,
 ) -> anyhow::Result<()> {
+    // Compile individual theme files (for backward compat / direct linking)
     for name in Theme::available() {
         let Some(theme) = Theme::from_name(name) else {
             continue;
         };
-        // Skip the active theme — it's already compiled as style.css
         if active_theme == Some(&theme) {
             continue;
         }
@@ -89,6 +89,82 @@ pub fn compile_all_theme_styles(
         std::fs::create_dir_all(output_dir)?;
         std::fs::write(output_dir.join(format!("style-{name}.css")), css)?;
     }
+
+    // Compile a single themes.css with all theme variables scoped by attribute.
+    // This enables instant theme switching via data-site-theme attribute with
+    // zero FOUC — no stylesheet swapping needed.
+    compile_themes_css(output_dir, active_theme)?;
+
+    Ok(())
+}
+
+/// Compile a single `themes.css` containing CSS variables for all themes,
+/// scoped under `[data-site-theme="X"]` selectors.
+///
+/// Each theme's `:root` variables become `[data-site-theme="X"]` and its
+/// `[data-theme="light"]` variables become `[data-site-theme="X"][data-theme="light"]`.
+/// This file is loaded alongside `style.css` and enables instant theme switching
+/// by just setting an HTML attribute — no stylesheet swapping or loading delays.
+fn compile_themes_css(output_dir: &Path, active_theme: Option<&Theme>) -> anyhow::Result<()> {
+    let mut css = String::from(
+        "/* All theme variables for instant switching via data-site-theme attribute */\n",
+    );
+    let active_name = active_theme.map(|t| t.name()).unwrap_or("zorto");
+
+    for name in Theme::available() {
+        // Skip active theme — its variables are already in style.css as :root
+        if name == active_name {
+            continue;
+        }
+        let Some(theme) = Theme::from_name(name) else {
+            continue;
+        };
+
+        // Extract just the CSS variable declarations from the theme's SCSS.
+        // We compile a minimal SCSS that only has the variable blocks (no
+        // structure/component imports) to get pure CSS custom properties.
+        let scss_files = theme.scss();
+        let Some((_, style_content)) = scss_files.iter().find(|(f, _)| *f == "style.scss") else {
+            continue;
+        };
+
+        // Strip @import lines (structure, components), Sass variables ($...),
+        // and font @import url() lines (deduplicated at top of file by caller).
+        let mut vars_scss = String::new();
+        for line in style_content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("@import") || trimmed.starts_with("$") {
+                continue;
+            }
+            vars_scss.push_str(line);
+            vars_scss.push('\n');
+        }
+
+        // Compile the stripped SCSS to CSS (handles any SCSS syntax in variable blocks)
+        let compiled = grass::from_string(vars_scss, &grass::Options::default()).map_err(|e| {
+            anyhow::anyhow!("SCSS compilation error for theme {name} variables: {e}")
+        })?;
+
+        // Rewrite selectors: :root → [data-site-theme="X"],
+        // [data-theme...] → [data-site-theme="X"][data-theme...]
+        // grass may output [data-theme=light] or [data-theme="light"]
+        let scoped = compiled
+            .replace(":root", &format!("[data-site-theme=\"{name}\"]"))
+            .replace(
+                "[data-theme=light]",
+                &format!("[data-site-theme=\"{name}\"][data-theme=light]"),
+            )
+            .replace(
+                "[data-theme=\"light\"]",
+                &format!("[data-site-theme=\"{name}\"][data-theme=\"light\"]"),
+            );
+
+        css.push_str(&format!("\n/* theme: {name} */\n"));
+        css.push_str(&scoped);
+    }
+
+    std::fs::create_dir_all(output_dir)?;
+    std::fs::write(output_dir.join("themes.css"), css)?;
     Ok(())
 }
 

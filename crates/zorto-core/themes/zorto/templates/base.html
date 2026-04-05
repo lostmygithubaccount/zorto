@@ -6,34 +6,25 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
     <meta name="robots" content="noodp"/>
-    <style>html{opacity:0!important}html.css-ready{opacity:1!important}html.no-transitions,html.no-transitions *{transition:none!important}</style>
-    <link rel="stylesheet" href="/style.css" id="theme-stylesheet">
+    <link rel="stylesheet" href="/style.css">
+    {%- if config.compile_all_themes %}
+    <link rel="stylesheet" href="/themes.css">
+    {%- endif %}
     <script>
       (function() {
         var html = document.documentElement;
-        html.classList.add('no-transitions');
+        // Apply saved light/dark mode before first paint
         var saved = localStorage.getItem('theme');
         var preferLight = window.matchMedia('(prefers-color-scheme: light)').matches;
         if (saved === 'light' || (!saved && preferLight)) {
           html.setAttribute('data-theme', 'light');
         }
+        // Apply saved site theme before first paint (themes.css has all
+        // theme variables scoped by [data-site-theme], so this is instant)
         var siteTheme = localStorage.getItem('site-theme');
-        var defaultTheme = '{{ config.theme | default(value="zorto") }}';
-        var styleLink = document.getElementById('theme-stylesheet');
-        if (siteTheme && siteTheme !== defaultTheme) {
-          styleLink.href = '/style-' + siteTheme + '.css';
+        if (siteTheme) {
+          html.setAttribute('data-site-theme', siteTheme);
         }
-        // Show page only after the correct stylesheet has loaded
-        styleLink.onload = function() {
-          html.classList.add('css-ready');
-          requestAnimationFrame(function(){ html.classList.remove('no-transitions'); });
-          styleLink.onload = null;
-        };
-        // Safety timeout — show page even if onload doesn't fire (e.g. cached)
-        setTimeout(function() {
-          html.classList.add('css-ready');
-          html.classList.remove('no-transitions');
-        }, 1500);
       })();
     </script>
     {%- if config.markdown.highlight_code and config.markdown.highlight_theme == "css" %}
@@ -67,13 +58,6 @@
     {%- endif %}
     {%- if config.generate_feed %}
     <link rel="alternate" type="application/atom+xml" title="{{ config.title }} Feed" href="/atom.xml">
-    {%- endif %}
-    {%- if config.compile_all_themes %}
-    {%- for name in ["zorto", "dkdc", "default", "ember", "forest", "ocean", "rose", "slate"] %}
-    {%- if name != config.theme | default(value="zorto") %}
-    <link rel="prefetch" href="/style-{{ name }}.css" as="style">
-    {%- endif %}
-    {%- endfor %}
     {%- endif %}
     {%- block extra_head %}{% endblock extra_head %}
 </head>
@@ -217,37 +201,26 @@
   if (!switcher) return;
   var btn = switcher.querySelector('.theme-switcher__btn');
   var menu = document.getElementById('theme-switcher-menu');
-  var styleLink = document.getElementById('theme-stylesheet');
+  var html = document.documentElement;
   var defaultTheme = '{{ config.theme | default(value="zorto") }}';
   var currentSiteTheme = localStorage.getItem('site-theme') || defaultTheme;
 
   function applySiteTheme(name) {
-    var href = (name === defaultTheme) ? '/style.css' : '/style-' + name + '.css';
-    if (styleLink.getAttribute('href') !== href) {
-      document.documentElement.classList.remove('css-ready');
-      styleLink.onload = function() {
-        document.documentElement.classList.add('css-ready');
-        styleLink.onload = null;
-      };
-      styleLink.href = href;
-      setTimeout(function() { document.documentElement.classList.add('css-ready'); }, 2000);
+    // Instant switch: just set the attribute. themes.css has all variables
+    // scoped under [data-site-theme="X"], so the browser applies them immediately.
+    if (name === defaultTheme) {
+      html.removeAttribute('data-site-theme');
+    } else {
+      html.setAttribute('data-site-theme', name);
     }
     localStorage.setItem('site-theme', name);
     currentSiteTheme = name;
-    // Re-apply light/dark preference
-    var mode = localStorage.getItem('theme');
-    if (mode === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-    }
-    // Update active state
     menu.querySelectorAll('.theme-switcher__option').forEach(function(o) {
       o.classList.toggle('active', o.getAttribute('data-theme-name') === name);
     });
   }
 
-  // Mark initial active theme (don't re-apply on load — head script already handled it)
+  // Mark initial active theme
   menu.querySelectorAll('.theme-switcher__option').forEach(function(o) {
     o.classList.toggle('active', o.getAttribute('data-theme-name') === currentSiteTheme);
   });
@@ -561,13 +534,5 @@
 </script>
 {%- endif %}
 {%- block extra_body %}{% endblock extra_body %}
-<script>
-// Fallback: if by the time the body is fully parsed the CSS still hasn't
-// triggered onload (e.g. cached stylesheet), show the page now.
-if (!document.documentElement.classList.contains('css-ready')) {
-  document.documentElement.classList.add('css-ready');
-}
-requestAnimationFrame(function(){ document.documentElement.classList.remove('no-transitions'); });
-</script>
 </body>
 </html>
