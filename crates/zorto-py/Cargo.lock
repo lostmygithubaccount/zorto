@@ -2551,7 +2551,7 @@ checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
 name = "zorto"
-version = "0.17.1"
+version = "0.17.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -2565,7 +2565,7 @@ dependencies = [
 
 [[package]]
 name = "zorto-core"
-version = "0.17.1"
+version = "0.17.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2587,7 +2587,7 @@ dependencies = [
 
 [[package]]
 name = "zorto-py"
-version = "0.17.1"
+version = "0.17.2"
 dependencies = [
  "pyo3",
  "zorto",
