@@ -356,12 +356,13 @@
 
   function openModal() {
     modal.removeAttribute('hidden');
-    requestAnimationFrame(function() { modal.classList.add('search-modal--visible'); });
     input.value = '';
     resultsEl.innerHTML = '';
     statusEl.innerHTML = '';
     selectedIdx = -1;
-    setTimeout(function() { input.focus(); }, 50);
+    // Focus before animation — must be synchronous for mobile Safari
+    input.focus({ preventScroll: true });
+    requestAnimationFrame(function() { modal.classList.add('search-modal--visible'); });
     if (!dbReady && !dbLoading) {
       statusEl.innerHTML = '<div class="search-modal__loading"><div class="search-modal__spinner"></div><span>Loading search index...</span></div>';
       initDB().then(function() { statusEl.innerHTML = ''; });
