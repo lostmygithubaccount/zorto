@@ -53,7 +53,7 @@ social_links = [
 ]
 
 hero_title = "Zorto"
-hero_subtitle = "Your website is files in Git. You own them. AI agents edit them. Zorto builds them."
+hero_subtitle = "The AI-native static site generator (SSG) with executable code blocks."
 hero_actions = [
   { name = "Get started", url = "/docs/getting-started/", style = "default" },
   { name = "GitHub", url = "https://github.com/dkdc-io/zorto", style = "outline", external = true },
