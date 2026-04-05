@@ -4,7 +4,7 @@ theme = "default"
 
 [markdown]
 highlight_code = true
-insert_anchor_links = "left"
+insert_anchor_links = "right"
 
 [extra]
 copyright_html = '<a href="/">My Docs</a> by Author via <a href="https://zorto.dev" target="_blank" rel="noopener">Zorto</a>'
