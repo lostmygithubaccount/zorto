@@ -113,7 +113,7 @@ Anchor links work too:
 If the target file does not exist, Zorto emits a warning during the build:
 
 ```
-unresolved internal link: @/posts/missing.md (no matching page or section found)
+unresolved internal link: posts/missing.md (no matching page or section found)
 ```
 
 This gives you broken-link detection without an external tool. Use `zorto check` to validate all internal links without building the full site.
