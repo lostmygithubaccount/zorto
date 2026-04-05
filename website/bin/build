@@ -15,6 +15,16 @@ if [ -z "${PYTHONHOME:-}" ]; then
     export PYTHONHOME
 fi
 
+# ensure libpython is on the library path (needed for PyO3 on Linux)
+PYTHON_LIB_DIR="$(python3 -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')"
+export LD_LIBRARY_PATH="${PYTHON_LIB_DIR}:${LD_LIBRARY_PATH:-}"
+
 REPO_ROOT="$(cd "$WEBSITE_DIR/.." && pwd)"
 cd "$REPO_ROOT"
-cargo run -p zorto -- --root website --sandbox . build "$@"
+
+# use installed zorto binary if available, otherwise cargo run
+if command -v zorto &>/dev/null; then
+    zorto --root website --sandbox . build "$@"
+else
+    cargo run -p zorto -- --root website --sandbox . build "$@"
+fi
