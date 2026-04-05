@@ -899,14 +899,20 @@ button.navbar__icon-link {
 .code-viz {
   border-top: 1px solid var(--border-color);
   padding: 16px;
-  display: flex;
-  justify-content: center;
   background: var(--background);
+  overflow-x: auto;
 
   img {
     max-width: 100%;
     height: auto;
     border-radius: 4px;
+    display: block;
+    margin: 0 auto;
+  }
+
+  // plotly/altair interactive charts
+  > div {
+    max-width: 100%;
   }
 }
 
