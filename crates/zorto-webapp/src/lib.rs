@@ -17,6 +17,7 @@ mod pages;
 mod sections;
 
 const DEFAULT_WEBAPP_PORT: u16 = 1112;
+const DEFAULT_PREVIEW_URL: &str = "http://localhost:1111";
 const RELOAD_CHANNEL_CAPACITY: usize = 16;
 
 pub(crate) struct AppState {
@@ -41,6 +42,20 @@ impl AppState {
 
     fn site_exists(&self) -> bool {
         self.root.join("config.toml").exists()
+    }
+
+    fn site_base_url(&self) -> String {
+        let config_path = self.root.join("config.toml");
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            if let Ok(config) = toml::from_str::<toml::Value>(&content) {
+                if let Some(url) = config.get("base_url").and_then(|v| v.as_str()) {
+                    if !url.is_empty() {
+                        return url.trim_end_matches('/').to_string();
+                    }
+                }
+            }
+        }
+        DEFAULT_PREVIEW_URL.to_string()
     }
 }
 

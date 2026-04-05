@@ -12,10 +12,11 @@ use crate::{AppState, escape};
 
 pub async fn edit(State(state): State<Arc<AppState>>) -> Html<String> {
     let site_title = state.site_title();
+    let base_url = state.site_base_url();
     let config_path = state.root.join("config.toml");
     let content = std::fs::read_to_string(&config_path).unwrap_or_default();
 
-    Html(render_config_editor(&site_title, &content, None))
+    Html(render_config_editor(&site_title, &content, None, &base_url))
 }
 
 pub async fn save(
@@ -43,10 +44,16 @@ pub async fn save(
     };
 
     let site_title = state.site_title();
+    let base_url = state.site_base_url();
     let content = std::fs::read_to_string(&config_path).unwrap_or_default();
     let flash_ref = flash.as_ref().map(|(k, v)| (*k, v.as_str()));
 
-    Html(render_config_editor(&site_title, &content, flash_ref))
+    Html(render_config_editor(
+        &site_title,
+        &content,
+        flash_ref,
+        &base_url,
+    ))
 }
 
 #[derive(serde::Deserialize)]
@@ -70,7 +77,12 @@ pub struct SaveForm {
     generate_sitemap: String,
 }
 
-fn render_config_editor(site_title: &str, content: &str, flash: Option<(&str, &str)>) -> String {
+fn render_config_editor(
+    site_title: &str,
+    content: &str,
+    flash: Option<(&str, &str)>,
+    base_url: &str,
+) -> String {
     let flash_html = flash
         .map(|(kind, msg)| {
             format!(
@@ -99,7 +111,7 @@ fn render_config_editor(site_title: &str, content: &str, flash: Option<(&str, &s
     };
 
     let title = get_str("title");
-    let base_url = get_str("base_url");
+    let config_base_url = get_str("base_url");
     let description = get_str("description");
     let theme = get_str("theme");
     let generate_feed = get_bool("generate_feed");
@@ -175,12 +187,12 @@ fn render_config_editor(site_title: &str, content: &str, flash: Option<(&str, &s
   </form>
 </div>"##,
         e_title = escape(&title),
-        e_base_url = escape(&base_url),
+        e_base_url = escape(&config_base_url),
         e_description = escape(&description),
         e_content = escape(content),
     );
 
-    html::page("Config", site_title, "config", &body)
+    html::page("Config", site_title, "config", &body, base_url)
 }
 
 /// Build a config.toml string from the visual form fields while preserving

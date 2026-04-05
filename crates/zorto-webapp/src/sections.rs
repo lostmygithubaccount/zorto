@@ -9,6 +9,7 @@ use crate::{AppState, escape, validate_path};
 
 pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
     let site_title = state.site_title();
+    let base_url = state.site_base_url();
     let content_dir = state.root.join("content");
 
     let mut rows = Vec::new();
@@ -90,11 +91,18 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
 </div>"#
     );
 
-    Html(html::page("Sections", &site_title, "sections", &body))
+    Html(html::page(
+        "Sections",
+        &site_title,
+        "sections",
+        &body,
+        &base_url,
+    ))
 }
 
 pub async fn edit(State(state): State<Arc<AppState>>, Path(path): Path<String>) -> Html<String> {
     let site_title = state.site_title();
+    let base_url = state.site_base_url();
     let content_dir = state.root.join("content");
     let file_path = match validate_path(&content_dir, &path) {
         Ok(p) => p,
@@ -104,12 +112,19 @@ pub async fn edit(State(state): State<Arc<AppState>>, Path(path): Path<String>) 
                 &site_title,
                 "sections",
                 "<p>Invalid path.</p>",
+                &base_url,
             ));
         }
     };
     let content = std::fs::read_to_string(&file_path).unwrap_or_default();
 
-    Html(render_section_editor(&site_title, &path, &content, None))
+    Html(render_section_editor(
+        &site_title,
+        &path,
+        &content,
+        None,
+        &base_url,
+    ))
 }
 
 pub async fn save(
@@ -118,21 +133,22 @@ pub async fn save(
     axum::Form(form): axum::Form<SaveForm>,
 ) -> Html<String> {
     let content_dir = state.root.join("content");
+    let site_title = state.site_title();
+    let base_url = state.site_base_url();
     let file_path = match validate_path(&content_dir, &path) {
         Ok(p) => p,
         Err(_) => {
-            let site_title = state.site_title();
             return Html(html::page(
                 "Error",
                 &site_title,
                 "sections",
                 "<p>Invalid path.</p>",
+                &base_url,
             ));
         }
     };
     let new_content = form.to_file_content();
     let result = std::fs::write(&file_path, &new_content);
-    let site_title = state.site_title();
 
     let flash_msg: Option<(String, String)> = match result {
         Ok(()) => match rebuild_site(&state) {
@@ -144,7 +160,13 @@ pub async fn save(
     let flash = flash_msg.as_ref().map(|(k, v)| (k.as_str(), v.as_str()));
 
     let content = std::fs::read_to_string(&file_path).unwrap_or_default();
-    Html(render_section_editor(&site_title, &path, &content, flash))
+    Html(render_section_editor(
+        &site_title,
+        &path,
+        &content,
+        flash,
+        &base_url,
+    ))
 }
 
 #[derive(serde::Deserialize)]
@@ -300,6 +322,7 @@ fn render_section_editor(
     path: &str,
     content: &str,
     flash: Option<(&str, &str)>,
+    base_url: &str,
 ) -> String {
     let fm = parse_section_fm(content);
     let body_content = extract_body(content);
@@ -413,7 +436,13 @@ document.addEventListener('DOMContentLoaded', function() {
     ]
     .concat();
 
-    html::page(&format!("Edit: {display}"), site_title, "sections", &body)
+    html::page(
+        &format!("Edit: {display}"),
+        site_title,
+        "sections",
+        &body,
+        base_url,
+    )
 }
 
 use crate::rebuild_site;

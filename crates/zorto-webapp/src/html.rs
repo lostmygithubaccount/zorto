@@ -2,8 +2,6 @@
 
 use crate::escape;
 
-const DEFAULT_BASE_URL: &str = "http://localhost:1111";
-
 const CSS: &str = r#"
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { background: #111118; }
@@ -77,6 +75,21 @@ label { display: block; font-size: 0.8rem; color: #8c8ca6; margin-bottom: 4px; t
 .flash-success { background: #1a3a2a; border: 1px solid #34d399; color: #34d399; }
 .flash-error { background: #3a1a1a; border: 1px solid #f87171; color: #f87171; }
 
+/* Inline form errors */
+.field-error { color: #f87171; font-size: 0.8rem; margin-top: 4px; }
+.form-group.has-error input, .form-group.has-error textarea, .form-group.has-error select { border-color: #f87171; }
+
+/* Confirmation dialog */
+.confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.confirm-dialog { background: #16161f; border: 1px solid #2a2a3a; border-radius: 10px; padding: 24px; max-width: 400px; width: 90%; text-align: center; }
+.confirm-dialog h3 { color: #e0e0f0; margin-bottom: 8px; font-size: 1.1rem; }
+.confirm-dialog p { color: #8c8ca6; font-size: 0.85rem; margin-bottom: 20px; }
+.confirm-dialog .confirm-actions { display: flex; gap: 8px; justify-content: center; }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 40px 20px; color: #666680; }
+.empty-state p { font-size: 0.95rem; margin-bottom: 16px; }
+
 /* Preview panel */
 .preview-panel { background: #1a1a26; border: 1px solid #2a2a3a; border-radius: 6px; padding: 16px; min-height: 200px; }
 .preview-panel h1, .preview-panel h2, .preview-panel h3, .preview-panel h4 { color: #e0e0f0; margin: 1em 0 0.5em; }
@@ -146,7 +159,7 @@ label { display: block; font-size: 0.8rem; color: #8c8ca6; margin-bottom: 4px; t
 }
 "#;
 
-pub fn page(title: &str, site_title: &str, active: &str, body: &str) -> String {
+pub fn page(title: &str, site_title: &str, active: &str, body: &str, base_url: &str) -> String {
     let nav_items = [
         ("dashboard", "/", "Dashboard"),
         ("pages", "/pages", "Pages"),
@@ -199,10 +212,17 @@ pub fn page(title: &str, site_title: &str, active: &str, body: &str) -> String {
   <div class="main">
     {body}
   </div>
+  <script>
+  document.querySelectorAll('.sidebar nav a').forEach(function(a) {{
+    a.addEventListener('click', function() {{
+      document.querySelector('.sidebar').classList.remove('open');
+    }});
+  }});
+  </script>
 </body>
 </html>"##,
         title = escape(title),
         site_title = escape(site_title),
-        base_url = DEFAULT_BASE_URL,
+        base_url = escape(base_url),
     )
 }

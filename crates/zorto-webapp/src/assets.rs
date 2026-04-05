@@ -7,10 +7,9 @@ use std::sync::Arc;
 use crate::html;
 use crate::{AppState, escape, validate_path};
 
-const DEFAULT_BASE_URL: &str = "http://localhost:1111";
-
 pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
     let site_title = state.site_title();
+    let base_url = state.site_base_url();
     let static_dir = state.root.join("static");
 
     let mut files: Vec<(String, String, u64)> = Vec::new(); // (relative_path, ext, size)
@@ -56,7 +55,7 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
                 // For images served from the preview server
                 format!(
                     r#"<div class="asset-thumb-placeholder" style="background: url('{base_url}/{path}') center/contain no-repeat #111118; border-radius: 4px; width: 100%; height: 100px;"></div>"#,
-                    base_url = DEFAULT_BASE_URL,
+                    base_url = escape(&base_url),
                     path = escape(path),
                 )
             } else {
@@ -155,7 +154,13 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
 </script>"#
     );
 
-    Html(html::page("Assets", &site_title, "assets", &body))
+    Html(html::page(
+        "Assets",
+        &site_title,
+        "assets",
+        &body,
+        &base_url,
+    ))
 }
 
 pub async fn upload(State(state): State<Arc<AppState>>, mut multipart: Multipart) -> Html<String> {

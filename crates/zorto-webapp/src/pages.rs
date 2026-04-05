@@ -7,8 +7,12 @@ use std::sync::Arc;
 use crate::html;
 use crate::{AppState, escape, validate_path};
 
-pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
+pub async fn list(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<ListQuery>,
+) -> Html<String> {
     let site_title = state.site_title();
+    let base_url = state.site_base_url();
     let content_dir = state.root.join("content");
 
     let mut rows = Vec::new();
@@ -66,16 +70,24 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
     }
 
     rows.sort();
-    let table_body = rows.join("\n");
 
-    let body = format!(
-        r#"<div class="toolbar">
-  <h2>Pages</h2>
-  <div class="toolbar-right">
-    <a href="/pages/new" class="btn btn-primary">New Page</a>
-  </div>
-</div>
-<div class="card">
+    // Flash message from page creation
+    let flash_html = if params.created.is_some() {
+        r#"<div class="flash flash-success">Page created and site rebuilt.</div>"#
+    } else {
+        ""
+    };
+
+    let table_html = if rows.is_empty() {
+        r#"<div class="empty-state">
+  <p>No pages yet — create one!</p>
+  <a href="/pages/new" class="btn btn-primary">New Page</a>
+</div>"#
+            .to_string()
+    } else {
+        let table_body = rows.join("\n");
+        format!(
+            r#"<div class="card">
   <table>
     <thead>
       <tr><th>Title</th><th>Date</th><th>Path</th></tr>
@@ -85,13 +97,35 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
     </tbody>
   </table>
 </div>"#
+        )
+    };
+
+    let body = format!(
+        r#"{flash_html}<div class="toolbar">
+  <h2>Pages</h2>
+  <div class="toolbar-right">
+    <a href="/pages/new" class="btn btn-primary">New Page</a>
+  </div>
+</div>
+{table_html}"#
     );
 
-    Html(html::page("Pages", &site_title, "pages", &body))
+    Html(html::page("Pages", &site_title, "pages", &body, &base_url))
 }
 
-pub async fn edit(State(state): State<Arc<AppState>>, Path(path): Path<String>) -> Html<String> {
+#[derive(serde::Deserialize)]
+pub struct ListQuery {
+    #[serde(default)]
+    created: Option<String>,
+}
+
+pub async fn edit(
+    State(state): State<Arc<AppState>>,
+    Path(path): Path<String>,
+    axum::extract::Query(params): axum::extract::Query<EditQuery>,
+) -> Html<String> {
     let site_title = state.site_title();
+    let base_url = state.site_base_url();
     let content_dir = state.root.join("content");
     let file_path = match validate_path(&content_dir, &path) {
         Ok(p) => p,
@@ -101,12 +135,31 @@ pub async fn edit(State(state): State<Arc<AppState>>, Path(path): Path<String>) 
                 &site_title,
                 "pages",
                 "<p>Invalid path.</p>",
+                &base_url,
             ));
         }
     };
     let content = std::fs::read_to_string(&file_path).unwrap_or_default();
 
-    Html(render_editor(&site_title, &path, &content, None))
+    let flash = if params.created.is_some() {
+        Some(("success", "Page created and site rebuilt."))
+    } else {
+        None
+    };
+
+    Html(render_editor(
+        &site_title,
+        &path,
+        &content,
+        flash,
+        &base_url,
+    ))
+}
+
+#[derive(serde::Deserialize)]
+pub struct EditQuery {
+    #[serde(default)]
+    created: Option<String>,
 }
 
 pub async fn save(
@@ -115,15 +168,17 @@ pub async fn save(
     axum::Form(form): axum::Form<SaveForm>,
 ) -> Html<String> {
     let content_dir = state.root.join("content");
+    let site_title = state.site_title();
+    let base_url = state.site_base_url();
     let file_path = match validate_path(&content_dir, &path) {
         Ok(p) => p,
         Err(_) => {
-            let site_title = state.site_title();
             return Html(html::page(
                 "Error",
                 &site_title,
                 "pages",
                 "<p>Invalid path.</p>",
+                &base_url,
             ));
         }
     };
@@ -131,7 +186,6 @@ pub async fn save(
     // Reconstruct the file from form fields
     let new_content = form.to_file_content();
     let result = std::fs::write(&file_path, &new_content);
-    let site_title = state.site_title();
 
     let flash_msg: Option<(String, String)> = match result {
         Ok(()) => match rebuild_site(&state) {
@@ -143,7 +197,13 @@ pub async fn save(
     let flash = flash_msg.as_ref().map(|(k, v)| (k.as_str(), v.as_str()));
 
     let content = std::fs::read_to_string(&file_path).unwrap_or_default();
-    Html(render_editor(&site_title, &path, &content, flash))
+    Html(render_editor(
+        &site_title,
+        &path,
+        &content,
+        flash,
+        &base_url,
+    ))
 }
 
 pub async fn delete(
@@ -167,6 +227,7 @@ pub async fn delete(
 
 pub async fn new_form(State(state): State<Arc<AppState>>) -> Html<String> {
     let site_title = state.site_title();
+    let base_url = state.site_base_url();
 
     // Detect available sections for the dropdown
     let content_dir = state.root.join("content");
@@ -251,20 +312,59 @@ pub async fn new_form(State(state): State<Arc<AppState>>) -> Html<String> {
     </div>
     <div class="form-group">
       <label>Content</label>
-      <textarea name="body" rows="15" placeholder="Write your content here..."></textarea>
+      <textarea name="body" rows="20" placeholder="Write your content here..." id="editor"></textarea>
     </div>
     <button type="submit" class="btn btn-primary">Create Page</button>
   </div>
-</form>"#
+</form>
+<script>
+document.getElementById('editor').addEventListener('keydown', function(e) {{
+  if (e.key === 'Tab') {{
+    e.preventDefault();
+    var start = this.selectionStart;
+    var end = this.selectionEnd;
+    this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+    this.selectionStart = this.selectionEnd = start + 2;
+  }}
+}});
+</script>"#
     );
 
-    Html(html::page("New Page", &site_title, "pages", &body))
+    Html(html::page(
+        "New Page",
+        &site_title,
+        "pages",
+        &body,
+        &base_url,
+    ))
 }
 
 pub async fn create(
     State(state): State<Arc<AppState>>,
     axum::Form(form): axum::Form<NewPageForm>,
 ) -> axum::response::Response {
+    // Validate required fields
+    if form.title.trim().is_empty() {
+        let site_title = state.site_title();
+        let base_url = state.site_base_url();
+        let body = r#"<div class="flash flash-error">Title is required.</div>
+<div class="toolbar">
+  <h2>New Page</h2>
+  <div class="toolbar-right">
+    <a href="/pages" class="btn">Back to Pages</a>
+  </div>
+</div>
+<p style="color: #8c8ca6;">Please go back and fill in the title field.</p>"#;
+        return Html(html::page(
+            "New Page",
+            &site_title,
+            "pages",
+            body,
+            &base_url,
+        ))
+        .into_response();
+    }
+
     let slug = slug::slugify(&form.title);
     let section = form.section.clone();
     let content_dir = state.root.join("content");
@@ -331,7 +431,7 @@ pub async fn create(
         eprintln!("Page created but site rebuild failed: {e}");
     }
 
-    Redirect::to(&format!("/pages/{relative}")).into_response()
+    Redirect::to(&format!("/pages/{relative}?created=1")).into_response()
 }
 
 // --- Form types ---
@@ -512,6 +612,7 @@ fn render_editor(
     path: &str,
     content: &str,
     flash: Option<(&str, &str)>,
+    base_url: &str,
 ) -> String {
     let fm = ParsedFrontmatter::parse(content);
     let body_content = extract_body(content);
@@ -550,10 +651,19 @@ fn render_editor(
   <h2>Edit: "#, &display_title, r#"</h2>
   <div class="toolbar-right">
     <a href="/pages" class="btn">Back to Pages</a>
-    <form method="POST" action="/pages/delete/"#, &e_path, r#"" style="display:inline; margin-left: 8px;"
-          onsubmit="return confirm('Delete this page?')">
-      <button type="submit" class="btn" style="color: #f87171; border-color: #5c2a2a;">Delete</button>
-    </form>
+    <button type="button" class="btn" style="color: #f87171; border-color: #5c2a2a;" onclick="document.getElementById('delete-dialog').style.display='flex'">Delete</button>
+    <div id="delete-dialog" class="confirm-overlay" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+      <div class="confirm-dialog">
+        <h3>Delete this page?</h3>
+        <p>This will permanently remove the file. This action cannot be undone.</p>
+        <div class="confirm-actions">
+          <button type="button" class="btn" onclick="document.getElementById('delete-dialog').style.display='none'">Cancel</button>
+          <form method="POST" action="/pages/delete/"#, &e_path, r#"" style="display:inline;">
+            <button type="submit" class="btn btn-danger">Delete Page</button>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 <form method="POST" action="/pages/"#, &e_path, r#"">
@@ -610,13 +720,24 @@ fn render_editor(
 document.addEventListener('keydown', function(e) {
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault();
-    document.querySelector('form').submit();
+    document.querySelector('form[action^="/pages/"]').submit();
   }
 });
 document.addEventListener('DOMContentLoaded', function() {
   var editor = document.getElementById('editor');
   if (editor && editor.value.trim()) {
     htmx.trigger(editor, 'keyup');
+  }
+  if (editor) {
+    editor.addEventListener('keydown', function(e) {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        var start = this.selectionStart;
+        var end = this.selectionEnd;
+        this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+        this.selectionStart = this.selectionEnd = start + 2;
+      }
+    });
   }
 });
 </script>"##,
@@ -627,6 +748,7 @@ document.addEventListener('DOMContentLoaded', function() {
         site_title,
         "pages",
         &body,
+        base_url,
     )
 }
 

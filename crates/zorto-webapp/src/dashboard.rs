@@ -7,8 +7,6 @@ use std::sync::Arc;
 use crate::AppState;
 use crate::html;
 
-const DEFAULT_BASE_URL: &str = "http://localhost:1111";
-
 #[derive(serde::Deserialize)]
 pub struct DashboardQuery {
     #[serde(default)]
@@ -78,6 +76,8 @@ pub async fn index(
         0
     };
 
+    let base_url = state.site_base_url();
+
     let welcome_html = if params.welcome.is_some() {
         r#"<div class="flash flash-success">Site created successfully! Start adding content or customize your config.</div>"#
     } else {
@@ -145,10 +145,17 @@ pub async fn index(
     {recent_html}
   </div>
 </div>"#,
-        base_url = DEFAULT_BASE_URL,
+        base_url = crate::escape(&base_url),
     );
 
-    Html(html::page("Dashboard", &site_title, "dashboard", &body)).into_response()
+    Html(html::page(
+        "Dashboard",
+        &site_title,
+        "dashboard",
+        &body,
+        &base_url,
+    ))
+    .into_response()
 }
 
 fn extract_title(content: &str) -> Option<String> {
