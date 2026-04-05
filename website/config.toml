@@ -53,24 +53,22 @@ social_links = [
 ]
 
 hero_title = "Zorto"
-hero_subtitle = "The AI-native static site generator (SSG) with executable code blocks."
+hero_subtitle = "Build a site in 60 seconds. Python charts rendered inline. 16 themes. Zero config."
 hero_actions = [
-  { name = "Getting started", url = "/docs/getting-started/", style = "default" },
-  { name = "Concepts", url = "/docs/concepts/", style = "outline" },
-  { name = "How-to", url = "/docs/how-to/", style = "outline" },
-  { name = "Reference", url = "/docs/reference/", style = "outline" },
+  { name = "Get started", url = "/docs/getting-started/", style = "default" },
+  { name = "GitHub", url = "https://github.com/dkdc-io/zorto", style = "outline", external = true },
 ]
 
 features = [
-  { name = "Free & open source", description = "MIT-licensed forever.", url = "/docs/concepts/open-source/" },
-  { name = "AI-native", description = "Explicit contracts, compiler-like quality checks, llms.txt for consumption.", url = "/docs/concepts/ai-native/" },
-  { name = "Executable code blocks", description = "Run Python and Bash at build time. Output rendered inline.", url = "/docs/concepts/executable-code/" },
-  { name = "Fast", description = "Written in Rust. Build your site in milliseconds.", url = "/docs/concepts/fast/" },
-  { name = "Callouts", description = "GitHub-style callout alerts: note, tip, warning, caution, important.", url = "/docs/concepts/callouts/" },
-  { name = "Shortcodes", description = "Built-in tabs, figures, diagrams, embeds, and more. No HTML in markdown.", url = "/docs/concepts/shortcodes/" },
-  { name = "Blog, events, and more", description = "Sections with date sorting, pagination, and taxonomy support.", url = "/docs/concepts/blog/" },
-  { name = "Themes", description = "16 built-in themes with light/dark mode. Override templates and styles locally.", url = "/docs/concepts/themes/" },
-  { name = "Live reload", description = "Dev server with automatic rebuilds and instant browser refresh.", url = "/docs/concepts/live-reload/" },
+  { name = "Executable code blocks", description = "Run Python and Bash at build time. Matplotlib, Plotly, Altair, and Seaborn charts rendered inline. Output baked into static HTML.", url = "/docs/concepts/executable-code/" },
+  { name = "Fast", description = "Written in Rust. Sites build in milliseconds. Live reload with instant browser refresh during development.", url = "/docs/concepts/fast/" },
+  { name = "16 themes", description = "Built-in themes with light and dark mode. Switch instantly. Override any template or style locally.", url = "/docs/concepts/themes/" },
+  { name = "AI-native", description = "Designed for AI agents. Explicit contracts via AGENTS.md, compiler-like checks, llms.txt for LLM consumption.", url = "/docs/concepts/ai-native/" },
+  { name = "Shortcodes & callouts", description = "Tabs, figures, diagrams, callout alerts, code includes, and more. Rich content without HTML in your markdown.", url = "/docs/concepts/shortcodes/" },
+  { name = "Blog & docs", description = "Sections with date sorting, pagination, taxonomies, and search. Blog, documentation, and landing page templates included.", url = "/docs/concepts/blog/" },
+  { name = "Python & Rust", description = "Install via uv, pip, or cargo. Use as a CLI, Python library, or Rust crate. MIT-licensed forever.", url = "/docs/concepts/open-source/" },
+  { name = "Built-in search", description = "SQLite-powered full-text search. Generated at build time, runs client-side. No external services.", url = "/docs/getting-started/" },
+  { name = "Web CMS", description = "Optional browser-based content management. Onboarding wizard, page editor, config manager. Run with --webapp.", url = "/docs/getting-started/" },
 ]
 
 copyright_html = '<a href="/">Zorto</a> by <a href="https://dkdc.io" target="_blank" rel="noopener">dkdc.io</a> via <a href="https://zorto.dev" target="_blank" rel="noopener">Zorto</a>'

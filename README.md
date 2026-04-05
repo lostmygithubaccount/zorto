@@ -8,8 +8,6 @@
 
 The AI-native static site generator (SSG) with executable code blocks, inspired by [Zola](https://github.com/getzola/zola) and [Quarto](https://github.com/quarto-dev/quarto-cli).
 
-**Warning**: While I use Zorto for many static websites including [zorto.dev](https://zorto.dev), I do not consider it production-ready for usage by others yet.
-
 ## Install
 
 Recommended:
