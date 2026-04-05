@@ -4,8 +4,6 @@ title = "My Business"
 theme = "default"
 generate_llms_txt = false
 
-slugify.paths = "safe"
-
 [markdown]
 highlight_code = false
 smart_punctuation = true

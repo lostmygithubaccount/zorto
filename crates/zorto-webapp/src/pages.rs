@@ -156,8 +156,11 @@ pub async fn delete(
         Err(_) => return Redirect::to("/pages").into_response(),
     };
     if file_path.exists() {
-        let _ = std::fs::remove_file(&file_path);
-        let _ = rebuild_site(&state);
+        if let Err(e) = std::fs::remove_file(&file_path) {
+            eprintln!("Error deleting page {path}: {e}");
+        } else if let Err(e) = rebuild_site(&state) {
+            eprintln!("Page deleted but site rebuild failed: {e}");
+        }
     }
     Redirect::to("/pages").into_response()
 }
@@ -322,10 +325,11 @@ pub async fn create(
     }
 
     let file_path = file_dir.join(format!("{slug}.md"));
-    let _ = std::fs::write(&file_path, &fm);
-
-    // Rebuild after creating
-    let _ = rebuild_site(&state);
+    if let Err(e) = std::fs::write(&file_path, &fm) {
+        eprintln!("Error creating page: {e}");
+    } else if let Err(e) = rebuild_site(&state) {
+        eprintln!("Page created but site rebuild failed: {e}");
+    }
 
     Redirect::to(&format!("/pages/{relative}")).into_response()
 }

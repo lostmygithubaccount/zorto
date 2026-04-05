@@ -568,7 +568,7 @@ generate_md_files = true
 
     #[test]
     fn test_unknown_top_level_keys_accepted() {
-        // TOML's serde will ignore unknown fields (since Config uses #[serde(default)])
+        // Config does not use #[serde(deny_unknown_fields)], so unknown keys are silently ignored
         let tmp = TempDir::new().unwrap();
         write_config(
             &tmp,
@@ -577,11 +577,7 @@ base_url = "https://example.com"
 some_future_field = true
 "#,
         );
-        // This should either succeed (ignoring the field) or fail cleanly
-        let result = Config::load(tmp.path());
-        // Serde with deny_unknown_fields would fail; without it, succeeds
-        if let Ok(config) = result {
-            assert_eq!(config.base_url, "https://example.com");
-        }
+        let config = Config::load(tmp.path()).expect("unknown top-level keys should be accepted");
+        assert_eq!(config.base_url, "https://example.com");
     }
 }
