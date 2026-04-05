@@ -2,6 +2,11 @@
 
 Step-by-step guides for common Zorto tasks.
 
+## Tutorials
+
+- [Build a blog](build-blog.md): end-to-end from `zorto init` to deployment
+- [Build a docs site](build-docs-site.md): sections, sidebar navigation, `content_dirs`
+
 ## Content
 
 - [Add a blog](add-blog.md): posts, tags, pagination, drafts, and feeds
