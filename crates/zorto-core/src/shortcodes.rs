@@ -3,6 +3,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
+/// Maximum number of iterations for nested shortcode expansion.
+const MAX_SHORTCODE_ITERATIONS: usize = 10;
+
 static BODY_SHORTCODE_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?s)\{%\s*(\w+)\s*\(((?:[^)"']|"[^"]*"|'[^']*')*)\)\s*%\}(.*?)\{%\s*end\s*%\}"#)
         .unwrap()
@@ -66,7 +69,7 @@ fn process_body_shortcodes(
     let mut iterations = 0;
 
     // Loop to handle nested shortcodes
-    while BODY_SHORTCODE_RE.is_match(&result) && iterations < 10 {
+    while BODY_SHORTCODE_RE.is_match(&result) && iterations < MAX_SHORTCODE_ITERATIONS {
         let mut first_error: Option<anyhow::Error> = None;
         let new_result = BODY_SHORTCODE_RE.replace_all(&result, |caps: &regex::Captures| {
             let name = &caps[1];
@@ -95,6 +98,13 @@ fn process_body_shortcodes(
         }
         result = new_result.into_owned();
         iterations += 1;
+    }
+
+    if iterations == MAX_SHORTCODE_ITERATIONS && BODY_SHORTCODE_RE.is_match(&result) {
+        eprintln!(
+            "warning: shortcode expansion hit the iteration limit ({MAX_SHORTCODE_ITERATIONS}); \
+             some shortcodes may remain unexpanded"
+        );
     }
 
     Ok(result)
