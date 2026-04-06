@@ -827,7 +827,8 @@ async fn page_create_empty_title_rejected() {
     let tmp = TempDir::new().unwrap();
     let app = test_app(&tmp);
 
-    let form = "title=&section=posts&date=2025-03-15&description=&draft=false&tags=&body=Some+content";
+    let form =
+        "title=&section=posts&date=2025-03-15&description=&draft=false&tags=&body=Some+content";
     let (status, body) = post_form(&app, "/pages/new", form).await;
     // Should NOT redirect — should return an error page
     assert_eq!(status, StatusCode::OK);
