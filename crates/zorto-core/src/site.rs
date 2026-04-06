@@ -229,7 +229,10 @@ impl Site {
         let sandbox = self.sandbox.as_deref().unwrap_or(root);
         let no_exec = self.no_exec;
 
-        for (key, page) in self.pages.iter_mut() {
+        let mut page_keys: Vec<String> = self.pages.keys().cloned().collect();
+        page_keys.sort();
+        for key in &page_keys {
+            let page = self.pages.get_mut(key).unwrap();
             let mut raw = std::mem::take(&mut page.raw_content);
             raw = shortcodes::process_shortcodes(&raw, &shortcode_dir, root, sandbox)?;
 
@@ -250,7 +253,10 @@ impl Site {
             page.raw_content = raw;
         }
 
-        for (key, section) in self.sections.iter_mut() {
+        let mut section_keys: Vec<String> = self.sections.keys().cloned().collect();
+        section_keys.sort();
+        for key in &section_keys {
+            let section = self.sections.get_mut(key).unwrap();
             let raw = std::mem::take(&mut section.raw_content);
             if !raw.trim().is_empty() {
                 let processed =

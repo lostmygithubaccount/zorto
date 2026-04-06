@@ -188,9 +188,12 @@ if 'matplotlib' in _sys.modules or 'matplotlib.pyplot' in _sys.modules:
             _buf.seek(0)
             __zorto_internal_viz_output__.append(('img', 'data:image/png;base64,' + _b64.b64encode(_buf.read()).decode()))
             _buf.close()
-        _plt.close('all')
     except Exception as _e:
         import sys; print(f'zorto: warning: matplotlib capture failed: {_e}', file=sys.stderr)
+    try:
+        _plt.close('all')
+    except:
+        pass
 
 # plotly — only check variables created by THIS code block
 if 'plotly' in _sys.modules:

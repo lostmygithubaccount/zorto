@@ -901,14 +901,14 @@ wheels = [
 
 [[package]]
 name = "zorto"
-version = "0.20.3"
+version = "0.20.5"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/03/18/352a9734845d33044ea1371f58343442d856253ad63290f43d6981c60e27/zorto-0.20.3.tar.gz", hash = "sha256:6caa6c834b857ee323a82bd1712b4f5c38c37710d06fe029ce4e8291ccf7a1b4", size = 141881, upload-time = "2026-04-05T15:48:37.289Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5e/c1/b16fbd470ec290588f72218a4a532f4843d220c876763c2e2b820136522c/zorto-0.20.5.tar.gz", hash = "sha256:de771ca216c0fa9bbbb8ee77deabb8042068e6ee2106d94784845a1ae45a1437", size = 142785, upload-time = "2026-04-06T14:17:42.259Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/51/8f/a106b4c3cd3d98c564f66677a37f0f7cda5afd3b1d20df859edcd98418b1/zorto-0.20.3-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:547811a47a3c9de46f0679b684cb063b6e7551bb49703795079f7fee9f2de189", size = 7856969, upload-time = "2026-04-05T15:48:28.376Z" },
-    { url = "https://files.pythonhosted.org/packages/44/50/52848a9b53ad051a595c3360286f1390d75d60dc22c4c8a01e17658f85c0/zorto-0.20.3-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:556cc3812669fefb384848971ba5dc972391730ed3880c783e24773cb517f2b0", size = 7529852, upload-time = "2026-04-05T15:48:30.73Z" },
-    { url = "https://files.pythonhosted.org/packages/d9/cc/37226493e9b99c6f72494af7649740e371121ce647b65fb185cd058cb8e4/zorto-0.20.3-cp311-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:013befc86735b0bae9826e1a523ce0d900fd82ff14c03ab4f6107ce9cf69c668", size = 8407849, upload-time = "2026-04-05T15:48:32.545Z" },
-    { url = "https://files.pythonhosted.org/packages/1d/98/9187f4e8f41cf1e83168c59f548377984239d1eb9d194a6676a71ee7a02e/zorto-0.20.3-cp311-abi3-manylinux_2_39_x86_64.whl", hash = "sha256:480b2bbe251f5116e35d104b51e2689d104f7e5239eda5f60e4311108a6eec96", size = 8439052, upload-time = "2026-04-05T15:48:35.143Z" },
+    { url = "https://files.pythonhosted.org/packages/02/a3/bd4d6105f230570abfaa9e31db7c9719d22a2783092708681b83a8a3e4c5/zorto-0.20.5-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:972c525ee824585949e68a8f60268f43bde3a371a3612e08e64b7abd742f1c58", size = 7859386, upload-time = "2026-04-06T14:17:34.014Z" },
+    { url = "https://files.pythonhosted.org/packages/95/13/50dfa9bad18d09ec9c17ddda7bd487e723a854217fa458266df2321114c0/zorto-0.20.5-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:a3ac54764111fe91e9acb9e6c94f0e0ae029ef91ee48b97a487ce777556fc67b", size = 7529614, upload-time = "2026-04-06T14:17:36.176Z" },
+    { url = "https://files.pythonhosted.org/packages/14/04/53c4fd2faa7be7ba62f43380974c83116e1d0b988470828bea74ececb145/zorto-0.20.5-cp311-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:1b6d90ac3341fdca4b6c81f2352488726c51232a58d7ac1cec47ebd0e5bfffad", size = 8406797, upload-time = "2026-04-06T14:17:38.005Z" },
+    { url = "https://files.pythonhosted.org/packages/57/1b/d618e51aca7cf007481ca7d2d3ed47accef3deb0533cd9f47e517f138ca8/zorto-0.20.5-cp311-abi3-manylinux_2_39_x86_64.whl", hash = "sha256:174e7022990cc581eed8d0be74a2728249b5c8eaaa3a2e9652216387bd235d4c", size = 8440236, upload-time = "2026-04-06T14:17:40.002Z" },
 ]
 
 [[package]]
