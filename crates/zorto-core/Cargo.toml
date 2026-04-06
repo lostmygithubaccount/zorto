@@ -1,6 +1,6 @@
 [package]
 name = "zorto-core"
-version = "0.20.4"
+version = "0.20.5"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Cody <cody@dkdc.io>"]
