@@ -14,15 +14,13 @@ The roadmap for Zorto to v1 release.
 
 The release of v1.0.0 of Zorto will primarily indicate readiness for production; the APIs are stable, the code is well-tested and high-quality. Until that point, I'm favoring iteration speed. That said, Zorto is in production powering this website and all of my own static websites.
 
-There are also some known bugs including blog tags not working and errors during preview.
-
 ## Improved `check` for test/lint/compile
 
-For people & agents, `zorto check` should provide confidence that a website is following best practices.
+~~For people & agents, `zorto check` should provide confidence that a website is following best practices.~~ Done — `zorto check` validates broken links, frontmatter, and missing assets.
 
 ## Good default themes
 
-I want at least 8, ideally 16 or more good default themes.
+~~I want at least 8, ideally 16 or more good default themes.~~ Done — 16 built-in themes shipped, all with light and dark mode support.
 
 ## Skills & more for agents
 
