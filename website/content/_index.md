@@ -14,11 +14,9 @@ zorto --version
 echo "Built on $(uname -s) $(uname -m) at $(date -u '+%Y-%m-%d %H:%M UTC')"
 ```
 
-```python
-# {python} blocks execute at build time
+```{python}
 for i in range(5):
     print(i)
-# output: 0 1 2 3 4
 ```
 
 > [!TIP]
