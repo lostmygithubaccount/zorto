@@ -174,6 +174,8 @@ pub(crate) fn activate_venv(py: pyo3::Python<'_>, site_root: &Path) -> pyo3::PyR
 const VIZ_DETECTION_CODE: &str = r#"
 import sys as _sys
 __zorto_internal_viz_output__ = []
+_pre = __zorto_internal_pre_vars__ if '__zorto_internal_pre_vars__' in dir() else set()
+_new_vars = {n for n in dir() if n not in _pre and not n.startswith('_')}
 
 # matplotlib (also covers seaborn which uses matplotlib under the hood)
 if 'matplotlib' in _sys.modules or 'matplotlib.pyplot' in _sys.modules:
@@ -190,17 +192,18 @@ if 'matplotlib' in _sys.modules or 'matplotlib.pyplot' in _sys.modules:
     except Exception as _e:
         import sys; print(f'zorto: warning: matplotlib capture failed: {_e}', file=sys.stderr)
 
-# plotly
+# plotly — only check variables created by THIS code block
 if 'plotly' in _sys.modules:
     try:
         import plotly.graph_objects as _go
-        for _name, _obj in list(locals().items()):
-            if not _name.startswith('_') and isinstance(_obj, _go.Figure):
+        for _name in _new_vars:
+            _obj = locals().get(_name)
+            if _obj is not None and isinstance(_obj, _go.Figure):
                 __zorto_internal_viz_output__.append(('html', _obj.to_html(full_html=False, include_plotlyjs='cdn')))
     except Exception as _e:
         import sys; print(f'zorto: warning: plotly capture failed: {_e}', file=sys.stderr)
 
-# altair
+# altair — only check variables created by THIS code block
 if 'altair' in _sys.modules:
     try:
         import altair as _alt
@@ -209,8 +212,9 @@ if 'altair' in _sys.modules:
             _cls = getattr(_alt, _cls_name, None)
             if _cls is not None:
                 _alt_types = _alt_types + (_cls,)
-        for _name, _obj in list(locals().items()):
-            if not _name.startswith('_') and isinstance(_obj, _alt_types):
+        for _name in _new_vars:
+            _obj = locals().get(_name)
+            if _obj is not None and isinstance(_obj, _alt_types):
                 __zorto_internal_viz_output__.append(('html', _obj.to_html()))
     except Exception as _e:
         import sys; print(f'zorto: warning: altair capture failed: {_e}', file=sys.stderr)
@@ -254,6 +258,10 @@ fn execute_python(
             // Set working directory
             let os = py.import("os")?;
             os.call_method1("chdir", (working_dir.to_string_lossy().as_ref(),))?;
+
+            // Snapshot __main__ namespace before user code runs
+            let snapshot_code = CString::new("__zorto_internal_pre_vars__ = set(dir())")?;
+            let _ = py.run(snapshot_code.as_c_str(), None, None);
 
             // Execute user code
             let exec_result = py.run(code_cstr.as_c_str(), None, None);
