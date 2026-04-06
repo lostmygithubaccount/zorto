@@ -28,6 +28,10 @@ Step-by-step guides for common Zorto tasks.
 - [Add a favicon](add-favicon.md): site icon setup
 - [Add a 404 page](add-404-page.md): custom error page
 
+## Search
+
+- [Add search](add-search.md): enable client-side search with one config line
+
 ## Deployment
 
 - [Deploy your site](deploy.md): Netlify, GitHub Pages, Vercel, Cloudflare
