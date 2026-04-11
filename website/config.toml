@@ -45,6 +45,7 @@ menu_items = [
 
 menu_items_right = [
   { name = "llms.txt", url = "/llms.txt" },
+  { name = "Presentations", url = "/presentations/" },
   { name = "Blog", url = "/posts" },
 ]
 

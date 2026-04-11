@@ -86,6 +86,8 @@ pub enum SortBy {
     Date,
     /// Alphabetical by title.
     Title,
+    /// Ascending by weight. Pages without weight sort last; ties broken by filename.
+    Weight,
 }
 
 /// Configuration for the Markdown rendering pipeline.
@@ -176,7 +178,7 @@ fn default_section_html() -> String {
     "section.html".to_string()
 }
 
-fn default_true() -> bool {
+pub(crate) fn default_true() -> bool {
     true
 }
 

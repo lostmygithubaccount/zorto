@@ -327,3 +327,74 @@ Override/priority cascade diagram. The last item is highlighted as the winner.
 **Syntax:**
 
 <pre><code>&#123;&#123; cascade(items="Low:Default value:default|High:Your override:wins") &#125;&#125;</code></pre>
+
+## Presentation shortcodes
+
+The following shortcodes are designed for use in [presentations](../concepts/presentations.md) but work in any page.
+
+## slide_image
+
+Absolutely positioned image for slide layouts.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `src` | string | *required* | Image path or URL |
+| `alt` | string | `""` | Alt text |
+| `top` | string | | CSS top position (e.g. `"10%"`, `"50px"`) |
+| `left` | string | | CSS left position |
+| `right` | string | | CSS right position |
+| `bottom` | string | | CSS bottom position |
+| `width` | string | | CSS width |
+| `height` | string | | CSS height |
+
+**Syntax:**
+
+<pre><code>&#123;&#123; slide_image(src="logo.png", top="10%", right="5%", width="200px") &#125;&#125;</code></pre>
+
+## speaker_notes
+
+Speaker notes for reveal.js presentations. Press `S` in a presentation to open the speaker view.
+
+**Syntax:**
+
+<pre><code>&#123;% speaker_notes() %&#125;
+Remember to mention the key point about performance.
+&#123;% end %&#125;</code></pre>
+
+## fragment
+
+Progressive reveal — content appears on each click/advance within a slide.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `style` | string | `"fade-in"` | Animation style: `fade-in`, `fade-out`, `fade-up`, `fade-down`, `fade-left`, `fade-right`, `grow`, `shrink`, `strike`, `highlight-red`, `highlight-blue`, `highlight-green` |
+
+**Syntax:**
+
+<pre><code>&#123;% fragment(style="fade-in") %&#125;
+This appears on click.
+&#123;% end %&#125;</code></pre>
+
+## columns
+
+Multi-column layout. Body content is split on `<!-- column -->` markers.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `widths` | string | equal | Pipe-separated column widths (e.g. `"60%|40%"`) |
+
+**Syntax:**
+
+<pre><code>&#123;% columns(widths="60%|40%") %&#125;
+Left column content
+
+&lt;!-- column --&gt;
+
+Right column content
+&#123;% end %&#125;</code></pre>

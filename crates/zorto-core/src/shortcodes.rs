@@ -178,6 +178,10 @@ fn resolve_shortcode(
         "tree" => builtin_tree(args_str, body),
         "compare" => builtin_compare(args_str),
         "cascade" => builtin_cascade(args_str),
+        "slide_image" => builtin_slide_image(args_str),
+        "speaker_notes" => builtin_speaker_notes(body),
+        "fragment" => builtin_fragment(args_str, body),
+        "columns" => builtin_columns(args_str, body),
         _ => render_shortcode(name, args_str, body, shortcode_dir),
     }
 }
@@ -999,6 +1003,97 @@ fn builtin_cascade(args_str: &str) -> anyhow::Result<String> {
         ));
     }
 
+    html.push_str("</div>");
+    Ok(html)
+}
+
+/// Built-in `slide_image` shortcode: absolutely positioned image for presentations.
+///
+/// Arguments:
+/// - `src` (required): image path or URL
+/// - `alt` (optional): alt text
+/// - `top`, `left`, `right`, `bottom` (optional): CSS position values
+/// - `width`, `height` (optional): CSS size values
+fn builtin_slide_image(args_str: &str) -> anyhow::Result<String> {
+    let args = parse_args(args_str);
+    let src = args
+        .get("src")
+        .ok_or_else(|| anyhow::anyhow!("slide_image shortcode requires a `src` argument"))?;
+    let alt = args.get("alt").map(|s| s.as_str()).unwrap_or("");
+
+    let mut style_parts = vec!["position: absolute".to_string()];
+    for prop in &["top", "left", "right", "bottom", "width", "height"] {
+        if let Some(val) = args.get(*prop) {
+            style_parts.push(format!("{}: {}", prop, escape_html(val)));
+        }
+    }
+
+    Ok(format!(
+        r#"<img src="{}" alt="{}" style="{}" class="slide-image">"#,
+        escape_html(src),
+        escape_html(alt),
+        style_parts.join("; ")
+    ))
+}
+
+/// Built-in `speaker_notes` shortcode: reveal.js speaker notes.
+///
+/// Body content becomes the speaker notes for the current slide.
+/// Rendered as `<aside class="notes">` which reveal.js recognizes natively.
+fn builtin_speaker_notes(body: Option<&str>) -> anyhow::Result<String> {
+    let body = body.ok_or_else(|| anyhow::anyhow!("speaker_notes shortcode requires a body"))?;
+    Ok(format!(
+        "<aside class=\"notes\">\n\n{}\n\n</aside>",
+        body.trim()
+    ))
+}
+
+/// Built-in `fragment` shortcode: progressive reveal in presentations.
+///
+/// Arguments:
+/// - `style` (optional): reveal.js fragment style (default: "fade-in").
+///   Options: fade-in, fade-out, fade-up, fade-down, fade-left, fade-right,
+///   grow, shrink, strike, highlight-red, highlight-blue, highlight-green.
+fn builtin_fragment(args_str: &str, body: Option<&str>) -> anyhow::Result<String> {
+    let args = parse_args(args_str);
+    let style = args.get("style").map(|s| s.as_str()).unwrap_or("fade-in");
+    let body = body.ok_or_else(|| anyhow::anyhow!("fragment shortcode requires a body"))?;
+    Ok(format!(
+        "<div class=\"fragment {}\">\n\n{}\n\n</div>",
+        escape_html(style),
+        body.trim()
+    ))
+}
+
+/// Built-in `columns` shortcode: multi-column layout for presentations.
+///
+/// Body content is split on `<!-- column -->` markers into separate columns.
+///
+/// Arguments:
+/// - `widths` (optional): pipe-separated column widths (e.g. "60%|40%").
+///   Defaults to equal-width flex columns.
+fn builtin_columns(args_str: &str, body: Option<&str>) -> anyhow::Result<String> {
+    let args = parse_args(args_str);
+    let body = body.ok_or_else(|| anyhow::anyhow!("columns shortcode requires a body"))?;
+    let parts: Vec<&str> = body.split("<!-- column -->").collect();
+    let widths: Vec<&str> = args
+        .get("widths")
+        .map(|w| w.split('|').collect())
+        .unwrap_or_default();
+
+    let mut html = String::from(
+        "<div class=\"slide-columns\" style=\"display: flex; gap: 2em; width: 100%;\">\n",
+    );
+    for (i, part) in parts.iter().enumerate() {
+        let width_style = widths
+            .get(i)
+            .map(|w| format!(" style=\"flex: 0 0 {}\"", escape_html(w.trim())))
+            .unwrap_or_else(|| " style=\"flex: 1\"".to_string());
+        html.push_str(&format!(
+            "<div class=\"slide-column\"{width_style}>\n\n{}\n\n</div>\n",
+            part.trim()
+        ));
+    }
     html.push_str("</div>");
     Ok(html)
 }

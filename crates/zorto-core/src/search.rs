@@ -184,6 +184,7 @@ mod tests {
             taxonomies: HashMap::new(),
             extra: serde_json::Value::Null,
             aliases: vec![],
+            weight: None,
             word_count: 0,
             reading_time: 0,
             relative_path: "test.md".to_string(),

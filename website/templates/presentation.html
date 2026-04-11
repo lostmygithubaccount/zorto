@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="{{ config.default_language | default(value='en') }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ section.title }} | {{ config.title }}</title>
+    {% if section.description -%}
+    <meta name="description" content="{{ section.description }}">
+    {%- endif %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/{{ section.extra.reveal_theme | default(value='black') }}.css" id="theme">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+    {%- if config.extra.favicon %}
+    <link rel="icon" type="{{ config.extra.favicon_mimetype | default(value='image/png') }}" href="{{ config.extra.favicon }}">
+    {%- endif %}
+    <style>
+        /* Zorto presentation overrides */
+        .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+            text-transform: none;
+        }
+        .reveal .zorto-anchor {
+            display: none;
+        }
+        .reveal .slide-image {
+            max-width: none;
+        }
+        .reveal .slide-columns {
+            width: 100%;
+            text-align: left;
+        }
+        .reveal .slide-column ul,
+        .reveal .slide-column ol {
+            display: block;
+        }
+        .reveal section.layout-center {
+            text-align: center;
+        }
+        .reveal section.layout-center h1,
+        .reveal section.layout-center h2,
+        .reveal section.layout-center h3 {
+            text-align: center;
+        }
+        .reveal section.layout-image-left,
+        .reveal section.layout-image-right {
+            display: flex !important;
+            align-items: center;
+            gap: 2em;
+            text-align: left;
+        }
+        .reveal section.layout-image-left > *,
+        .reveal section.layout-image-right > * {
+            flex: 1;
+            min-width: 0;
+        }
+        .reveal section.layout-image-left img,
+        .reveal section.layout-image-right img {
+            max-width: 100%;
+            height: auto;
+        }
+        .reveal section.layout-image-full {
+            text-align: center;
+        }
+        .reveal section.layout-title {
+            text-align: center;
+        }
+        .reveal section.layout-title h1 {
+            font-size: 2.5em;
+        }
+        .reveal .slides section .fragment {
+            transition: all 0.3s ease;
+        }
+        /* Code block styling */
+        .reveal pre {
+            width: 100%;
+            font-size: 0.55em;
+        }
+        .reveal code {
+            max-height: 500px;
+        }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+            {%- for page in section.pages %}
+            <section
+                {%- if page.extra.background_image %} data-background-image="{{ page.extra.background_image }}"{% endif %}
+                {%- if page.extra.background_color %} data-background-color="{{ page.extra.background_color }}"{% endif %}
+                {%- if page.extra.background_size %} data-background-size="{{ page.extra.background_size }}"{% endif %}
+                {%- if page.extra.background_opacity %} data-background-opacity="{{ page.extra.background_opacity }}"{% endif %}
+                {%- if page.extra.transition %} data-transition="{{ page.extra.transition }}"{% endif %}
+                {%- if page.extra.layout %} class="layout-{{ page.extra.layout }}"{% endif %}
+            >
+                {{ page.content | safe }}
+            </section>
+            {%- endfor %}
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+    <script>
+        Reveal.initialize({
+            hash: true,
+            slideNumber: true,
+            width: {{ section.extra.width | default(value=1050) }},
+            height: {{ section.extra.height | default(value=700) }},
+            margin: {{ section.extra.margin | default(value=0.04) }},
+            transition: '{{ section.extra.transition | default(value="slide") }}',
+            center: true,
+            plugins: [ RevealNotes, RevealHighlight ]
+        });
+    </script>
+</body>
+</html>

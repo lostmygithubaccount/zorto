@@ -82,6 +82,13 @@ pub struct Frontmatter {
     pub aliases: Vec<String>,
     pub sort_by: Option<SortBy>,
     pub paginate_by: Option<usize>,
+    /// Sort weight for ordering within a section (lower = first).
+    pub weight: Option<i64>,
+    /// Whether child pages should be rendered as individual HTML files (default: `true`).
+    /// When `false`, pages are still rendered to HTML but only available via `section.pages`
+    /// in templates — useful for presentations where slides are assembled into one output.
+    #[serde(default = "crate::config::default_true")]
+    pub render_pages: bool,
     #[serde(default = "default_toml_table")]
     pub extra: toml::Value,
     /// Catch-all for unknown top-level keys (taxonomy values like tags, categories, etc.)
@@ -102,6 +109,8 @@ impl Default for Frontmatter {
             aliases: Vec::new(),
             sort_by: None,
             paginate_by: None,
+            weight: None,
+            render_pages: true,
             extra: default_toml_table(),
             rest: HashMap::new(),
         }
@@ -141,6 +150,8 @@ pub struct Page {
     pub extra: serde_json::Value,
     /// Redirect aliases — additional URL paths that redirect to this page.
     pub aliases: Vec<String>,
+    /// Sort weight for ordering within a section (lower values sort first).
+    pub weight: Option<i64>,
     /// Approximate word count of the raw content.
     pub word_count: usize,
     /// Estimated reading time in minutes (word_count / 200, minimum 1).
@@ -172,6 +183,10 @@ pub struct Section {
     pub paginate_by: Option<usize>,
     /// Custom template name. Defaults to `"section.html"`.
     pub template: Option<String>,
+    /// Whether child pages should be rendered as individual HTML files.
+    /// When `false`, pages are available via `section.pages` in templates but
+    /// do not produce standalone HTML output.
+    pub render_pages: bool,
     /// Extra frontmatter values as JSON, accessible in templates as `section.extra`.
     pub extra: serde_json::Value,
     /// Path of the source `_index.md` relative to the content directory.
@@ -298,6 +313,7 @@ pub fn build_page(
         taxonomies,
         extra,
         aliases: fm.aliases,
+        weight: fm.weight,
         word_count,
         reading_time,
         relative_path: relative_path.to_string(),
@@ -328,6 +344,7 @@ pub fn build_section(
         sort_by: fm.sort_by,
         paginate_by: fm.paginate_by,
         template: fm.template,
+        render_pages: fm.render_pages,
         extra,
         relative_path: relative_path.to_string(),
     }
@@ -699,6 +716,12 @@ pub fn assign_pages_to_sections(
         match section.sort_by.unwrap_or_default() {
             SortBy::Date => sort_pages_by_date(&mut section.pages),
             SortBy::Title => section.pages.sort_by(|a, b| a.title.cmp(&b.title)),
+            SortBy::Weight => section.pages.sort_by(|a, b| {
+                let wa = a.weight.unwrap_or(i64::MAX);
+                let wb = b.weight.unwrap_or(i64::MAX);
+                wa.cmp(&wb)
+                    .then_with(|| a.relative_path.cmp(&b.relative_path))
+            }),
         }
     }
 }

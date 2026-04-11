@@ -33,8 +33,14 @@ Be careful with this operation.
 | `tree` | Body | File tree visualization |
 | `compare` | Inline | Side-by-side comparison cards |
 | `cascade` | Inline | Priority/override cascade diagram |
+| `slide_image` | Inline | Absolutely positioned image (presentations) |
+| `speaker_notes` | Body | Reveal.js speaker notes (presentations) |
+| `fragment` | Body | Progressive reveal on click (presentations) |
+| `columns` | Body | Multi-column layout (presentations) |
 
 The diagram shortcodes (`flow`, `layers`, `tree`, `compare`, `cascade`) render pure CSS/HTML visuals with no JavaScript. They are used throughout these docs — see [content model](content-model.md) and [AI-native](ai-native.md) for examples.
+
+The presentation shortcodes (`slide_image`, `speaker_notes`, `fragment`, `columns`) are designed for use in [presentations](presentations.md) but work in any page.
 
 See the [shortcodes reference](../reference/shortcodes.md) for parameters and live examples.
 
@@ -75,7 +81,7 @@ Card content goes here.
 
 ## Further reading
 
-- [Shortcodes reference](../reference/shortcodes.md) — all 15 built-in shortcodes with live examples
+- [Shortcodes reference](../reference/shortcodes.md) — all 19 built-in shortcodes with live examples
 - [Callouts](callouts.md) — GitHub-style alert boxes
 - [Templates](templates.md) — the Tera template engine
 - [How to customize your theme](../how-to/customize-theme.md) — create custom shortcodes

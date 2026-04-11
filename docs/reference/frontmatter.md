@@ -24,6 +24,7 @@ Used in regular `.md` files (anything that is not `_index.md`).
 | `draft` | bool | `false` | If `true`, excluded from production builds |
 | `slug` | string | filename | Override the URL slug. By default, derived from the filename (e.g. `my-post.md` becomes `my-post`) |
 | `template` | string | `"page.html"` | Custom template for this page |
+| `weight` | int | *none* | Sort weight for ordering within a section (lower values first). Used with `sort_by = "weight"` |
 | `aliases` | array of strings | `[]` | Additional URL paths that redirect to this page |
 | `[extra]` | table | `{}` | Arbitrary key-value data, accessible in templates as `page.extra` |
 | taxonomy fields | array of strings | `[]` | Top-level arrays are interpreted as taxonomy values (e.g. `tags = ["rust"]`) |
@@ -52,8 +53,9 @@ Used in `_index.md` files that define sections (directories).
 |-------|------|---------|-------------|
 | `title` | string | `""` | Section title |
 | `description` | string | *none* | Section description |
-| `sort_by` | string | *none* | Sort pages: `"date"` (reverse chronological) or `"title"` (alphabetical) |
+| `sort_by` | string | *none* | Sort pages: `"date"` (reverse chronological), `"title"` (alphabetical), or `"weight"` (ascending by weight, filename tiebreak) |
 | `paginate_by` | int | *none* | Pages per pagination page. Omit or set to `0` to disable pagination |
+| `render_pages` | bool | `true` | When `false`, child pages are not rendered as individual HTML files. Their content is still available in `section.pages` for use in templates. Used for [presentations](../concepts/presentations.md) |
 | `template` | string | `"section.html"` | Custom template for this section |
 | `[extra]` | table | `{}` | Arbitrary key-value data, accessible in templates as `section.extra` |
 

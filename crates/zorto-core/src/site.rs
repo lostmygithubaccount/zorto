@@ -112,6 +112,18 @@ impl Site {
         // Phase 3: ASSIGN pages to sections (after rendering so content is filled)
         content::assign_pages_to_sections(&mut self.sections, &self.pages);
 
+        // Phase 3.5: Remove pages that belong to non-rendering sections.
+        // Their rendered content is preserved in section.pages for use in templates
+        // (e.g. presentations), but they won't get individual HTML output files.
+        let no_render_keys: std::collections::HashSet<&str> = self
+            .sections
+            .values()
+            .filter(|s| !s.render_pages)
+            .flat_map(|s| s.pages.iter().map(|p| p.relative_path.as_str()))
+            .collect();
+        self.pages
+            .retain(|k, _| !no_render_keys.contains(k.as_str()));
+
         // Phase 4: TEMPLATE RENDERING
         let templates_dir = self.root.join("templates");
         let tera = templates::setup_tera(&templates_dir, &self.config, &self.sections)?;
