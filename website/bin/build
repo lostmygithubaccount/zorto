@@ -3,10 +3,10 @@ set -euo pipefail
 WEBSITE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 REPO_ROOT="$(cd "$WEBSITE_DIR/.." && pwd)"
 
-# install Python deps into the website venv
+# install zorto + Python deps into the website venv
 cd "$WEBSITE_DIR"
 uv sync
 
-# build from repo root using cargo (--sandbox . allows shortcodes to reference ../crates/)
+# build from repo root (--sandbox . allows shortcodes to reference ../crates/)
 cd "$REPO_ROOT"
-VIRTUAL_ENV="$WEBSITE_DIR/.venv" cargo run -p zorto --quiet -- --root website --sandbox . build "$@"
+VIRTUAL_ENV="$WEBSITE_DIR/.venv" uv run --no-project zorto --root website --sandbox . build "$@"
