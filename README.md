@@ -6,9 +6,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/dkdc-io/zorto/ci.yml?branch=main&label=CI)](https://github.com/dkdc-io/zorto/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-8A2BE2.svg)](https://github.com/dkdc-io/zorto/blob/main/LICENSE)
 
-Zorto turns plain Markdown into polished websites, blog posts, and slide decks — same files, same workflow, no HTML gymnastics. Point it at a folder of `.md` files and get a production-ready site with search, themes, and a reveal.js-powered presentation mode (arrow keys, speaker view, fullscreen). Designed so you — or an AI agent working alongside you — can draft a landing page, an engineering blog post, or your next all-hands deck in minutes, not days.
-
-Prior art: inspired by [Zola](https://github.com/getzola/zola) (fast Rust SSG) and [Quarto](https://github.com/quarto-dev/quarto-cli) (executable documents). Zorto is MIT-licensed and free and open source forever.
+The AI-native static site generator (SSG) with executable code blocks, inspired by [Zola](https://github.com/getzola/zola) and [Quarto](https://github.com/quarto-dev/quarto-cli).
 
 ## Install
 
