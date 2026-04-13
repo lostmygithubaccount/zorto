@@ -320,7 +320,48 @@ fn parse_code_attrs(lang: &str) -> (&str, Option<String>) {
 }
 
 fn is_external_url(url: &str, base_url: &str) -> bool {
-    (url.starts_with("http://") || url.starts_with("https://")) && !url.starts_with(base_url)
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return false;
+    }
+    match (url_host(url), url_host(base_url)) {
+        (Some(uh), Some(bh)) => !uh.eq_ignore_ascii_case(bh),
+        // If we can't extract a host from base_url (misconfigured), treat any
+        // absolute http(s) URL as external — matches the prior behaviour but
+        // without the prefix-substring trap.
+        _ => true,
+    }
+}
+
+/// Extract the host component from an http(s) URL.
+///
+/// Returns the substring between `://` and the next `/`, `?`, or `#`. The
+/// userinfo prefix (`user:pass@`) and `:port` suffix are stripped so two URLs
+/// pointing at the same origin compare equal regardless of incidental syntax.
+/// Returns `None` for inputs that aren't `http://` or `https://`.
+fn url_host(url: &str) -> Option<&str> {
+    let after_scheme = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))?;
+    let end = after_scheme
+        .find(['/', '?', '#'])
+        .unwrap_or(after_scheme.len());
+    let authority = &after_scheme[..end];
+    // Strip userinfo (`user:pass@host`)
+    let host_with_port = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    // Strip port (`host:8080`). For IPv6 the host is bracketed (`[::1]:8080`),
+    // so only treat the LAST `:` as a port separator if there's no `]` after it.
+    let host = if host_with_port.starts_with('[') {
+        // IPv6 literal: keep through the closing bracket, drop any `:port` after.
+        match host_with_port.rfind(']') {
+            Some(idx) => &host_with_port[..=idx],
+            None => host_with_port,
+        }
+    } else {
+        host_with_port
+            .rsplit_once(':')
+            .map_or(host_with_port, |(h, _)| h)
+    };
+    if host.is_empty() { None } else { Some(host) }
 }
 
 #[cfg(test)]
@@ -650,6 +691,68 @@ mod tests {
         ));
         assert!(!is_external_url("/relative/path", "https://example.com"));
         assert!(!is_external_url("#anchor", "https://example.com"));
+    }
+
+    #[test]
+    fn test_is_external_url_lookalike_domain() {
+        // Regression: prefix-only check used to treat `example.com.evil.com`
+        // as same-origin to `example.com`, suppressing the noreferrer/nofollow
+        // hardening on exactly the URLs that need it most.
+        assert!(is_external_url(
+            "https://example.com.evil.com/path",
+            "https://example.com"
+        ));
+        assert!(is_external_url(
+            "https://example.com.evil.com/",
+            "https://example.com"
+        ));
+        // Subdomain is also a different host.
+        assert!(is_external_url(
+            "https://sub.example.com/x",
+            "https://example.com"
+        ));
+        // Same host on different scheme is still same-origin for our purposes.
+        assert!(!is_external_url(
+            "http://example.com/page",
+            "https://example.com"
+        ));
+        // Host comparison is case-insensitive (DNS is).
+        assert!(!is_external_url(
+            "https://EXAMPLE.com/page",
+            "https://example.com"
+        ));
+        // Userinfo and ports must not confuse the comparison.
+        assert!(!is_external_url(
+            "https://user:pass@example.com:8080/page",
+            "https://example.com"
+        ));
+        // IPv6 host literal.
+        assert!(is_external_url(
+            "https://[2001:db8::1]/x",
+            "https://example.com"
+        ));
+        assert!(!is_external_url(
+            "https://[2001:db8::1]:8080/x",
+            "https://[2001:db8::1]"
+        ));
+    }
+
+    #[test]
+    fn test_url_host_extraction() {
+        assert_eq!(url_host("https://example.com"), Some("example.com"));
+        assert_eq!(url_host("https://example.com/path"), Some("example.com"));
+        assert_eq!(url_host("http://example.com:8080/x"), Some("example.com"));
+        assert_eq!(
+            url_host("https://user:pass@example.com/x"),
+            Some("example.com")
+        );
+        assert_eq!(url_host("https://[2001:db8::1]"), Some("[2001:db8::1]"));
+        assert_eq!(
+            url_host("https://[2001:db8::1]:8080/x"),
+            Some("[2001:db8::1]")
+        );
+        assert_eq!(url_host("/relative"), None);
+        assert_eq!(url_host("ftp://x.com"), None);
     }
 
     #[test]
