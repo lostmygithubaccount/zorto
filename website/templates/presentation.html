@@ -7,20 +7,52 @@
     {% if section.description -%}
     <meta name="description" content="{{ section.description }}">
     {%- endif %}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
-    {#- Known reveal.js theme names; anything else in [extra].reveal_theme is ignored at render time. -#}
+    {#- SRI pins. A jsdelivr republish or npm account takeover would otherwise
+        execute attacker-controlled JS/CSS in every reader's browser. Hashes
+        computed per resource at pin time; regenerate with `openssl dgst -sha384`
+        if you bump a version. -#}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css"
+        integrity="sha384-AJKv9Ui5SfA0VsFksFI9GuA1ztX9Ca3CLP6HGfX4YY/tYSVodC+PUszaQZFIlkuy" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css"
+        integrity="sha384-YgvgKeZJykuztG+iQPoZHNZENTFZvOcOJ/uRzmJTje6GHYN9zAw+y5rx/L8MQKA/" crossorigin="anonymous">
+    {#- Known reveal.js theme names. Anything else in [extra].reveal_theme is
+        ignored at render time AND skipped at client-side swap. -#}
     {%- set known_themes = ["black", "white", "league", "beige", "night", "serif", "simple", "solarized", "blood", "moon", "dracula", "sky"] -%}
     {%- set default_theme = section.extra.reveal_theme | default(value='black') -%}
     {%- if default_theme not in known_themes -%}{%- set default_theme = "black" -%}{%- endif -%}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/{{ default_theme }}.css" id="theme">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
-    {#- Preload any per-slide theme referenced in [page.extra.reveal_theme] to avoid FOUC on swap. -#}
+    {#- SRI per theme. Server-side lookup resolves `default_sri`; the same
+        map is emitted as JS below so the client-side swap can set the right
+        integrity before changing href. Regenerate with `openssl dgst -sha384`
+        if you bump reveal.js. Tera has no dict literals so we keep this as
+        an if-chain plus a hand-written JS map — both must stay in sync. -#}
+    {%- if default_theme == "black" -%}{%- set default_sri = "sha384-rGf1FAL+Buyw4LpDboONln7P/UqlyCftbnLG8bC6nNAaW3LcuHtUg5t5KYY3U+L8" -%}
+    {%- elif default_theme == "white" -%}{%- set default_sri = "sha384-/TZMdZeq0ZGi4iePTHhOMXOkyv2f72ZcwmhAtOmSZlPkx+5qCOfyc/U1kjd5Su6S" -%}
+    {%- elif default_theme == "league" -%}{%- set default_sri = "sha384-TGjsKwPMycz86Iifg+w6QmLVOVn20sb7sI+eJWqAWKb/A4b2Gp4QHBmFuGs6pspc" -%}
+    {%- elif default_theme == "beige" -%}{%- set default_sri = "sha384-rt6XN0bOEUE+uunPfkXDxJRCcGfZlXwt88npmRTw9RWNMTY7aXztsHNOm+gBCAaT" -%}
+    {%- elif default_theme == "night" -%}{%- set default_sri = "sha384-Q9XI5NaX0hqK5y+JskI9jDNh8uHfYHD4uT8MI5rLL2TIoViEL2JvQMzyYQDRgPCP" -%}
+    {%- elif default_theme == "serif" -%}{%- set default_sri = "sha384-eFbSgIKvgH02fkNrerwHS6PfnPIWVjqW8ASZVOQEpIW5PE9f/yk4MSII6KZge91O" -%}
+    {%- elif default_theme == "simple" -%}{%- set default_sri = "sha384-v5nh2ExKPN2sC3ymxjQsE5HaZHtom6tg98CZHuAIDStnwTP3u6Sv0W9RRrjH5oOo" -%}
+    {%- elif default_theme == "solarized" -%}{%- set default_sri = "sha384-llmy26dJQpqxYl2glG5JVQHBlLBGrfcp+x0to2MkIyogkd5InkyZ6U46F7bPFyBe" -%}
+    {%- elif default_theme == "blood" -%}{%- set default_sri = "sha384-m2cEmb3mMoGtVvYrs1JddqDUDCTG25g7zTaQw3EK9ckkAhDk+Ec5XaLzoYGazhBv" -%}
+    {%- elif default_theme == "moon" -%}{%- set default_sri = "sha384-eWZjS0sXChUT3FAnEu8uRlj4HnLp3fb1c/9FsG0VHOJwn0PaQUeoN+BSBUrUw5Iw" -%}
+    {%- elif default_theme == "dracula" -%}{%- set default_sri = "sha384-xIpHe7yOfVP6P05c+JY1b6jSvEoUM1ZewibGWxXBh9/1R+OgC4R3ICNsh/vjGvuV" -%}
+    {%- elif default_theme == "sky" -%}{%- set default_sri = "sha384-4D+nRiTQX2o4Kyn+c/HCSJJVLcy66CTnqLDyISKnyyqEMtWyg838lVnoQhiFc/Ph" -%}
+    {%- endif -%}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/{{ default_theme }}.css"
+        id="theme" integrity="{{ default_sri }}" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css"
+        integrity="sha384-0rrWATPYzlkqxkUhsXu1QkrO6K3rq4d6FqJQhcCJ7jQcZhb6plkpODMjpoiAYidE" crossorigin="anonymous">
+    {#- Preload any per-slide theme referenced in [page.extra.reveal_theme] to
+        avoid FOUC on swap. Preloads intentionally have no `integrity` — the
+        integrity check happens when the stylesheet is *activated* on the
+        main `<link>` below, so an attacker-served preload payload gets
+        discarded there. Keeping preloads SRI-free dodges the Tera
+        no-dict-literal limitation without widening the attack surface. -#}
     {%- set_global preloaded = [default_theme] -%}
     {%- for page in section.pages -%}
         {%- set t = page.extra.reveal_theme | default(value="") -%}
         {%- if t and t in known_themes and t not in preloaded -%}
-    <link rel="preload" as="style" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/{{ t }}.css">
+    <link rel="preload" as="style" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/{{ t }}.css" crossorigin="anonymous">
             {%- set_global preloaded = preloaded | concat(with=t) -%}
         {%- endif -%}
     {%- endfor %}
@@ -193,9 +225,12 @@
             {%- endfor %}
         </div>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"
+        integrity="sha384-M/JtqCVlLcK9lwVnBnMXP0V577CBULkjodKsR/PITOe4MSKNbbwqCemEyluOw0+5" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"
+        integrity="sha384-vGIe90H8q0nlnrw/zr9vn+r39OtjvzBfai9voOybn5Bx+KmKLtSxhM+YIfcrsfI3" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"
+        integrity="sha384-NUSGSUaJDMJ4EYNyUIGbV/meNnf3WqIvGfjqD3BDJdvWEI3K/zrL38QWB52JLIMW" crossorigin="anonymous"></script>
     <script>
         Reveal.initialize({
             hash: true,
@@ -213,21 +248,49 @@
         // same allow-list so an attacker-controlled frontmatter value cannot
         // load arbitrary CSS from the jsdelivr namespace.
         (function () {
-            // ALLOWED is rendered from the `known_themes` literal above. If
-            // you ever widen `known_themes` to include user-provided values,
-            // drop the `| safe` below and revalidate — otherwise an attacker-
-            // controlled string could load arbitrary CSS via the swap.
+            // ALLOWED is rendered from the `known_themes` literal above.
+            // THEME_SRI is hand-written here (Tera has no dict literal) and
+            // must stay in sync with the server-side if-chain above — both
+            // list the same 12 known reveal.js themes with their sha384
+            // hashes. If you widen `known_themes` to include user-provided
+            // values, drop the `| safe` below and revalidate; an attacker-
+            // controlled name could otherwise disable SRI (missing integrity
+            // → no validation) via the swap.
             var ALLOWED = {{ known_themes | json_encode | safe }};
+            var THEME_SRI = {
+                "black": "sha384-rGf1FAL+Buyw4LpDboONln7P/UqlyCftbnLG8bC6nNAaW3LcuHtUg5t5KYY3U+L8",
+                "white": "sha384-/TZMdZeq0ZGi4iePTHhOMXOkyv2f72ZcwmhAtOmSZlPkx+5qCOfyc/U1kjd5Su6S",
+                "league": "sha384-TGjsKwPMycz86Iifg+w6QmLVOVn20sb7sI+eJWqAWKb/A4b2Gp4QHBmFuGs6pspc",
+                "beige": "sha384-rt6XN0bOEUE+uunPfkXDxJRCcGfZlXwt88npmRTw9RWNMTY7aXztsHNOm+gBCAaT",
+                "night": "sha384-Q9XI5NaX0hqK5y+JskI9jDNh8uHfYHD4uT8MI5rLL2TIoViEL2JvQMzyYQDRgPCP",
+                "serif": "sha384-eFbSgIKvgH02fkNrerwHS6PfnPIWVjqW8ASZVOQEpIW5PE9f/yk4MSII6KZge91O",
+                "simple": "sha384-v5nh2ExKPN2sC3ymxjQsE5HaZHtom6tg98CZHuAIDStnwTP3u6Sv0W9RRrjH5oOo",
+                "solarized": "sha384-llmy26dJQpqxYl2glG5JVQHBlLBGrfcp+x0to2MkIyogkd5InkyZ6U46F7bPFyBe",
+                "blood": "sha384-m2cEmb3mMoGtVvYrs1JddqDUDCTG25g7zTaQw3EK9ckkAhDk+Ec5XaLzoYGazhBv",
+                "moon": "sha384-eWZjS0sXChUT3FAnEu8uRlj4HnLp3fb1c/9FsG0VHOJwn0PaQUeoN+BSBUrUw5Iw",
+                "dracula": "sha384-xIpHe7yOfVP6P05c+JY1b6jSvEoUM1ZewibGWxXBh9/1R+OgC4R3ICNsh/vjGvuV",
+                "sky": "sha384-4D+nRiTQX2o4Kyn+c/HCSJJVLcy66CTnqLDyISKnyyqEMtWyg838lVnoQhiFc/Ph"
+            };
             var themeLink = document.getElementById('theme');
             var defaultHref = themeLink.getAttribute('href');
+            var defaultSri = themeLink.getAttribute('integrity');
             function themeUrl(name) {
-                if (ALLOWED.indexOf(name) === -1) return defaultHref;
                 return 'https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/' + name + '.css';
             }
             function apply(slide) {
                 if (!slide) return;
                 var t = slide.getAttribute('data-reveal-theme');
-                themeLink.setAttribute('href', t ? themeUrl(t) : defaultHref);
+                // Swap integrity BEFORE href — the browser validates the new
+                // resource against whichever integrity is current when the
+                // load fires. Setting href first could race to load without
+                // the right hash.
+                if (t && ALLOWED.indexOf(t) !== -1 && THEME_SRI[t]) {
+                    themeLink.setAttribute('integrity', THEME_SRI[t]);
+                    themeLink.setAttribute('href', themeUrl(t));
+                } else {
+                    themeLink.setAttribute('integrity', defaultSri);
+                    themeLink.setAttribute('href', defaultHref);
+                }
             }
             Reveal.on('slidechanged', function (event) { apply(event.currentSlide); });
             Reveal.on('ready', function () { apply(Reveal.getCurrentSlide()); });

@@ -180,37 +180,57 @@ const VIZ_DETECTION_CODE: &str = r#"
 import sys as _sys, weakref as _weakref
 __zorto_internal_viz_output__ = []
 if '__zorto_internal_rendered__' not in dir():
+    # Fast path for hashable, weak-refable viz types (altair Chart).
     __zorto_internal_rendered__ = _weakref.WeakSet()
-if '__zorto_internal_rendered_ids__' not in dir():
-    # Fallback for viz objects that can't be weak-referenced (rare for
-    # first-party plotly/altair, but possible for third-party wrappers).
-    # Keyed by id() — cannot detect CPython id-recycling, so we warn once
-    # per unseen type so the author notices.
+    # Fallback for unhashable-but-weak-refable types. plotly's `BaseFigure`
+    # defines `__eq__` without `__hash__` (Python auto-drops `__hash__` in
+    # that case), so plotly Figures raise TypeError on WeakSet.add() and
+    # need an id-keyed weakref map instead. WeakValueDictionary auto-purges
+    # when the referent is GC'd, so id-recycling is still handled (the new
+    # object at a recycled id finds no live entry → treated as fresh).
+    __zorto_internal_rendered_refs__ = _weakref.WeakValueDictionary()
+    # Last-resort: neither hashable nor weak-referenceable. Strong id set
+    # with a one-time warning per offending type. id-recycling can silently
+    # dedup here, but we can't do better without keeping strong refs to
+    # every chart forever. Not expected for first-party viz types.
     __zorto_internal_rendered_ids__ = set()
     __zorto_internal_warned_types__ = set()
 
 def _zorto_mark(_obj):
     """Return True if _obj is new (first time seen); record it as seen."""
+    # 1. Hashable + weak-refable (e.g. altair Chart): WeakSet is ideal.
     try:
         if _obj in __zorto_internal_rendered__:
             return False
         __zorto_internal_rendered__.add(_obj)
         return True
     except TypeError:
-        _t = type(_obj).__name__
-        if _t not in __zorto_internal_warned_types__:
-            __zorto_internal_warned_types__.add(_t)
-            print(
-                f'zorto: warning: viz object of type {_t} is not '
-                f'weak-referenceable; falling back to id-based dedup '
-                f'(may miss id-recycled charts)',
-                file=_sys.stderr,
-            )
-        _oid = id(_obj)
-        if _oid in __zorto_internal_rendered_ids__:
+        pass
+    # 2. Unhashable but weak-refable (e.g. plotly Figure): id-keyed
+    #    WeakValueDictionary preserves id-recycling resistance.
+    _oid = id(_obj)
+    try:
+        _alive = __zorto_internal_rendered_refs__.get(_oid)
+        if _alive is _obj:
             return False
-        __zorto_internal_rendered_ids__.add(_oid)
+        __zorto_internal_rendered_refs__[_oid] = _obj
         return True
+    except TypeError:
+        pass
+    # 3. Last resort — neither hashable nor weak-refable. Warn once.
+    _t = type(_obj).__name__
+    if _t not in __zorto_internal_warned_types__:
+        __zorto_internal_warned_types__.add(_t)
+        print(
+            f'zorto: warning: viz object of type {_t} is neither hashable '
+            f'nor weak-referenceable; id-based dedup may miss id-recycled '
+            f'charts across blocks',
+            file=_sys.stderr,
+        )
+    if _oid in __zorto_internal_rendered_ids__:
+        return False
+    __zorto_internal_rendered_ids__.add(_oid)
+    return True
 
 def _zorto_typed_globals(_types):
     """Yield (name, obj) for globals bound to any instance of _types."""
@@ -270,10 +290,19 @@ if 'altair' in _sys.modules:
             _vid = 'vega-' + _uuid.uuid4().hex
             _sid = _vid + '-spec'
             _spec_json = _json.dumps(_obj.to_dict()).replace('<', '\\u003c')
+            # SRI pins on the CDN bundles so a jsdelivr republish or npm
+            # compromise can't serve attacker JS to readers. Bump the version
+            # → regenerate the hash with `openssl dgst -sha384`.
             _html = (
-                '<script src="https://cdn.jsdelivr.net/npm/vega@6.1.2"></script>'
-                '<script src="https://cdn.jsdelivr.net/npm/vega-lite@6.1.0"></script>'
-                '<script src="https://cdn.jsdelivr.net/npm/vega-embed@7.0.2"></script>'
+                '<script src="https://cdn.jsdelivr.net/npm/vega@6.1.2" '
+                'integrity="sha384-3Zeq0Gb8jqDivp2a+zwPu5uJJZV+yM0iuorzVFGDPuzChE4tO/3/TecDON0JtQEl" '
+                'crossorigin="anonymous"></script>'
+                '<script src="https://cdn.jsdelivr.net/npm/vega-lite@6.1.0" '
+                'integrity="sha384-YqChHqvOfmjffD8s4u/yesYKLLyylMUVuswYnnT4Xzlo8KtF3u/4Zuu5enUGzFrj" '
+                'crossorigin="anonymous"></script>'
+                '<script src="https://cdn.jsdelivr.net/npm/vega-embed@7.0.2" '
+                'integrity="sha384-MsH1NE1KRDpmMJCcJ8Ulqhadgiz4lT0GIaHN7DKB1POKAoBhSWywPDQ2sJDkP8M7" '
+                'crossorigin="anonymous"></script>'
                 f'<div id="{_vid}"></div>'
                 f'<script type="application/json" id="{_sid}">{_spec_json}</script>'
                 f'<script>vegaEmbed('
