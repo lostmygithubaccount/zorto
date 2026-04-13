@@ -21,7 +21,7 @@ name = "zorto"
 path = "src/main.rs"
 
 [features]
-default = ["embed-python", "search", "theme-zorto", "theme-dkdc", "theme-default", "theme-ember", "theme-forest", "theme-ocean", "theme-rose", "theme-slate", "theme-midnight", "theme-sunset", "theme-mint", "theme-plum", "theme-sand", "theme-arctic", "theme-lime", "theme-charcoal"]
+default = ["embed-python", "search", "webapp", "theme-zorto", "theme-dkdc", "theme-default", "theme-ember", "theme-forest", "theme-ocean", "theme-rose", "theme-slate", "theme-midnight", "theme-sunset", "theme-mint", "theme-plum", "theme-sand", "theme-arctic", "theme-lime", "theme-charcoal"]
 embed-python = ["zorto-core/embed-python"]
 python = ["zorto-core/python"]
 theme-zorto = ["zorto-core/theme-zorto"]

@@ -507,10 +507,12 @@ fn wizard_page(title: &str, step: u8, body: &str) -> String {
     </div>
     {body}
   </div>
+  {livereload}
 </body>
 </html>"##,
         title = escape(title),
         CSS = WIZARD_CSS,
+        livereload = crate::LIVERELOAD_JS,
     )
 }
 

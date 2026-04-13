@@ -403,7 +403,7 @@ fn render_section_editor(
       <div class="form-group">
         <label>Content <span style="color: #666680; font-size: 0.7rem; text-transform: none;">(Markdown — optional body for section page)</span></label>
         <textarea name="body" rows="20" id="editor"
-                  hx-post="/preview/render" hx-trigger="keyup changed delay:500ms"
+                  hx-post="/_render-markdown" hx-trigger="keyup changed delay:500ms"
                   hx-target="#preview" hx-swap="innerHTML">"##,
         &e_body,
         r##"</textarea>

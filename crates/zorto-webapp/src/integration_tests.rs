@@ -89,6 +89,7 @@ fn test_app(tmp: &TempDir) -> axum::Router {
         output_dir: output,
         sandbox: None,
         reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
     });
 
     app(state)
@@ -582,7 +583,7 @@ async fn build_trigger_succeeds() {
 async fn preview_renders_markdown() {
     let tmp = TempDir::new().unwrap();
     let app = test_app(&tmp);
-    let (status, body) = post_body(&app, "/preview/render", "# Hello\n\nWorld").await;
+    let (status, body) = post_body(&app, "/_render-markdown", "# Hello\n\nWorld").await;
     assert_eq!(status, StatusCode::OK, "body: {body}");
     assert!(body.contains("<h1"), "expected <h1 in: {body}");
     assert!(body.contains("Hello"));
@@ -594,7 +595,7 @@ async fn preview_strips_frontmatter() {
     let tmp = TempDir::new().unwrap();
     let app = test_app(&tmp);
     let content = "+++\ntitle = \"Test\"\n+++\n# Heading\n\nBody text";
-    let (status, body) = post_body(&app, "/preview/render", content).await;
+    let (status, body) = post_body(&app, "/_render-markdown", content).await;
     assert_eq!(status, StatusCode::OK);
     assert!(body.contains("<h1"), "expected <h1 in: {body}");
     assert!(body.contains("Heading"));
@@ -680,6 +681,7 @@ async fn dashboard_redirects_when_no_site() {
         output_dir: output,
         sandbox: None,
         reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
     });
     let app = app(state);
 
@@ -705,6 +707,7 @@ async fn setup_welcome_returns_ok() {
         output_dir: output,
         sandbox: None,
         reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
     });
     let app = app(state);
 
@@ -727,6 +730,7 @@ async fn setup_template_page_returns_ok() {
         output_dir: output,
         sandbox: None,
         reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
     });
     let app = app(state);
 
@@ -855,12 +859,124 @@ async fn preview_render_empty_body() {
     let tmp = TempDir::new().unwrap();
     let app = test_app(&tmp);
 
-    let (status, body) = post_body(&app, "/preview/render", "").await;
+    let (status, body) = post_body(&app, "/_render-markdown", "").await;
     assert_eq!(status, StatusCode::OK);
     // Empty input should produce empty (or minimal) output, not error
     assert!(
         !body.contains("panic") && !body.contains("500"),
         "empty preview should not error: {body}"
+    );
+}
+
+// ── Preview (embedded static server) ───────────────────────────────
+
+#[tokio::test]
+async fn preview_root_serves_index_with_livereload() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let out = tmp.path().join("site/public");
+    std::fs::write(
+        out.join("index.html"),
+        "<html><body><h1>Home</h1></body></html>",
+    )
+    .unwrap();
+
+    let (status, body) = get(&app, "/preview/").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.contains("<h1>Home</h1>"));
+    assert!(
+        body.contains("__livereload"),
+        "livereload JS must be injected"
+    );
+}
+
+#[tokio::test]
+async fn preview_serves_nested_file() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let out = tmp.path().join("site/public");
+    std::fs::create_dir_all(out.join("posts/hello")).unwrap();
+    std::fs::write(
+        out.join("posts/hello/index.html"),
+        "<html><body><p>nested</p></body></html>",
+    )
+    .unwrap();
+
+    let (status, body) = get(&app, "/preview/posts/hello/").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.contains("nested"));
+    assert!(body.contains("__livereload"));
+}
+
+#[tokio::test]
+async fn preview_serves_non_html_asset_without_injection() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let out = tmp.path().join("site/public");
+    std::fs::write(out.join("style.css"), "body { color: red; }").unwrap();
+
+    let (status, body) = get(&app, "/preview/style.css").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "body { color: red; }");
+    assert!(!body.contains("__livereload"));
+}
+
+#[tokio::test]
+async fn preview_missing_file_returns_404() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let (status, _body) = get(&app, "/preview/does-not-exist.html").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn preview_blocks_directory_traversal() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    // A sibling file OUTSIDE output_dir that traversal could reach
+    std::fs::write(tmp.path().join("site/secret.txt"), "nope").unwrap();
+
+    let (status, _body) = get(&app, "/preview/../secret.txt").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn cms_page_includes_livereload_script() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let (status, body) = get(&app, "/").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains("__livereload"),
+        "CMS pages must carry the livereload client"
+    );
+}
+
+#[tokio::test]
+async fn view_site_link_points_at_embedded_preview() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let (status, body) = get(&app, "/").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains(r#"href="/preview""#),
+        "View Site link should target /preview: {}",
+        &body[..body.len().min(2000)]
+    );
+}
+
+#[tokio::test]
+async fn livereload_route_rejects_non_upgrade_request() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    // Plain GET without the WebSocket upgrade headers should be rejected by axum.
+    let (status, _body) = get(&app, "/__livereload").await;
+    assert!(
+        status == StatusCode::UPGRADE_REQUIRED
+            || status == StatusCode::BAD_REQUEST
+            || status == StatusCode::METHOD_NOT_ALLOWED,
+        "non-WS request on /__livereload returned unexpected {status}"
     );
 }
 

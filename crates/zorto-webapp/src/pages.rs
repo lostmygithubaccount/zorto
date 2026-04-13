@@ -700,7 +700,7 @@ fn render_editor(
       <div class="form-group">
         <label>Content <span style="color: #666680; font-size: 0.7rem; text-transform: none;">(Markdown)</span></label>
         <textarea name="body" rows="28" id="editor"
-                  hx-post="/preview/render" hx-trigger="keyup changed delay:500ms"
+                  hx-post="/_render-markdown" hx-trigger="keyup changed delay:500ms"
                   hx-target="#preview" hx-swap="innerHTML">"##, &e_body, r##"</textarea>
       </div>
       <div style="display: flex; gap: 8px;">
