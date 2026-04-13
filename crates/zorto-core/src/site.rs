@@ -544,6 +544,10 @@ impl Site {
         let mut post_render_warnings = Vec::new();
         post_render_warnings.extend(crate::lint::lint_templates(&templates_dir));
         post_render_warnings.extend(crate::lint::lint_frontmatter(&self.pages, &self.sections));
+        post_render_warnings.extend(crate::lint::lint_presentation_transitions(
+            &self.pages,
+            &self.sections,
+        ));
         let static_dir = self.root.join("static");
         post_render_warnings.extend(crate::lint::lint_missing_assets(
             &self.pages,

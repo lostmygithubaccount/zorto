@@ -271,6 +271,78 @@ pub fn lint_frontmatter(
     warnings
 }
 
+/// Reveal.js transition keywords. Anything else is silently ignored by reveal,
+/// so a typo in `[extra] transition` produces a deck that just defaults to
+/// `slide` without telling the author. Used by [`lint_presentation_transitions`].
+const REVEAL_TRANSITIONS: &[&str] = &["slide", "fade", "convex", "concave", "zoom", "none"];
+
+/// Lint per-slide and per-deck `transition` values against the reveal.js allowlist.
+///
+/// Only sections rendered with `presentation.html` are inspected (the keyword set
+/// is reveal-specific). For each such section, the section's own `transition` and
+/// each child page's `transition` are validated.
+pub fn lint_presentation_transitions(
+    pages: &HashMap<String, Page>,
+    sections: &HashMap<String, Section>,
+) -> Vec<LintWarning> {
+    let mut warnings = Vec::new();
+
+    for section in sections.values() {
+        if section.template.as_deref() != Some("presentation.html") {
+            continue;
+        }
+
+        check_transition(
+            section.extra.get("transition"),
+            &section.relative_path,
+            "section",
+            &mut warnings,
+        );
+
+        let section_key = section.relative_path.as_str();
+        let prefix = section_key.trim_end_matches("_index.md");
+        for page in pages.values() {
+            if !page.relative_path.starts_with(prefix)
+                || page.relative_path == section.relative_path
+            {
+                continue;
+            }
+            check_transition(
+                page.extra.get("transition"),
+                &page.relative_path,
+                "slide",
+                &mut warnings,
+            );
+        }
+    }
+
+    warnings
+}
+
+fn check_transition(
+    value: Option<&serde_json::Value>,
+    file: &str,
+    scope: &str,
+    warnings: &mut Vec<LintWarning>,
+) {
+    let Some(t) = value.and_then(|v| v.as_str()) else {
+        return;
+    };
+    if REVEAL_TRANSITIONS.contains(&t) {
+        return;
+    }
+    warnings.push(LintWarning {
+        rule: "invalid-transition".to_string(),
+        file: file.to_string(),
+        line: 0,
+        text: t.to_string(),
+        message: format!(
+            "{scope} `transition` must be one of {} -- reveal.js silently ignores unknown values",
+            REVEAL_TRANSITIONS.join(", ")
+        ),
+    });
+}
+
 /// Check if a date string is a valid format.
 fn is_valid_date(s: &str) -> bool {
     // RFC 3339 / offset datetime
@@ -708,6 +780,124 @@ mod tests {
         let warnings = lint_missing_assets(&pages, &sections, &static_dir);
         assert_eq!(warnings.len(), 1);
         assert_eq!(warnings[0].rule, "missing-asset");
+    }
+
+    // --- Presentation transition tests ---
+
+    fn presentation_section(relative_path: &str, extra: toml::Value) -> Section {
+        let fm = Frontmatter {
+            template: Some("presentation.html".into()),
+            extra,
+            ..Frontmatter::default()
+        };
+        build_section(fm, String::new(), relative_path, "https://example.com")
+    }
+
+    fn slide_page(relative_path: &str, extra: toml::Value) -> Page {
+        let fm = Frontmatter {
+            title: Some("Slide".into()),
+            extra,
+            ..Frontmatter::default()
+        };
+        build_page(fm, String::new(), relative_path, "https://example.com")
+    }
+
+    fn extra_with_transition(t: &str) -> toml::Value {
+        let mut tbl = toml::map::Map::new();
+        tbl.insert("transition".to_string(), toml::Value::String(t.into()));
+        toml::Value::Table(tbl)
+    }
+
+    #[test]
+    fn test_lint_transition_accepts_known_keywords() {
+        for keyword in REVEAL_TRANSITIONS {
+            let pages = HashMap::new();
+            let mut sections = HashMap::new();
+            sections.insert(
+                "deck/_index.md".into(),
+                presentation_section("deck/_index.md", extra_with_transition(keyword)),
+            );
+            let warnings = lint_presentation_transitions(&pages, &sections);
+            assert!(
+                warnings.is_empty(),
+                "{keyword} should be accepted: {warnings:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_lint_transition_rejects_typo_on_section() {
+        let pages = HashMap::new();
+        let mut sections = HashMap::new();
+        sections.insert(
+            "deck/_index.md".into(),
+            presentation_section("deck/_index.md", extra_with_transition("slid")),
+        );
+        let warnings = lint_presentation_transitions(&pages, &sections);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].rule, "invalid-transition");
+        assert!(warnings[0].text == "slid", "got: {:?}", warnings[0]);
+        assert!(
+            warnings[0].message.contains("section"),
+            "got: {}",
+            warnings[0].message
+        );
+    }
+
+    #[test]
+    fn test_lint_transition_rejects_typo_on_slide() {
+        let mut pages = HashMap::new();
+        pages.insert(
+            "deck/title.md".into(),
+            slide_page("deck/title.md", extra_with_transition("fadee")),
+        );
+        let mut sections = HashMap::new();
+        sections.insert(
+            "deck/_index.md".into(),
+            presentation_section("deck/_index.md", default_toml_table_for_test()),
+        );
+        let warnings = lint_presentation_transitions(&pages, &sections);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].rule, "invalid-transition");
+        assert_eq!(warnings[0].text, "fadee");
+        assert!(
+            warnings[0].message.contains("slide"),
+            "got: {}",
+            warnings[0].message
+        );
+    }
+
+    #[test]
+    fn test_lint_transition_skips_non_presentation_sections() {
+        let mut pages = HashMap::new();
+        pages.insert(
+            "posts/hello.md".into(),
+            slide_page("posts/hello.md", extra_with_transition("garbage")),
+        );
+        let mut sections = HashMap::new();
+        // No template = "presentation.html" — section.html is the default.
+        sections.insert(
+            "posts/_index.md".into(),
+            make_section_with("posts/_index.md", ""),
+        );
+        let warnings = lint_presentation_transitions(&pages, &sections);
+        assert!(warnings.is_empty(), "got: {warnings:?}");
+    }
+
+    #[test]
+    fn test_lint_transition_no_value_no_warning() {
+        let pages = HashMap::new();
+        let mut sections = HashMap::new();
+        sections.insert(
+            "deck/_index.md".into(),
+            presentation_section("deck/_index.md", default_toml_table_for_test()),
+        );
+        let warnings = lint_presentation_transitions(&pages, &sections);
+        assert!(warnings.is_empty(), "got: {warnings:?}");
+    }
+
+    fn default_toml_table_for_test() -> toml::Value {
+        toml::Value::Table(toml::map::Map::new())
     }
 
     #[test]
