@@ -9,7 +9,10 @@ use zorto_core::site;
 const DEFAULT_OUTPUT_DIR: &str = "public";
 const DEFAULT_PREVIEW_PORT: &str = "1111";
 const DEFAULT_BIND_ADDRESS: &str = "127.0.0.1";
-const DEFAULT_BASE_URL: &str = "http://localhost:1111";
+// Use a placeholder production URL by default so a user who accepts the
+// default during `zorto init` doesn't end up with a sitemap.xml full of
+// localhost links if they later run `zorto build`.
+const DEFAULT_BASE_URL: &str = "https://example.com";
 const DEFAULT_SITE_TITLE: &str = "My Site";
 
 #[derive(Parser)]
@@ -217,20 +220,19 @@ where
             }
         }
         Commands::Init { name, template } => {
-            // Detect if we should launch the interactive flow:
-            // - no explicit name was given
-            // - the default template value wasn't overridden by the user
-            // - stdin is a TTY
-            let is_interactive = name.is_none() && template == "default" && atty_stdin();
-
-            if is_interactive {
-                interactive_init(&root)?;
+            // In a TTY we always run the interactive flow — positional args
+            // become prompt defaults rather than skipping prompts entirely,
+            // so a user gets to set theme / title / author / base_url even
+            // when they typed `zorto init my-site`.
+            // In a non-TTY (script, pipe) we use the positional args as-is.
+            if atty_stdin() {
+                interactive_init(&root, name.as_deref(), &template)?;
             } else {
-                let target = match name {
+                let target = match name.as_deref() {
                     Some(n) => root.join(n),
                     None => root.clone(),
                 };
-                init_site(&target, &template)?;
+                init_site(&root, &target, &template)?;
             }
         }
         Commands::Check {
@@ -277,7 +279,11 @@ fn atty_stdin() -> bool {
     std::io::stdin().is_terminal()
 }
 
-fn init_site(target: &std::path::Path, template: &str) -> anyhow::Result<()> {
+fn init_site(
+    root: &std::path::Path,
+    target: &std::path::Path,
+    template: &str,
+) -> anyhow::Result<()> {
     if target.join("config.toml").exists() {
         anyhow::bail!(
             "A zorto site already exists in {} — run `zorto preview` to work with it",
@@ -297,22 +303,53 @@ fn init_site(target: &std::path::Path, template: &str) -> anyhow::Result<()> {
         "Initialized new site at {} (template: {template})",
         target.display()
     );
+    print_next_steps(root, target);
     Ok(())
 }
 
+/// Print a `Next steps:` block pointing the user at `zorto preview --open`.
+/// Prefers a relative `cd` when the target is under `root`; otherwise prints
+/// just the preview command (target == root) or an absolute cd as fallback.
+fn print_next_steps(root: &std::path::Path, target: &std::path::Path) {
+    println!();
+    println!("Next steps:");
+    if target == root {
+        println!("  zorto preview --open");
+    } else {
+        match target.strip_prefix(root) {
+            Ok(rel) if !rel.as_os_str().is_empty() => {
+                println!("  cd {} && zorto preview --open", rel.display());
+            }
+            _ => {
+                println!("  cd {} && zorto preview --open", target.display());
+            }
+        }
+    }
+    println!();
+}
+
 /// Interactive init flow using dialoguer prompts.
-fn interactive_init(root: &std::path::Path) -> anyhow::Result<()> {
+///
+/// Positional `name` and `template` arguments (if given on the CLI) are
+/// used as defaults — the user is still prompted, so they get to set
+/// theme / site title / author / base_url even when they typed
+/// `zorto init my-site -t blog`.
+fn interactive_init(
+    root: &std::path::Path,
+    name_default: Option<&str>,
+    template_default: &str,
+) -> anyhow::Result<()> {
     use dialoguer::{Input, Select};
 
     println!();
-    println!("  Welcome to Zorto!");
-    println!("  Let's create your new site.");
+    println!("Welcome to Zorto!");
+    println!("Let's create your new site.");
     println!();
 
     // 1. Site name / directory
     let name: String = Input::new()
-        .with_prompt("  Site directory name")
-        .default(".".to_string())
+        .with_prompt("Site directory name")
+        .default(name_default.unwrap_or(".").to_string())
         .interact_text()?;
 
     let target = if name == "." {
@@ -321,7 +358,6 @@ fn interactive_init(root: &std::path::Path) -> anyhow::Result<()> {
         root.join(&name)
     };
 
-    // Check for existing site in target dir or website/ subdir
     if target.join("config.toml").exists() {
         anyhow::bail!(
             "A zorto site already exists in {} — run `zorto preview` to work with it",
@@ -335,16 +371,21 @@ fn interactive_init(root: &std::path::Path) -> anyhow::Result<()> {
         );
     }
 
-    // 2. Template selection
+    // 2. Template selection (positional arg pre-selects)
     let template_labels: Vec<String> = templates::TEMPLATES
         .iter()
         .map(|t| format!("{:<12} {}", t.name, t.description))
         .collect();
 
+    let default_template_idx = templates::TEMPLATES
+        .iter()
+        .position(|t| t.name == template_default)
+        .unwrap_or(0);
+
     let template_idx = Select::new()
-        .with_prompt("  Template")
+        .with_prompt("Template")
         .items(&template_labels)
-        .default(0)
+        .default(default_template_idx)
         .interact()?;
     let template_name = templates::TEMPLATES[template_idx].name;
 
@@ -390,7 +431,7 @@ fn interactive_init(root: &std::path::Path) -> anyhow::Result<()> {
             .unwrap_or(0);
 
         let theme_idx = Select::new()
-            .with_prompt("  Theme")
+            .with_prompt("Theme")
             .items(&theme_labels)
             .default(default_idx)
             .interact()?;
@@ -400,26 +441,24 @@ fn interactive_init(root: &std::path::Path) -> anyhow::Result<()> {
 
     // 4. Configuration
     let site_title: String = Input::new()
-        .with_prompt("  Site title")
+        .with_prompt("Site title")
         .default(DEFAULT_SITE_TITLE.to_string())
         .interact_text()?;
 
     let author: String = Input::new()
-        .with_prompt("  Author name")
+        .with_prompt("Author name")
         .default(String::new())
         .allow_empty(true)
         .interact_text()?;
 
     let base_url: String = Input::new()
-        .with_prompt("  Base URL")
+        .with_prompt("Base URL (set to your production URL before deploying)")
         .default(DEFAULT_BASE_URL.to_string())
         .interact_text()?;
 
     // 5. Create the site
     println!();
     templates::write_template(&target, template_name)?;
-
-    // Customize the generated config with user values
     templates::customize_config(
         &target,
         &site_title,
@@ -432,17 +471,9 @@ fn interactive_init(root: &std::path::Path) -> anyhow::Result<()> {
         },
     )?;
 
-    // 6. Next steps
-    println!("  Site created at {}", target.display());
-    println!();
-    if name != "." {
-        println!("  Next steps:");
-        println!("    cd {name} && zorto preview --open");
-    } else {
-        println!("  Next steps:");
-        println!("    zorto preview --open");
-    }
-    println!();
+    // 6. Done + next steps
+    println!("Site created at {}", target.display());
+    print_next_steps(root, &target);
 
     Ok(())
 }
@@ -450,7 +481,7 @@ fn interactive_init(root: &std::path::Path) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::Parser;
+    use clap::{CommandFactory, Parser};
 
     #[test]
     fn parse_skill_install() {
@@ -469,5 +500,39 @@ mod tests {
             "--all",
         ]);
         assert!(matches!(cli.command, Some(Commands::Skill { .. })));
+    }
+
+    #[test]
+    fn parse_init_with_name_and_template() {
+        let cli = Cli::parse_from(["zorto", "init", "my-site", "--template", "blog"]);
+        match cli.command {
+            Some(Commands::Init { name, template }) => {
+                assert_eq!(name.as_deref(), Some("my-site"));
+                assert_eq!(template, "blog");
+            }
+            _ => panic!("expected Init"),
+        }
+    }
+
+    #[test]
+    fn skill_subcommand_is_hidden() {
+        let mut cmd = Cli::command();
+        let skill = cmd
+            .find_subcommand_mut("skill")
+            .expect("skill subcommand should exist");
+        assert!(
+            skill.is_hide_set(),
+            "`zorto skill` should be hidden from top-level --help"
+        );
+    }
+
+    #[test]
+    fn default_base_url_is_not_localhost() {
+        // Accepting the default during interactive init should not
+        // produce a sitemap.xml full of localhost links.
+        assert!(
+            !DEFAULT_BASE_URL.contains("localhost"),
+            "DEFAULT_BASE_URL should not be a localhost URL: {DEFAULT_BASE_URL}"
+        );
     }
 }

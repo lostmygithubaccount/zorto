@@ -72,4 +72,4 @@ contact_phone = "(555) 123-4567"
 location = "Your City, State"
 
 # Footer
-copyright_html = '<a href="/">My Business</a> by Author via <a href="https://zorto.dev" target="_blank" rel="noopener">Zorto</a>'
+copyright_html = '<a href="/">My Business</a> via <a href="https://zorto.dev" target="_blank" rel="noopener">Zorto</a>'

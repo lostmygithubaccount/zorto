@@ -230,18 +230,20 @@ pub fn customize_config(
         }
     }
 
-    // Update copyright_html with the actual site name and author
+    // Update copyright_html with the actual site name and (optionally)
+    // author. When no author is provided we drop the "by X" segment
+    // entirely rather than baking in a literal "Author" placeholder.
     if let Some(pos) = lines
         .iter()
         .position(|l| l.trim_start().starts_with("copyright_html"))
     {
         let safe_title = title.replace('\'', "&#39;");
-        let author_part = match author {
-            Some(a) => a.replace('\'', "&#39;"),
-            None => "Author".to_string(),
+        let by_segment = match author {
+            Some(a) => format!(" by {}", a.replace('\'', "&#39;")),
+            None => String::new(),
         };
         lines[pos] = format!(
-            "copyright_html = '<a href=\"/\">{safe_title}</a> by {author_part} via <a href=\"https://zorto.dev\" target=\"_blank\" rel=\"noopener\">Zorto</a>'"
+            "copyright_html = '<a href=\"/\">{safe_title}</a>{by_segment} via <a href=\"https://zorto.dev\" target=\"_blank\" rel=\"noopener\">Zorto</a>'"
         );
     }
 
@@ -251,4 +253,81 @@ pub fn customize_config(
     }
     std::fs::write(&config_path, output)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_minimal_config(target: &Path) {
+        std::fs::create_dir_all(target).unwrap();
+        std::fs::write(
+            target.join("config.toml"),
+            "base_url = \"https://example.com\"\n\
+             title = \"X\"\n\
+             [extra]\n\
+             copyright_html = '<a href=\"/\">X</a> via <a href=\"https://zorto.dev\" target=\"_blank\" rel=\"noopener\">Zorto</a>'\n",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn customize_config_omits_by_when_no_author() {
+        let dir = tempfile::tempdir().unwrap();
+        write_minimal_config(dir.path());
+        customize_config(dir.path(), "My Site", "https://example.com", None, None).unwrap();
+        let cfg = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
+        assert!(
+            cfg.contains("My Site</a> via"),
+            "expected `<title></a> via` with no `by` segment, got:\n{cfg}"
+        );
+        assert!(
+            !cfg.contains(" by "),
+            "expected no ` by ` segment when author is None, got:\n{cfg}"
+        );
+        assert!(
+            !cfg.contains("Author"),
+            "expected no literal `Author` placeholder, got:\n{cfg}"
+        );
+    }
+
+    #[test]
+    fn customize_config_includes_by_when_author_provided() {
+        let dir = tempfile::tempdir().unwrap();
+        write_minimal_config(dir.path());
+        customize_config(
+            dir.path(),
+            "My Site",
+            "https://example.com",
+            None,
+            Some("Alice"),
+        )
+        .unwrap();
+        let cfg = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
+        assert!(
+            cfg.contains("by Alice via"),
+            "expected `by Alice via`, got:\n{cfg}"
+        );
+    }
+
+    #[test]
+    fn customize_config_escapes_apostrophe_in_author() {
+        let dir = tempfile::tempdir().unwrap();
+        write_minimal_config(dir.path());
+        customize_config(
+            dir.path(),
+            "My Site",
+            "https://example.com",
+            None,
+            Some("O'Brien"),
+        )
+        .unwrap();
+        let cfg = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
+        // Apostrophes in the author would otherwise close the TOML
+        // literal-string copyright_html value.
+        assert!(
+            cfg.contains("O&#39;Brien"),
+            "expected apostrophe to be HTML-encoded, got:\n{cfg}"
+        );
+    }
 }
