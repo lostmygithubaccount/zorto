@@ -75,6 +75,17 @@ Never run `zorto build` directly inside `website/` — it will fail with sandbox
 - "Zorto" (capitalized) in documentation prose; `zorto` for commands, code, URLs.
 - built-in themes: `zorto`, `dkdc`, `default`, `ember`, `forest`, `ocean`, `rose`, `slate`, `midnight`, `sunset`, `mint`, `plum`, `sand`, `arctic`, `lime`, `charcoal`. All feature-gated Cargo features (default: all enabled). Python builds always include all themes. Every theme supports both light and dark mode via `[data-theme="light"]` CSS variable overrides.
 
+## Sacred prose
+
+The following files contain prose built up over time that belongs to the project owner. DO NOT rewrite, reword, or "improve" them without the owner's explicit sign-off on the actual new text BEFORE shipping:
+
+- `README.md`: top paragraph (hero / tagline), install copy, positioning.
+- `website/config.toml`: `description`, `hero_subtitle`, `hero_title`, feature card `description` fields.
+- `website/content/_index.md` (the home page body).
+- Any content under `website/content/` where the owner is listed as `author`.
+
+Additive changes (new sections below the hero, new feature cards appended, new linked pages) are fine. Edits TO existing prose are not; revert-reviews are costly. When in doubt: propose the diff in channel (bus or iMessage), ship only after explicit approval of the specific text.
+
 ## Zola reference
 
 zorto references Zola's MIT-licensed code as a design guide. The reference copy in `external/zola/` **must stay at tag v0.21.0** — this is the last MIT-licensed release. Starting at v0.22.0, Zola switched to EUPL which is incompatible with our MIT license. Do NOT checkout, pull, or reference any Zola code beyond v0.21.0.

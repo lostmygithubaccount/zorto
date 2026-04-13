@@ -1,7 +1,7 @@
 # zorto.dev: zorto configuration
 base_url = "https://zorto.dev"
 title = "Zorto"
-description = "Turn plain Markdown into websites, blog posts, and slide decks — built for humans and AI agents."
+description = "The AI-native static site generator (SSG) with executable code blocks."
 theme = "zorto"
 generate_feed = true
 generate_llms_txt = true
@@ -54,7 +54,7 @@ social_links = [
 ]
 
 hero_title = "Zorto"
-hero_subtitle = "Turn plain Markdown into websites, blog posts, and slide decks — built for humans and AI agents."
+hero_subtitle = "The AI-native static site generator (SSG) with executable code blocks."
 hero_actions = [
   { name = "Get started", url = "/docs/getting-started/", style = "default" },
   { name = "See a slide deck", url = "/presentations/intro-to-zorto/", style = "outline" },
