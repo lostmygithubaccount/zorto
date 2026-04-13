@@ -12,37 +12,40 @@ Prior art: inspired by [Zola](https://github.com/getzola/zola) (fast Rust SSG) a
 
 ## Install
 
-Recommended:
-
 ```bash
 curl -LsSf https://dkdc.sh/zorto/install.sh | sh
 ```
 
-Pre-built binaries are available for Linux and macOS via Python (`uv`). Windows users should install via `cargo` or use macOS/Linux.
-
-uv:
-
-```bash
-uv tool install zorto
-```
-
-cargo:
-
-```bash
-cargo install zorto
-```
-
-Verify installation:
+Verify:
 
 ```{bash}
 zorto --version
 ```
 
-You can use `uvx` to run it without installing:
+<details>
+<summary>More install options</summary>
+
+The `curl | sh` installer above wraps `uv tool install zorto`. On Linux and macOS it pulls a pre-built wheel from PyPI that bundles the Rust engine (no compile step). Windows is not covered by the installer — use `cargo` from source or run under WSL.
+
+**uv (PyPI wheel, no compile):**
+
+```bash
+uv tool install zorto
+```
+
+**uvx (run once without installing):**
 
 ```bash
 uvx zorto
 ```
+
+**cargo (build from source, requires Rust 1.85+):**
+
+```bash
+cargo install zorto
+```
+
+</details>
 
 ## Usage
 
