@@ -27,17 +27,36 @@ static LIVERELOAD_JS: LazyLock<String> = LazyLock::new(|| {
 (function() {{
     var reconnectInterval = {LIVERELOAD_RECONNECT_INTERVAL_MS};
     var maxReconnect = {LIVERELOAD_MAX_RECONNECT_MS};
+    var toastId = '__zorto_build_error';
+
+    function clearToast() {{
+        var el = document.getElementById(toastId);
+        if (el) el.remove();
+    }}
+
+    function showToast(msg) {{
+        clearToast();
+        var el = document.createElement('div');
+        el.id = toastId;
+        el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#b00020;color:#fff;padding:0.75em 1em;font:14px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;box-shadow:0 2px 8px rgba(0,0,0,0.25);';
+        el.textContent = 'Build error:\n' + msg;
+        document.body.appendChild(el);
+    }}
 
     function connect() {{
         var ws = new WebSocket('ws://' + location.host + '/__livereload');
         ws.onmessage = function(event) {{
             if (event.data === 'reload') {{
                 location.reload();
+                return;
             }}
+            try {{
+                var payload = JSON.parse(event.data);
+                if (payload.kind === 'error') showToast(payload.msg);
+                else if (payload.kind === 'clear') clearToast();
+            }} catch (e) {{}}
         }};
         ws.onclose = function() {{
-            // Reconnect with backoff instead of reloading the page.
-            // Only an explicit 'reload' message from the server triggers a page reload.
             setTimeout(function() {{ connect(); }}, reconnectInterval);
             reconnectInterval = Math.min(reconnectInterval * 1.5, maxReconnect);
         }};
@@ -52,9 +71,34 @@ static LIVERELOAD_JS: LazyLock<String> = LazyLock::new(|| {
     )
 });
 
+/// Messages broadcast from the rebuild loop to every connected browser tab.
+#[derive(Clone, Debug)]
+enum LivereloadMsg {
+    Reload,
+    Error(String),
+    Clear,
+}
+
+impl LivereloadMsg {
+    fn to_ws_text(&self) -> String {
+        match self {
+            LivereloadMsg::Reload => String::from("reload"),
+            LivereloadMsg::Error(msg) => {
+                let escaped = msg
+                    .replace('\\', "\\\\")
+                    .replace('"', "\\\"")
+                    .replace('\n', "\\n")
+                    .replace('\r', "");
+                format!(r#"{{"kind":"error","msg":"{escaped}"}}"#)
+            }
+            LivereloadMsg::Clear => String::from(r#"{"kind":"clear"}"#),
+        }
+    }
+}
+
 #[derive(Clone)]
 struct AppState {
-    reload_tx: broadcast::Sender<()>,
+    reload_tx: broadcast::Sender<LivereloadMsg>,
     output_dir: PathBuf,
 }
 
@@ -106,7 +150,7 @@ pub async fn serve(cfg: &ServeConfig<'_>) -> anyhow::Result<()> {
     }
 
     // Set up broadcast channel for live reload
-    let (reload_tx, _) = broadcast::channel::<()>(RELOAD_CHANNEL_CAPACITY);
+    let (reload_tx, _) = broadcast::channel::<LivereloadMsg>(RELOAD_CHANNEL_CAPACITY);
     let state = AppState {
         reload_tx: reload_tx.clone(),
         output_dir: cfg.output_dir.to_path_buf(),
@@ -214,9 +258,9 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Resp
 async fn handle_ws(mut socket: WebSocket, state: AppState) {
     let mut rx = state.reload_tx.subscribe();
 
-    while let Ok(()) = rx.recv().await {
+    while let Ok(msg) = rx.recv().await {
         if socket
-            .send(Message::Text(String::from("reload").into()))
+            .send(Message::Text(msg.to_ws_text().into()))
             .await
             .is_err()
         {
@@ -356,7 +400,7 @@ struct RebuildConfig {
 
 async fn watch_and_rebuild(
     cfg: RebuildConfig,
-    reload_tx: broadcast::Sender<()>,
+    reload_tx: broadcast::Sender<LivereloadMsg>,
     mut watch_rx: tokio::sync::mpsc::Receiver<
         Result<Vec<notify_debouncer_mini::DebouncedEvent>, notify::Error>,
     >,
@@ -368,21 +412,29 @@ async fn watch_and_rebuild(
                 .any(|e| matches!(e.kind, DebouncedEventKind::Any));
 
             if has_changes {
+                let rebuild_start = std::time::Instant::now();
                 println!("Change detected, rebuilding...");
                 match zorto_core::site::Site::load(&cfg.root, &cfg.output, cfg.drafts) {
                     Ok(mut site) => {
                         site.no_exec = cfg.no_exec;
                         site.sandbox = cfg.sandbox.clone();
                         site.set_base_url(cfg.base_url.clone());
-                        if let Err(e) = site.build() {
-                            eprintln!("Build error: {e}");
-                        } else {
-                            println!("Rebuilt successfully.");
-                            let _ = reload_tx.send(());
+                        match site.build() {
+                            Ok(()) => {
+                                let ms = rebuild_start.elapsed().as_millis();
+                                println!("Rebuilt in {ms}ms.");
+                                let _ = reload_tx.send(LivereloadMsg::Clear);
+                                let _ = reload_tx.send(LivereloadMsg::Reload);
+                            }
+                            Err(e) => {
+                                eprintln!("Build error: {e}");
+                                let _ = reload_tx.send(LivereloadMsg::Error(format!("{e:#}")));
+                            }
                         }
                     }
                     Err(e) => {
                         eprintln!("Load error: {e}");
+                        let _ = reload_tx.send(LivereloadMsg::Error(format!("{e:#}")));
                     }
                 }
             }
@@ -443,5 +495,27 @@ mod tests {
         let out = tmp.path().join("public");
         std::fs::create_dir_all(&out).unwrap();
         assert!(resolve_serve_path(&out, "/nope.html").is_none());
+    }
+
+    #[test]
+    fn livereload_reload_serializes_to_plain_text() {
+        assert_eq!(LivereloadMsg::Reload.to_ws_text(), "reload");
+    }
+
+    #[test]
+    fn livereload_clear_serializes_to_kind_tagged_json() {
+        assert_eq!(LivereloadMsg::Clear.to_ws_text(), r#"{"kind":"clear"}"#);
+    }
+
+    #[test]
+    fn livereload_error_escapes_control_chars() {
+        let msg = LivereloadMsg::Error("line1\nline2 \"quoted\" \\ path".to_string());
+        let json = msg.to_ws_text();
+        assert!(json.starts_with(r#"{"kind":"error","msg":"#), "got: {json}");
+        // Control chars + quotes + backslash are JSON-escaped (not raw).
+        assert!(!json.contains('\n'), "got: {json}");
+        assert!(json.contains(r#"\""#), "got: {json}");
+        assert!(json.contains(r"\\"), "got: {json}");
+        assert!(json.contains(r"\n"), "got: {json}");
     }
 }
