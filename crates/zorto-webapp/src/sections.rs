@@ -160,9 +160,7 @@ pub async fn new_form(
         Some("slug_invalid") => {
             r#"<div class="flash flash-error">Slug may only contain lowercase letters, digits, <code>-</code>, and <code>_</code>.</div>"#
         }
-        Some("title_required") => {
-            r#"<div class="flash flash-error">Title is required.</div>"#
-        }
+        Some("title_required") => r#"<div class="flash flash-error">Title is required.</div>"#,
         _ => "",
     };
 
@@ -269,9 +267,8 @@ pub async fn create(
     } else {
         ""
     };
-    let error_redirect = |code: &str| {
-        Redirect::to(&format!("/sections/new?error={code}{suffix}")).into_response()
-    };
+    let error_redirect =
+        |code: &str| Redirect::to(&format!("/sections/new?error={code}{suffix}")).into_response();
 
     let title = form.title.trim().to_string();
     if title.is_empty() {
@@ -317,10 +314,7 @@ pub async fn create(
     table.insert("title".into(), toml::Value::String(title.clone()));
     let desc = form.description.trim();
     if !desc.is_empty() {
-        table.insert(
-            "description".into(),
-            toml::Value::String(desc.to_string()),
-        );
+        table.insert("description".into(), toml::Value::String(desc.to_string()));
     }
     let sort_by = form.sort_by.trim();
     if !sort_by.is_empty() && matches!(sort_by, "date" | "title" | "weight") {
@@ -811,4 +805,3 @@ document.addEventListener('DOMContentLoaded', function() {
         base_url,
     )
 }
-

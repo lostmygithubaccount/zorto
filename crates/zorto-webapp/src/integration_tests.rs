@@ -432,7 +432,10 @@ async fn section_create_rejects_missing_title() {
     );
     // And the directory was NOT created
     let dir = tmp.path().join("site/content/anything");
-    assert!(!dir.exists(), "no section should be created when title is empty");
+    assert!(
+        !dir.exists(),
+        "no section should be created when title is empty"
+    );
 }
 
 #[tokio::test]
@@ -445,7 +448,8 @@ async fn section_create_rejects_duplicate_slug() {
     let (_status, _body) = post_form(&app, "/sections/new", form).await;
 
     // Existing index content must be untouched
-    let existing = std::fs::read_to_string(tmp.path().join("site/content/posts/_index.md")).unwrap();
+    let existing =
+        std::fs::read_to_string(tmp.path().join("site/content/posts/_index.md")).unwrap();
     assert!(
         existing.contains("Blog"),
         "existing posts/_index.md must not be overwritten on duplicate-slug attempt"
