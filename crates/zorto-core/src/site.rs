@@ -518,37 +518,43 @@ impl Site {
             self.pages.retain(|_, p| !p.draft);
         }
 
-        self.render_all_markdown()?;
-        content::assign_pages_to_sections(&mut self.sections, &self.pages);
-
-        let templates_dir = self.root.join("templates");
-        let _tera = templates::setup_tera(&templates_dir, &self.config, &self.sections)?;
-
         let mut warnings = Vec::new();
 
-        // Lint templates
-        warnings.extend(crate::lint::lint_templates(&templates_dir));
-
-        // Lint internal links
+        // Lint internal links BEFORE render_all_markdown. The link resolver
+        // overwrites raw_content with permalink-resolved text, so the `@/`
+        // markers vanish; running this lint after render produces zero hits.
         warnings.extend(crate::lint::lint_internal_links(
             &self.pages,
             &self.sections,
         ));
 
-        // Lint frontmatter
-        warnings.extend(crate::lint::lint_frontmatter(&self.pages, &self.sections));
+        // Print accumulated warnings even if render_all_markdown subsequently
+        // errors (e.g. on the same broken links the resolver hard-fails on).
+        let render_result = self.render_all_markdown();
+        for w in &warnings {
+            eprintln!("{w}");
+        }
+        render_result?;
 
-        // Lint missing assets
+        content::assign_pages_to_sections(&mut self.sections, &self.pages);
+
+        let templates_dir = self.root.join("templates");
+        let _tera = templates::setup_tera(&templates_dir, &self.config, &self.sections)?;
+
+        let mut post_render_warnings = Vec::new();
+        post_render_warnings.extend(crate::lint::lint_templates(&templates_dir));
+        post_render_warnings.extend(crate::lint::lint_frontmatter(&self.pages, &self.sections));
         let static_dir = self.root.join("static");
-        warnings.extend(crate::lint::lint_missing_assets(
+        post_render_warnings.extend(crate::lint::lint_missing_assets(
             &self.pages,
             &self.sections,
             &static_dir,
         ));
-
-        for w in &warnings {
+        for w in &post_render_warnings {
             eprintln!("{w}");
         }
+        warnings.extend(post_render_warnings);
+
         if deny_warnings && !warnings.is_empty() {
             anyhow::bail!(
                 "{} lint warning{} found (--deny-warnings is set)",
