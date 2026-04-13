@@ -168,22 +168,40 @@ pub(crate) fn activate_venv(py: pyo3::Python<'_>, site_root: &Path) -> pyo3::PyR
 /// so this is fine — but must be revisited if parallel rendering is added.
 /// Python code injected after user code to detect visualization objects.
 ///
-/// Checks `sys.modules` first to avoid importing anything the user didn't use.
-/// Produces a `__zorto_internal_viz_output__` list of `(kind, data)` tuples that Rust reads back.
+/// `__main__` persists across all blocks/posts in one build, so we track
+/// already-rendered objects in a `WeakSet` keyed by object identity. A block
+/// that rebinds `fig = ...` creates a new object → not in the set → rendered;
+/// a block that just mutates or re-references an existing rendered object →
+/// already in the set → skipped. Weak references avoid `id()` recycling: when
+/// the original object is GC'd, its entry auto-clears, so a new object that
+/// happens to land at the same id is treated as unseen.
 #[cfg(feature = "python")]
 const VIZ_DETECTION_CODE: &str = r#"
-import sys as _sys
+import sys as _sys, weakref as _weakref
 __zorto_internal_viz_output__ = []
-_pre = __zorto_internal_pre_vars__ if '__zorto_internal_pre_vars__' in dir() else {}
-# Names bound (newly or rebound) by this code block.
-# Comparing id() of values catches both new names and existing names rebound
-# to a new object — __main__ is shared across all blocks in a build.
-_new_vars = {
-    _k for _k, _v in globals().items()
-    if not _k.startswith('_') and _pre.get(_k) != id(_v)
-}
+if '__zorto_internal_rendered__' not in dir():
+    __zorto_internal_rendered__ = _weakref.WeakSet()
 
-# matplotlib (also covers seaborn which uses matplotlib under the hood)
+def _zorto_mark(_obj):
+    """Return True if _obj is new (first time seen); record it as seen."""
+    try:
+        if _obj in __zorto_internal_rendered__:
+            return False
+        __zorto_internal_rendered__.add(_obj)
+        return True
+    except TypeError:
+        return True
+
+def _zorto_typed_globals(_types):
+    """Yield (name, obj) for globals bound to any instance of _types."""
+    for _k, _v in list(globals().items()):
+        if _k.startswith('__zorto_') or _k in ('_zorto_mark', '_zorto_typed_globals'):
+            continue
+        if isinstance(_v, _types):
+            yield _k, _v
+
+# matplotlib (also covers seaborn). Matplotlib figures live in pyplot's registry
+# rather than user globals, so we iterate fignums directly and close after.
 if 'matplotlib' in _sys.modules or 'matplotlib.pyplot' in _sys.modules:
     try:
         import matplotlib.pyplot as _plt
@@ -195,27 +213,29 @@ if 'matplotlib' in _sys.modules or 'matplotlib.pyplot' in _sys.modules:
             __zorto_internal_viz_output__.append(('img', 'data:image/png;base64,' + _b64.b64encode(_buf.read()).decode()))
             _buf.close()
     except Exception as _e:
-        import sys; print(f'zorto: warning: matplotlib capture failed: {_e}', file=sys.stderr)
+        print(f'zorto: warning: matplotlib capture failed: {_e}', file=_sys.stderr)
     try:
         _plt.close('all')
     except:
         pass
 
-# plotly — only check variables created by THIS code block
+# plotly
 if 'plotly' in _sys.modules:
     try:
         import plotly.graph_objects as _go
-        for _name in _new_vars:
-            _obj = globals().get(_name)
-            if _obj is not None and isinstance(_obj, _go.Figure):
+        for _name, _obj in _zorto_typed_globals(_go.Figure):
+            if _zorto_mark(_obj):
                 __zorto_internal_viz_output__.append(('html', _obj.to_html(full_html=False, include_plotlyjs='cdn')))
     except Exception as _e:
-        import sys; print(f'zorto: warning: plotly capture failed: {_e}', file=sys.stderr)
+        print(f'zorto: warning: plotly capture failed: {_e}', file=_sys.stderr)
 
-# altair — only check variables created by THIS code block.
-# to_html() returns a full HTML document which breaks embedding — build a
-# minimal vega-embed snippet instead (scripts loaded once per page by the
-# browser; duplicate <script> tags are no-ops).
+# altair — embed the spec as a JSON island and load it via JSON.parse.
+# The spec is user-reachable (e.g. axis labels from a DataFrame) and can
+# contain strings like `</script>`. To prevent HTML-parser breakout, escape
+# every `<` as `\u003c` in the serialized JSON — still valid JSON, no `<`
+# reaches the HTML tokenizer, works in both inline and JSON-island scripts.
+# to_html() returns a full HTML document which breaks embedding; to_dict()
+# + vega-embed renders cleanly inline.
 if 'altair' in _sys.modules:
     try:
         import altair as _alt, json as _json, uuid as _uuid
@@ -224,22 +244,26 @@ if 'altair' in _sys.modules:
             _cls = getattr(_alt, _cls_name, None)
             if _cls is not None:
                 _alt_types = _alt_types + (_cls,)
-        for _name in _new_vars:
-            _obj = globals().get(_name)
-            if _obj is not None and isinstance(_obj, _alt_types):
-                _vid = 'vega-' + _uuid.uuid4().hex
-                _spec = _obj.to_dict()
-                _html = (
-                    '<script src="https://cdn.jsdelivr.net/npm/vega@6"></script>'
-                    '<script src="https://cdn.jsdelivr.net/npm/vega-lite@6.1.0"></script>'
-                    '<script src="https://cdn.jsdelivr.net/npm/vega-embed@7"></script>'
-                    f'<div id="{_vid}"></div>'
-                    f'<script>vegaEmbed(document.getElementById("{_vid}"), '
-                    f'{_json.dumps(_spec)}, {{mode: "vega-lite"}});</script>'
-                )
-                __zorto_internal_viz_output__.append(('html', _html))
+        for _name, _obj in _zorto_typed_globals(_alt_types):
+            if not _zorto_mark(_obj):
+                continue
+            _vid = 'vega-' + _uuid.uuid4().hex
+            _sid = _vid + '-spec'
+            _spec_json = _json.dumps(_obj.to_dict()).replace('<', '\\u003c')
+            _html = (
+                '<script src="https://cdn.jsdelivr.net/npm/vega@6.1.2"></script>'
+                '<script src="https://cdn.jsdelivr.net/npm/vega-lite@6.1.0"></script>'
+                '<script src="https://cdn.jsdelivr.net/npm/vega-embed@7.0.2"></script>'
+                f'<div id="{_vid}"></div>'
+                f'<script type="application/json" id="{_sid}">{_spec_json}</script>'
+                f'<script>vegaEmbed('
+                f'document.getElementById("{_vid}"), '
+                f'JSON.parse(document.getElementById("{_sid}").textContent), '
+                f'{{mode: "vega-lite"}});</script>'
+            )
+            __zorto_internal_viz_output__.append(('html', _html))
     except Exception as _e:
-        import sys; print(f'zorto: warning: altair capture failed: {_e}', file=sys.stderr)
+        print(f'zorto: warning: altair capture failed: {_e}', file=_sys.stderr)
 "#;
 
 #[cfg(feature = "python")]
@@ -280,15 +304,6 @@ fn execute_python(
             // Set working directory
             let os = py.import("os")?;
             os.call_method1("chdir", (working_dir.to_string_lossy().as_ref(),))?;
-
-            // Snapshot __main__ namespace before user code runs.
-            // We capture (name -> id(value)) so we can detect both new names
-            // AND rebound names, since __main__ persists across all blocks/posts
-            // in a single build (names from prior blocks leak in).
-            let snapshot_code = CString::new(
-                "__zorto_internal_pre_vars__ = {_k: id(_v) for _k, _v in globals().items()}",
-            )?;
-            let _ = py.run(snapshot_code.as_c_str(), None, None);
 
             // Execute user code
             let exec_result = py.run(code_cstr.as_c_str(), None, None);

@@ -9,8 +9,21 @@
     {%- endif %}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/{{ section.extra.reveal_theme | default(value='black') }}.css" id="theme">
+    {#- Known reveal.js theme names; anything else in [extra].reveal_theme is ignored at render time. -#}
+    {%- set known_themes = ["black", "white", "league", "beige", "night", "serif", "simple", "solarized", "blood", "moon", "dracula", "sky"] -%}
+    {%- set default_theme = section.extra.reveal_theme | default(value='black') -%}
+    {%- if default_theme not in known_themes -%}{%- set default_theme = "black" -%}{%- endif -%}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/{{ default_theme }}.css" id="theme">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+    {#- Preload any per-slide theme referenced in [page.extra.reveal_theme] to avoid FOUC on swap. -#}
+    {%- set_global preloaded = [default_theme] -%}
+    {%- for page in section.pages -%}
+        {%- set t = page.extra.reveal_theme | default(value="") -%}
+        {%- if t and t in known_themes and t not in preloaded -%}
+    <link rel="preload" as="style" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/{{ t }}.css">
+            {%- set_global preloaded = preloaded | concat(with=t) -%}
+        {%- endif -%}
+    {%- endfor %}
     {%- if config.extra.favicon %}
     <link rel="icon" type="{{ config.extra.favicon_mimetype | default(value='image/png') }}" href="{{ config.extra.favicon }}">
     {%- endif %}
@@ -25,6 +38,22 @@
         .reveal .slide-image {
             max-width: none;
         }
+        /* Content wrapper inside each section. We attach overflow and flex
+           here rather than on the section itself so that reveal.js's own
+           transform-based slide transitions and centering are preserved. */
+        .reveal .slides > section > .slide-content {
+            width: 100%;
+            max-height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(124, 58, 237, 0.4) transparent;
+        }
+        .reveal .slides > section > .slide-content::-webkit-scrollbar { width: 8px; }
+        .reveal .slides > section > .slide-content::-webkit-scrollbar-thumb {
+            background: rgba(124, 58, 237, 0.4);
+            border-radius: 4px;
+        }
         .reveal .slide-columns {
             width: 100%;
             text-align: left;
@@ -33,7 +62,7 @@
         .reveal .slide-column ol {
             display: block;
         }
-        .reveal section.layout-center {
+        .reveal section.layout-center > .slide-content {
             text-align: center;
         }
         .reveal section.layout-center h1,
@@ -41,15 +70,15 @@
         .reveal section.layout-center h3 {
             text-align: center;
         }
-        .reveal section.layout-image-left,
-        .reveal section.layout-image-right {
-            display: flex !important;
+        .reveal section.layout-image-left > .slide-content,
+        .reveal section.layout-image-right > .slide-content {
+            display: flex;
             align-items: center;
             gap: 2em;
             text-align: left;
         }
-        .reveal section.layout-image-left > *,
-        .reveal section.layout-image-right > * {
+        .reveal section.layout-image-left > .slide-content > *,
+        .reveal section.layout-image-right > .slide-content > * {
             flex: 1;
             min-width: 0;
         }
@@ -58,10 +87,10 @@
             max-width: 100%;
             height: auto;
         }
-        .reveal section.layout-image-full {
+        .reveal section.layout-image-full > .slide-content {
             text-align: center;
         }
-        .reveal section.layout-title {
+        .reveal section.layout-title > .slide-content {
             text-align: center;
         }
         .reveal section.layout-title h1 {
@@ -90,34 +119,6 @@
         .reveal .code-viz .plotly-graph-div,
         .reveal .code-viz .js-plotly-plot {
             max-height: 380px !important;
-        }
-        /* Overflow safety net: if a slide's content exceeds the 700px box,
-           let it scroll within the slide rather than getting clipped. */
-        .reveal .slides > section,
-        .reveal .slides > section > section {
-            overflow-y: auto;
-            overflow-x: hidden;
-            max-height: 100%;
-            scrollbar-width: thin;
-            scrollbar-color: rgba(124, 58, 237, 0.4) transparent;
-        }
-        /* Reveal's `center: true` translates sections to 50% — when content is
-           taller than the slide box, the top lands above the viewport and is
-           unreachable even with scroll. Pin overflow-prone layouts to the top. */
-        .reveal.center .slides section.layout-image-left,
-        .reveal.center .slides section.layout-image-right {
-            top: 0 !important;
-            transform: none !important;
-            min-height: 100%;
-        }
-        .reveal section.layout-image-left,
-        .reveal section.layout-image-right {
-            padding-top: 0.5em;
-        }
-        .reveal .slides > section::-webkit-scrollbar { width: 8px; }
-        .reveal .slides > section::-webkit-scrollbar-thumb {
-            background: rgba(124, 58, 237, 0.4);
-            border-radius: 4px;
         }
         /* Tighter spacing + smaller base text so more fits by default */
         .reveal { font-size: 32px; }
@@ -158,31 +159,26 @@
         .logo-glow { animation: logo-glow 2.8s ease-in-out infinite; }
         .logo-sway { animation: logo-sway 4s ease-in-out infinite; }
         .logo-fade-in { animation: logo-fade-in 1s ease-out both; }
-        .logo-corner {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 72px;
-            height: auto;
-            opacity: 0.85;
-            z-index: 10;
-        }
     </style>
 </head>
 <body>
     <div class="reveal">
         <div class="slides">
             {%- for page in section.pages %}
+            {%- set page_theme = page.extra.reveal_theme | default(value="") -%}
+            {%- if page_theme and page_theme not in known_themes -%}{%- set page_theme = "" -%}{%- endif -%}
             <section
                 {%- if page.extra.background_image %} data-background-image="{{ page.extra.background_image }}"{% endif %}
                 {%- if page.extra.background_color %} data-background-color="{{ page.extra.background_color }}"{% endif %}
                 {%- if page.extra.background_size %} data-background-size="{{ page.extra.background_size }}"{% endif %}
                 {%- if page.extra.background_opacity %} data-background-opacity="{{ page.extra.background_opacity }}"{% endif %}
                 {%- if page.extra.transition %} data-transition="{{ page.extra.transition }}"{% endif %}
-                {%- if page.extra.reveal_theme %} data-reveal-theme="{{ page.extra.reveal_theme }}"{% endif %}
+                {%- if page_theme %} data-reveal-theme="{{ page_theme }}"{% endif %}
                 {%- if page.extra.layout %} class="layout-{{ page.extra.layout }}"{% endif %}
             >
-                {{ page.content | safe }}
+                <div class="slide-content">
+                    {{ page.content | safe }}
+                </div>
             </section>
             {%- endfor %}
         </div>
@@ -201,23 +197,26 @@
             center: true,
             plugins: [ RevealNotes, RevealHighlight ]
         });
-        // Per-slide reveal-theme switching. Set `reveal_theme = "moon"` on a slide's
-        // [extra] table to swap the theme stylesheet when that slide is active.
+        // Per-slide reveal-theme switching. Set `reveal_theme = "moon"` on a
+        // slide's [extra] table to swap the theme stylesheet when that slide
+        // is active. Both the server (template) and client (here) enforce the
+        // same allow-list so an attacker-controlled frontmatter value cannot
+        // load arbitrary CSS from the jsdelivr namespace.
         (function () {
+            var ALLOWED = {{ known_themes | json_encode | safe }};
             var themeLink = document.getElementById('theme');
             var defaultHref = themeLink.getAttribute('href');
             function themeUrl(name) {
+                if (ALLOWED.indexOf(name) === -1) return defaultHref;
                 return 'https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/' + name + '.css';
             }
-            Reveal.on('slidechanged', function (event) {
-                var t = event.currentSlide && event.currentSlide.getAttribute('data-reveal-theme');
+            function apply(slide) {
+                if (!slide) return;
+                var t = slide.getAttribute('data-reveal-theme');
                 themeLink.setAttribute('href', t ? themeUrl(t) : defaultHref);
-            });
-            // On first load, apply the starting slide's theme if it has one.
-            Reveal.on('ready', function () {
-                var t = Reveal.getCurrentSlide() && Reveal.getCurrentSlide().getAttribute('data-reveal-theme');
-                if (t) themeLink.setAttribute('href', themeUrl(t));
-            });
+            }
+            Reveal.on('slidechanged', function (event) { apply(event.currentSlide); });
+            Reveal.on('ready', function () { apply(Reveal.getCurrentSlide()); });
         })();
     </script>
 </body>

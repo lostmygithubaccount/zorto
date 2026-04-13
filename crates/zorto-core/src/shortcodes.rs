@@ -1007,26 +1007,81 @@ fn builtin_cascade(args_str: &str) -> anyhow::Result<String> {
     Ok(html)
 }
 
+/// Validate a CSS value used in an inline `style=` attribute.
+///
+/// The shortcode concatenates these into `style="..."`, so we can't rely on
+/// HTML escaping alone: characters like `:`, `;`, `(`, and whitespace are
+/// syntactically meaningful inside a style attribute and let a crafted value
+/// inject extra declarations (e.g. `background: url(...)` for exfil).
+///
+/// Accept: a length/percentage/number (with optional leading `-`) and one of
+/// a small unit allow-list, or the literals `0` and `auto`. Reject everything
+/// else — shortcode authors should use a real CSS class for richer values.
+fn is_safe_css_length(val: &str) -> bool {
+    let v = val.trim();
+    if v == "0" || v == "auto" {
+        return true;
+    }
+    // Optional leading minus, digits with optional decimal, optional unit.
+    let bytes = v.as_bytes();
+    let mut i = 0;
+    if bytes.first() == Some(&b'-') {
+        i += 1;
+    }
+    let num_start = i;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i < bytes.len() && bytes[i] == b'.' {
+        i += 1;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+    }
+    if i == num_start {
+        return false;
+    }
+    // Non-zero unitless values aren't valid CSS lengths. Reject them so
+    // authors see the mistake rather than getting a silent no-op.
+    let unit = &v[i..];
+    matches!(
+        unit,
+        "px" | "em" | "rem" | "%" | "vh" | "vw" | "vmin" | "vmax" | "pt" | "ch" | "ex" | "fr"
+    )
+}
+
+/// Validate a class-list value: space-separated tokens of alnum/`-`/`_` only.
+fn is_safe_class_list(val: &str) -> bool {
+    !val.is_empty()
+        && val.split_ascii_whitespace().all(|tok| {
+            !tok.is_empty()
+                && tok
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        })
+}
+
 /// Built-in `slide_image` shortcode: image for presentations with optional
 /// absolute positioning, animation class, and opacity.
 ///
 /// Arguments:
 /// - `src` (required): image path or URL
 /// - `alt` (optional): alt text
-/// - `top`, `left`, `right`, `bottom` (optional): CSS position values.
+/// - `top`, `left`, `right`, `bottom` (optional): CSS length values.
 ///   If any is set → `position: absolute`. Otherwise the image renders as a
 ///   centered block (useful for hero logos on title/thank-you slides).
-/// - `width`, `height` (optional): CSS size values
+/// - `width`, `height` (optional): CSS length values
 /// - `class` (optional): space-separated CSS classes appended to `slide-image`
 ///   (e.g. `class="logo-float"` for animation presets)
-/// - `opacity` (optional): CSS opacity value (e.g. `0.7`)
+/// - `opacity` (optional): number between 0 and 1 (e.g. `0.7`)
+///
+/// All style/class values are strictly validated — arbitrary CSS is rejected.
 fn builtin_slide_image(args_str: &str) -> anyhow::Result<String> {
     let args = parse_args(args_str);
     let src = args
         .get("src")
         .ok_or_else(|| anyhow::anyhow!("slide_image shortcode requires a `src` argument"))?;
     let alt = args.get("alt").map(|s| s.as_str()).unwrap_or("");
-    let extra_class = args.get("class").map(|s| s.as_str()).unwrap_or("");
 
     let positioned = ["top", "left", "right", "bottom"]
         .iter()
@@ -1039,18 +1094,37 @@ fn builtin_slide_image(args_str: &str) -> anyhow::Result<String> {
         style_parts.push("display: block".to_string());
         style_parts.push("margin: 0 auto".to_string());
     }
-    for prop in &[
-        "top", "left", "right", "bottom", "width", "height", "opacity",
-    ] {
+    for prop in &["top", "left", "right", "bottom", "width", "height"] {
         if let Some(val) = args.get(*prop) {
-            style_parts.push(format!("{}: {}", prop, escape_html(val)));
+            if !is_safe_css_length(val) {
+                anyhow::bail!(
+                    "slide_image: `{prop}` must be a CSS length (e.g. `20px`, `50%`, `auto`), got `{val}`"
+                );
+            }
+            style_parts.push(format!("{prop}: {}", val.trim()));
+        }
+    }
+    if let Some(val) = args.get("opacity") {
+        let v = val.trim();
+        let parsed: Option<f64> = v.parse().ok();
+        match parsed {
+            Some(n) if (0.0..=1.0).contains(&n) => style_parts.push(format!("opacity: {v}")),
+            _ => anyhow::bail!(
+                "slide_image: `opacity` must be a number between 0 and 1, got `{val}`"
+            ),
         }
     }
 
+    let extra_class = args.get("class").map(|s| s.as_str()).unwrap_or("");
     let class_attr = if extra_class.is_empty() {
         "slide-image".to_string()
     } else {
-        format!("slide-image {}", escape_html(extra_class))
+        if !is_safe_class_list(extra_class) {
+            anyhow::bail!(
+                "slide_image: `class` must be space-separated alphanumeric/`-`/`_` tokens, got `{extra_class}`"
+            );
+        }
+        format!("slide-image {extra_class}")
     };
 
     Ok(format!(
@@ -2848,5 +2922,79 @@ mod tests {
             msg.contains("invalid2"),
             "expected error about second body shortcode, got: {msg}"
         );
+    }
+
+    #[test]
+    fn slide_image_accepts_valid_lengths_and_opacity() {
+        let html = builtin_slide_image(r#"src="/logo.png" top="20px" left="50%" width="100px" opacity="0.7" class="logo-float""#).unwrap();
+        assert!(html.contains("position: absolute"));
+        assert!(html.contains("top: 20px"));
+        assert!(html.contains("left: 50%"));
+        assert!(html.contains("opacity: 0.7"));
+        assert!(html.contains("slide-image logo-float"));
+    }
+
+    #[test]
+    fn slide_image_rejects_css_injection_in_length() {
+        let err = builtin_slide_image(
+            r#"src="/logo.png" opacity="0; position: fixed; background: url(https://evil/x)""#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("opacity"), "got: {err}");
+    }
+
+    #[test]
+    fn slide_image_rejects_css_injection_in_top() {
+        let err = builtin_slide_image(r#"src="/logo.png" top="20px; background: url(x)""#)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("top"), "got: {err}");
+    }
+
+    #[test]
+    fn slide_image_rejects_bad_class_tokens() {
+        let err = builtin_slide_image(r#"src="/logo.png" class="evil; background: url(x)""#)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("class"), "got: {err}");
+    }
+
+    #[test]
+    fn slide_image_rejects_opacity_out_of_range() {
+        let err = builtin_slide_image(r#"src="/logo.png" opacity="2.5""#)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("opacity"), "got: {err}");
+    }
+
+    #[test]
+    fn is_safe_css_length_allow_reject() {
+        for good in ["0", "auto", "20px", "-10px", "50%", "1.5em", "100vh", "1fr"] {
+            assert!(is_safe_css_length(good), "expected accept: {good}");
+        }
+        for bad in [
+            "",
+            "red",
+            "20",
+            "20 px",
+            "20px;",
+            "calc(100% - 10px)",
+            "url(x)",
+            "20px !important",
+            "20pxevil",
+        ] {
+            assert!(!is_safe_css_length(bad), "expected reject: {bad}");
+        }
+    }
+
+    #[test]
+    fn is_safe_class_list_allow_reject() {
+        for good in ["logo-float", "a b c", "foo_bar baz-qux1"] {
+            assert!(is_safe_class_list(good), "expected accept: {good}");
+        }
+        for bad in ["", "evil;", "a b;c", "url(x)", "a\"b"] {
+            assert!(!is_safe_class_list(bad), "expected reject: {bad}");
+        }
     }
 }
