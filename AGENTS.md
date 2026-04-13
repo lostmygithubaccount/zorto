@@ -27,7 +27,7 @@ bin/build          # Build all (Rust + Python)
 bin/build-rs       # Build Rust workspace
 bin/build-py       # Build Python bindings (maturin develop)
 bin/check          # Run all checks (format, lint, test)
-bin/check-rs       # Rust checks (fmt, clippy, machete, audit, test)
+bin/check-rs       # Rust checks (fmt, clippy, machete, deny, test)
 bin/check-py       # Python checks (ruff, ty)
 bin/format         # Format all code
 bin/test           # Run all tests
@@ -35,7 +35,7 @@ bin/install        # Install CLI (Rust + Python)
 bin/bump-version   # Bump version (--patch, --minor (default), --major)
 ```
 
-Rust checks: `cargo fmt -- --check`, `cargo clippy --all-targets --all-features --workspace -- -D warnings`, `cargo machete`, `cargo audit`, `cargo test --all-targets --all-features --workspace`
+Rust checks: `cargo fmt -- --check`, `cargo clippy --all-targets --all-features --workspace -- -D warnings`, `cargo machete`, `cargo deny check`, `cargo test --all-targets --all-features --workspace`
 Python checks: `ruff check .`, `ruff format --check .`, `ty check`
 
 ## website (zorto.dev)
