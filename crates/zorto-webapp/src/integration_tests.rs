@@ -371,6 +371,313 @@ async fn section_save_traversal_blocked() {
     assert!(body.contains("Invalid path"));
 }
 
+// ── Section CRUD (wave-4 H2) ───────────────────────────────────────
+
+#[tokio::test]
+async fn section_new_form_returns_ok() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let (status, body) = get(&app, "/sections/new").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.contains("New Section"));
+    assert!(body.contains("name=\"title\""));
+    assert!(body.contains("name=\"slug\""));
+    assert!(body.contains("name=\"sort_by\""));
+}
+
+#[tokio::test]
+async fn section_create_writes_index_md() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let form = "title=Marketing&slug=marketing&description=Campaigns&sort_by=date&paginate_by=5";
+    let (status, _body) = post_form(&app, "/sections/new", form).await;
+    assert!(
+        status == StatusCode::SEE_OTHER || status == StatusCode::FOUND,
+        "expected redirect after create, got {status}"
+    );
+
+    let index = tmp.path().join("site/content/marketing/_index.md");
+    assert!(index.exists(), "marketing/_index.md should exist");
+    let written = std::fs::read_to_string(&index).unwrap();
+    assert!(written.contains("title = \"Marketing\""));
+    assert!(written.contains("description = \"Campaigns\""));
+    assert!(written.contains("sort_by = \"date\""));
+    assert!(written.contains("paginate_by = 5"));
+}
+
+#[tokio::test]
+async fn section_create_derives_slug_from_title_when_blank() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let form = "title=Case+Studies&slug=&description=&sort_by=date&paginate_by=";
+    let (_status, _body) = post_form(&app, "/sections/new", form).await;
+
+    let index = tmp.path().join("site/content/case-studies/_index.md");
+    assert!(index.exists(), "slug should default to slugify(title)");
+}
+
+#[tokio::test]
+async fn section_create_rejects_missing_title() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let form = "title=&slug=anything&description=&sort_by=date&paginate_by=";
+    let (status, _body) = post_form(&app, "/sections/new", form).await;
+    // Redirect back to form with error flag
+    assert!(
+        status == StatusCode::SEE_OTHER || status == StatusCode::FOUND,
+        "expected redirect on empty title, got {status}"
+    );
+    // And the directory was NOT created
+    let dir = tmp.path().join("site/content/anything");
+    assert!(
+        !dir.exists(),
+        "no section should be created when title is empty"
+    );
+}
+
+#[tokio::test]
+async fn section_create_rejects_duplicate_slug() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    // `posts` already exists in the fixture
+    let form = "title=Posts+Redux&slug=posts&description=&sort_by=date&paginate_by=";
+    let (_status, _body) = post_form(&app, "/sections/new", form).await;
+
+    // Existing index content must be untouched
+    let existing =
+        std::fs::read_to_string(tmp.path().join("site/content/posts/_index.md")).unwrap();
+    assert!(
+        existing.contains("Blog"),
+        "existing posts/_index.md must not be overwritten on duplicate-slug attempt"
+    );
+}
+
+#[tokio::test]
+async fn section_create_rejects_unsafe_slug() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    // Path traversal, whitespace, uppercase all invalid per slug_is_safe.
+    for slug in ["../escape", "has space", "UPPER", "dots.in.name", ".hidden"] {
+        let form = format!(
+            "title=Something&slug={}&description=&sort_by=date&paginate_by=",
+            urlencode(slug)
+        );
+        let (_status, _body) = post_form(&app, "/sections/new", &form).await;
+    }
+
+    // None of those should have created a section directory anywhere.
+    for bad in [
+        "site/content/has space",
+        "site/content/UPPER",
+        "site/content/dots.in.name",
+        "site/content/.hidden",
+    ] {
+        assert!(
+            !tmp.path().join(bad).exists(),
+            "unsafe slug produced an unexpected directory: {bad}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn section_create_then_page_redirects_to_page_form_with_preselect() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let form = "title=Projects&slug=projects&description=&sort_by=date&paginate_by=&then=page";
+    let req = Request::builder()
+        .method("POST")
+        .uri("/sections/new")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from(form.to_string()))
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert!(
+        resp.status() == StatusCode::SEE_OTHER || resp.status() == StatusCode::FOUND,
+        "expected redirect, got {}",
+        resp.status()
+    );
+    let location = resp
+        .headers()
+        .get("location")
+        .expect("Location header")
+        .to_str()
+        .unwrap();
+    assert_eq!(
+        location, "/pages/new?preselect=projects",
+        "inline-create path must return to /pages/new with preselect"
+    );
+}
+
+#[tokio::test]
+async fn pages_new_preselects_from_query() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    // Create a section first
+    let form = "title=Team&slug=team&description=&sort_by=date&paginate_by=";
+    let _ = post_form(&app, "/sections/new", form).await;
+
+    let (status, body) = get(&app, "/pages/new?preselect=team").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains(r#"value="team" selected"#),
+        "team option must be preselected"
+    );
+    assert!(
+        body.contains("Section created"),
+        "success flash should appear when preselect is present"
+    );
+}
+
+#[tokio::test]
+async fn pages_new_shows_inline_create_link() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let (status, body) = get(&app, "/pages/new").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains("/sections/new?then=page"),
+        "New Page form must link to inline section creation"
+    );
+}
+
+#[tokio::test]
+async fn section_delete_empty_section() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    // Create a section with no pages
+    let form = "title=Empty&slug=empty&description=&sort_by=date&paginate_by=";
+    let _ = post_form(&app, "/sections/new", form).await;
+    let section_dir = tmp.path().join("site/content/empty");
+    assert!(section_dir.exists(), "precondition: empty/ should exist");
+
+    let (status, _body) = post_form(&app, "/sections/delete/empty/_index.md", "").await;
+    assert!(
+        status == StatusCode::SEE_OTHER || status == StatusCode::FOUND,
+        "expected redirect after delete, got {status}"
+    );
+    assert!(
+        !section_dir.exists(),
+        "empty/ should have been removed after delete"
+    );
+}
+
+#[tokio::test]
+async fn section_delete_refuses_when_section_has_pages() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    // `posts` has hello.md + draft.md per fixture — delete must refuse.
+    let req = Request::builder()
+        .method("POST")
+        .uri("/sections/delete/posts/_index.md")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    let location = resp
+        .headers()
+        .get("location")
+        .expect("Location header")
+        .to_str()
+        .unwrap();
+    assert!(
+        location.contains("error=not_empty"),
+        "expected not_empty error flag, got {location}"
+    );
+
+    // Directory and pages still intact
+    assert!(tmp.path().join("site/content/posts/_index.md").exists());
+    assert!(tmp.path().join("site/content/posts/hello.md").exists());
+    assert!(tmp.path().join("site/content/posts/draft.md").exists());
+}
+
+#[tokio::test]
+async fn section_delete_refuses_root_section() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/sections/delete/_index.md")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    let location = resp
+        .headers()
+        .get("location")
+        .expect("Location header")
+        .to_str()
+        .unwrap();
+    // Root either classifies as not_empty (content/ has posts/ + other files)
+    // or as root_section depending on fixture state. Either way, the delete
+    // MUST NOT succeed: content/_index.md must still exist.
+    assert!(
+        location.contains("error="),
+        "root section delete must carry an error flag: {location}"
+    );
+    assert!(
+        tmp.path().join("site/content/_index.md").exists(),
+        "root _index.md must not be deleted"
+    );
+}
+
+#[tokio::test]
+async fn section_delete_traversal_blocked() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/sections/delete/../../etc/evil")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    let location = resp
+        .headers()
+        .get("location")
+        .expect("Location header")
+        .to_str()
+        .unwrap();
+    assert!(
+        location.contains("error=invalid_path"),
+        "traversal must redirect with invalid_path, got {location}"
+    );
+}
+
+#[tokio::test]
+async fn section_list_shows_new_section_after_create() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let form = "title=Docs+Hub&slug=docs&description=&sort_by=date&paginate_by=";
+    let _ = post_form(&app, "/sections/new", form).await;
+
+    let (_status, body) = get(&app, "/sections").await;
+    assert!(
+        body.contains("Docs Hub"),
+        "new section should appear in the list"
+    );
+}
+
+/// Minimal url-encoder for test fixture slugs. Only handles the characters
+/// our test cases need.
+fn urlencode(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            ' ' => "+".to_string(),
+            '/' => "%2F".to_string(),
+            '.' => "%2E".to_string(),
+            _ => c.to_string(),
+        })
+        .collect()
+}
+
 // ── Assets ─────────────────────────────────────────────────────────
 
 #[tokio::test]
@@ -602,6 +909,233 @@ async fn preview_strips_frontmatter() {
     assert!(body.contains("Body text"));
     // Frontmatter should not appear in rendered output
     assert!(!body.contains("title = "));
+}
+
+// ── Preview render fidelity (wave-4 H4) ────────────────────────────
+
+#[tokio::test]
+async fn preview_uses_user_markdown_config_smart_punctuation() {
+    // The preview previously rendered with `MarkdownConfig::default()`,
+    // which silently disagreed with any user-customised `[markdown]` table.
+    // Verify that turning on smart punctuation in config.toml causes the
+    // preview pane to apply it (the same way `zorto build` would).
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("site");
+    std::fs::create_dir_all(root.join("content")).unwrap();
+    std::fs::create_dir_all(root.join("templates")).unwrap();
+    std::fs::create_dir_all(root.join("static")).unwrap();
+    std::fs::write(
+        root.join("config.toml"),
+        "base_url = \"https://example.com\"\ntitle = \"Test\"\n\n[markdown]\nsmart_punctuation = true\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("content/_index.md"), "+++\ntitle=\"Home\"\n+++\n").unwrap();
+    std::fs::write(
+        root.join("templates/index.html"),
+        "<html>{{section.title}}</html>",
+    )
+    .unwrap();
+    let (reload_tx, _) = broadcast::channel::<()>(16);
+    let state = Arc::new(AppState {
+        root,
+        output_dir: tmp.path().join("site/public"),
+        sandbox: None,
+        reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
+    });
+    let app = app(state);
+
+    // Three straight ASCII hyphens become an em-dash under smart punctuation.
+    let (_, body) = post_body(&app, "/_render-markdown", "Hello---world").await;
+    assert!(
+        body.contains('\u{2014}'),
+        "smart-punctuation em-dash must appear when [markdown].smart_punctuation = true: {body}"
+    );
+}
+
+#[tokio::test]
+async fn preview_uses_user_markdown_config_anchor_links() {
+    // Heading anchor links must follow the user's [markdown].insert_anchor_links
+    // setting, not MarkdownConfig::default().
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("site");
+    std::fs::create_dir_all(root.join("content")).unwrap();
+    std::fs::create_dir_all(root.join("templates")).unwrap();
+    std::fs::create_dir_all(root.join("static")).unwrap();
+    std::fs::write(
+        root.join("config.toml"),
+        "base_url = \"https://example.com\"\ntitle = \"Test\"\n\n[markdown]\ninsert_anchor_links = \"right\"\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("content/_index.md"), "+++\ntitle=\"Home\"\n+++\n").unwrap();
+    std::fs::write(
+        root.join("templates/index.html"),
+        "<html>{{section.title}}</html>",
+    )
+    .unwrap();
+    let (reload_tx, _) = broadcast::channel::<()>(16);
+    let state = Arc::new(AppState {
+        root,
+        output_dir: tmp.path().join("site/public"),
+        sandbox: None,
+        reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
+    });
+    let app = app(state);
+
+    let (_, body) = post_body(&app, "/_render-markdown", "## Hello World").await;
+    assert!(
+        body.contains("zorto-anchor"),
+        "anchor link must render when insert_anchor_links = \"right\": {body}"
+    );
+}
+
+#[tokio::test]
+async fn preview_stubs_inline_shortcodes_with_visible_placeholder() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let content = "Some text\n\n{{ figure(src=\"a.png\", alt=\"x\") }}\n\nMore text";
+    let (status, body) = post_body(&app, "/_render-markdown", content).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains("preview-shortcode-stub"),
+        "shortcode stub class must appear: {body}"
+    );
+    assert!(
+        body.contains(r#"data-name="figure""#),
+        "stub must label which shortcode was unrenderable: {body}"
+    );
+    // The user's actual args must NOT survive — the stub uses `(…)` to
+    // represent them. (The stub's `<code>{{ figure(…) }}</code>` label DOES
+    // contain `{{ figure`, so we can't assert against that fragment.)
+    assert!(
+        !body.contains("src=\"a.png\""),
+        "user's actual shortcode args must not survive in preview: {body}"
+    );
+    assert!(
+        !body.contains(r#"alt="x""#),
+        "user's actual shortcode args must not survive: {body}"
+    );
+    // Disclaimer banner appears
+    assert!(
+        body.contains("preview-disclaimer"),
+        "disclaimer banner must mention shortcode stubbing: {body}"
+    );
+    assert!(
+        body.contains("1 shortcode stubbed"),
+        "disclaimer must count shortcodes: {body}"
+    );
+}
+
+#[tokio::test]
+async fn preview_stubs_body_shortcodes_with_visible_placeholder() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let content = "Before\n\n{% note(type=\"info\") %}Some body content here.{% end %}\n\nAfter";
+    let (status, body) = post_body(&app, "/_render-markdown", content).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains(r#"data-kind="body""#),
+        "body shortcode must be classified as kind=body: {body}"
+    );
+    assert!(
+        body.contains(r#"data-name="note""#),
+        "body shortcode name must be labelled: {body}"
+    );
+    // The actual body content + the user's args must not survive — the stub
+    // uses `(…)…{% end %}` placeholder syntax. (The stub's own representation
+    // includes `{% note(…) %}` literally, so we don't assert on `{% note`.)
+    assert!(
+        !body.contains("type=\"info\""),
+        "user's shortcode args must not survive: {body}"
+    );
+    assert!(
+        !body.contains("Some body content here"),
+        "user's body content must not survive (it's swallowed into the stub): {body}"
+    );
+}
+
+#[tokio::test]
+async fn preview_suppresses_executable_code_blocks() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    // Executable block in zorto syntax: ```{python}
+    let content = "Intro\n\n```{python}\nprint('hello')\n```\n\nOutro";
+    let (status, body) = post_body(&app, "/_render-markdown", content).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains("preview-suppressed-pill"),
+        "exec block must show suppressed pill: {body}"
+    );
+    assert!(
+        body.contains("code execution suppressed"),
+        "user-facing copy must explain why: {body}"
+    );
+    // The placeholder comment must be gone
+    assert!(
+        !body.contains("EXEC_BLOCK"),
+        "raw placeholder must be replaced: {body}"
+    );
+    // Disclaimer mentions exec count
+    assert!(
+        body.contains("1 executable code block"),
+        "disclaimer must count exec blocks: {body}"
+    );
+}
+
+#[tokio::test]
+async fn preview_no_disclaimer_for_plain_markdown() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let (status, body) = post_body(
+        &app,
+        "/_render-markdown",
+        "# Heading\n\nA paragraph.\n\n- list item\n",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        !body.contains("preview-disclaimer"),
+        "no disclaimer should appear for plain markdown without shortcodes/exec: {body}"
+    );
+    assert!(body.contains("<h1"), "heading should still render");
+    assert!(body.contains("<li>"), "list should still render");
+}
+
+#[tokio::test]
+async fn preview_disclaimer_counts_both_shortcodes_and_exec() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let content = "{{ youtube(id=\"abc\") }}\n\n```{bash}\necho hi\n```";
+    let (_, body) = post_body(&app, "/_render-markdown", content).await;
+    assert!(
+        body.contains("1 shortcode stubbed"),
+        "shortcode count: {body}"
+    );
+    assert!(
+        body.contains("1 executable code block"),
+        "exec count: {body}"
+    );
+}
+
+#[tokio::test]
+async fn preview_does_not_swallow_text_that_only_looks_like_a_shortcode() {
+    // A sequence like `{{ not_a_shortcode }}` (no parens) is NOT a shortcode
+    // per zorto-core's grammar. The stubber must not swallow it — better to
+    // pass it through as literal text than to silently delete a user's
+    // copy.
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let content = "Talking about {{ braces in prose }} here.";
+    let (_, body) = post_body(&app, "/_render-markdown", content).await;
+    assert!(
+        body.contains("braces in prose"),
+        "non-shortcode `{{{{ ... }}}}` must survive verbatim: {body}"
+    );
+    assert!(
+        !body.contains("preview-shortcode-stub"),
+        "no stub should be produced for braces that aren't a shortcode: {body}"
+    );
 }
 
 // ── New page form ──────────────────────────────────────────────────
@@ -1003,5 +1537,261 @@ async fn config_save_visual_mode_updates_fields() {
     assert!(
         file.contains("generate_feed = true"),
         "feed flag should be set"
+    );
+}
+
+// ── Config partial-update (wave-4 H1) ──────────────────────────────
+
+#[tokio::test]
+async fn config_visual_save_preserves_explicit_sitemap_true() {
+    // Regression for agent3 H1: a user sets `generate_sitemap = true`
+    // explicitly in raw TOML, then saves a different field via the visual
+    // tab without touching the sitemap checkbox. The checkbox in the visual
+    // form was pre-checked from disk, so the form submission carries
+    // `generate_sitemap=true`. The save must round-trip true; the bug was
+    // that the handler unconditionally wrote whatever the form said,
+    // independent of the on-disk default semantics.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("site");
+    std::fs::create_dir_all(root.join("content")).unwrap();
+    std::fs::create_dir_all(root.join("templates")).unwrap();
+    std::fs::create_dir_all(root.join("static")).unwrap();
+    std::fs::write(
+        root.join("config.toml"),
+        "base_url = \"https://example.com\"\ntitle = \"Test\"\ngenerate_sitemap = true\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("content/_index.md"), "+++\ntitle=\"Home\"\n+++\n").unwrap();
+    std::fs::write(
+        root.join("templates/index.html"),
+        "<html>{{section.title}}</html>",
+    )
+    .unwrap();
+    let (reload_tx, _) = broadcast::channel::<()>(16);
+    let state = Arc::new(AppState {
+        root: root.clone(),
+        output_dir: root.join("public"),
+        sandbox: None,
+        reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
+    });
+    let app = app(state);
+
+    // The form mirrors what a browser would submit when the user only
+    // changed the title: both checkboxes were pre-rendered checked by the
+    // editor (because their values are on disk OR effectively-true) and
+    // are submitted as "true".
+    let form = "mode=visual&content=&title=New+Title&base_url=https%3A%2F%2Fexample.com&description=&theme=&generate_feed=&generate_sitemap=true";
+    let _ = post_form(&app, "/config", form).await;
+
+    let file = std::fs::read_to_string(root.join("config.toml")).unwrap();
+    assert!(
+        file.contains("generate_sitemap = true"),
+        "sitemap=true must survive a visual save: {file}"
+    );
+}
+
+#[tokio::test]
+async fn config_visual_save_does_not_stomp_default_sitemap() {
+    // The trickier H1 case: user has NO `generate_sitemap` line — they're
+    // relying on the zorto-core default (true). The visual form's checkbox
+    // must reflect that effective state and submit `generate_sitemap=true`,
+    // and the handler must NOT promote that into an explicit `false` (or
+    // even an explicit `true`) on save. The field stays absent so future
+    // default changes propagate.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("site");
+    std::fs::create_dir_all(root.join("content")).unwrap();
+    std::fs::create_dir_all(root.join("templates")).unwrap();
+    std::fs::create_dir_all(root.join("static")).unwrap();
+    // No generate_sitemap line — relying on zorto-core default (true).
+    std::fs::write(
+        root.join("config.toml"),
+        "base_url = \"https://example.com\"\ntitle = \"Test\"\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("content/_index.md"), "+++\ntitle=\"Home\"\n+++\n").unwrap();
+    std::fs::write(
+        root.join("templates/index.html"),
+        "<html>{{section.title}}</html>",
+    )
+    .unwrap();
+    let (reload_tx, _) = broadcast::channel::<()>(16);
+    let state = Arc::new(AppState {
+        root: root.clone(),
+        output_dir: root.join("public"),
+        sandbox: None,
+        reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
+    });
+    let app = app(state);
+
+    // Browser submits the visual form. Because the checkbox is now rendered
+    // from the default-applied Config (sitemap=true), the user sees it
+    // checked and the submission carries "true".
+    let form = "mode=visual&content=&title=Updated&base_url=https%3A%2F%2Fexample.com&description=&theme=&generate_feed=&generate_sitemap=true";
+    let _ = post_form(&app, "/config", form).await;
+
+    let file = std::fs::read_to_string(root.join("config.toml")).unwrap();
+    assert!(
+        !file.contains("generate_sitemap"),
+        "absent-but-default sitemap must remain absent after a no-op save (was promoted to explicit, file: {file})"
+    );
+    assert!(file.contains("Updated"), "title update must still apply");
+}
+
+#[tokio::test]
+async fn config_visual_save_unchecks_explicit_true_to_false() {
+    // The other side of the partial-update rule: when the user actually
+    // unchecks a previously-true boolean, that change must persist. Browser
+    // sends NO `generate_feed` field at all when unchecked.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("site");
+    std::fs::create_dir_all(root.join("content")).unwrap();
+    std::fs::create_dir_all(root.join("templates")).unwrap();
+    std::fs::create_dir_all(root.join("static")).unwrap();
+    std::fs::write(
+        root.join("config.toml"),
+        "base_url = \"https://example.com\"\ntitle = \"Test\"\ngenerate_feed = true\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("content/_index.md"), "+++\ntitle=\"Home\"\n+++\n").unwrap();
+    std::fs::write(
+        root.join("templates/index.html"),
+        "<html>{{section.title}}</html>",
+    )
+    .unwrap();
+    let (reload_tx, _) = broadcast::channel::<()>(16);
+    let state = Arc::new(AppState {
+        root: root.clone(),
+        output_dir: root.join("public"),
+        sandbox: None,
+        reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
+    });
+    let app = app(state);
+
+    // generate_feed is OMITTED entirely — that's how browsers serialize an
+    // unchecked checkbox.
+    let form = "mode=visual&content=&title=Same&base_url=https%3A%2F%2Fexample.com&description=&theme=&generate_sitemap=true";
+    let _ = post_form(&app, "/config", form).await;
+
+    let file = std::fs::read_to_string(root.join("config.toml")).unwrap();
+    assert!(
+        file.contains("generate_feed = false"),
+        "unchecking an explicit true must persist as explicit false (file: {file})"
+    );
+}
+
+#[tokio::test]
+async fn config_visual_save_preserves_unrelated_sections() {
+    // Saving via the visual form must not touch [extra], [[taxonomies]],
+    // [markdown], or any other table the form doesn't render. Round-trip
+    // through toml::Value preserves these — but only if we don't accidentally
+    // serialize through a typed struct that drops unknown fields.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("site");
+    std::fs::create_dir_all(root.join("content")).unwrap();
+    std::fs::create_dir_all(root.join("templates")).unwrap();
+    std::fs::create_dir_all(root.join("static")).unwrap();
+    let original = r#"base_url = "https://example.com"
+title = "Test"
+
+[extra]
+twitter = "@example"
+analytics_id = "UA-12345"
+
+[markdown]
+smart_punctuation = true
+external_links_target_blank = true
+
+[[taxonomies]]
+name = "categories"
+"#;
+    std::fs::write(root.join("config.toml"), original).unwrap();
+    std::fs::write(root.join("content/_index.md"), "+++\ntitle=\"Home\"\n+++\n").unwrap();
+    std::fs::write(
+        root.join("templates/index.html"),
+        "<html>{{section.title}}</html>",
+    )
+    .unwrap();
+    let (reload_tx, _) = broadcast::channel::<()>(16);
+    let state = Arc::new(AppState {
+        root: root.clone(),
+        output_dir: root.join("public"),
+        sandbox: None,
+        reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
+    });
+    let app = app(state);
+
+    let form = "mode=visual&content=&title=Updated&base_url=https%3A%2F%2Fexample.com&description=&theme=&generate_feed=&generate_sitemap=true";
+    let _ = post_form(&app, "/config", form).await;
+
+    let file = std::fs::read_to_string(root.join("config.toml")).unwrap();
+    assert!(file.contains("Updated"), "title update should apply");
+    assert!(
+        file.contains("twitter") && file.contains("@example"),
+        "[extra].twitter must survive: {file}"
+    );
+    assert!(
+        file.contains("UA-12345"),
+        "[extra].analytics_id must survive"
+    );
+    assert!(
+        file.contains("smart_punctuation"),
+        "[markdown] table must survive"
+    );
+    assert!(
+        file.contains("external_links_target_blank"),
+        "[markdown] settings must survive"
+    );
+    assert!(
+        file.contains("[[taxonomies]]") && file.contains("categories"),
+        "[[taxonomies]] must survive"
+    );
+}
+
+#[tokio::test]
+async fn config_visual_form_renders_default_sitemap_as_checked() {
+    // The render side of the H1 fix: a config without `generate_sitemap`
+    // relies on the zorto-core default (true). The visual checkbox must
+    // show that — otherwise the UI lies about what the build will do, and
+    // the next save bakes the lie into disk.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("site");
+    std::fs::create_dir_all(root.join("content")).unwrap();
+    std::fs::create_dir_all(root.join("templates")).unwrap();
+    std::fs::create_dir_all(root.join("static")).unwrap();
+    std::fs::write(
+        root.join("config.toml"),
+        "base_url = \"https://example.com\"\ntitle = \"Test\"\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("content/_index.md"), "+++\ntitle=\"Home\"\n+++\n").unwrap();
+    std::fs::write(
+        root.join("templates/index.html"),
+        "<html>{{section.title}}</html>",
+    )
+    .unwrap();
+    let (reload_tx, _) = broadcast::channel::<()>(16);
+    let state = Arc::new(AppState {
+        root,
+        output_dir: tmp.path().join("site/public"),
+        sandbox: None,
+        reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
+    });
+    let app = app(state);
+
+    let (status, body) = get(&app, "/config").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains(r#"name="generate_sitemap" value="true" checked"#),
+        "sitemap checkbox must render checked when relying on default"
+    );
+    assert!(
+        !body.contains(r#"name="generate_feed" value="true" checked"#),
+        "feed checkbox must render unchecked (default is false)"
     );
 }

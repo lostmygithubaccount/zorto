@@ -162,6 +162,14 @@ pub struct EditQuery {
     created: Option<String>,
 }
 
+#[derive(serde::Deserialize)]
+pub struct NewFormQuery {
+    /// Slug of a section to pre-select in the Section dropdown. Carried in
+    /// from `/sections/new?then=page` after an inline section create.
+    #[serde(default)]
+    preselect: Option<String>,
+}
+
 pub async fn save(
     State(state): State<Arc<AppState>>,
     Path(path): Path<String>,
@@ -225,7 +233,10 @@ pub async fn delete(
     Redirect::to("/pages").into_response()
 }
 
-pub async fn new_form(State(state): State<Arc<AppState>>) -> Html<String> {
+pub async fn new_form(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<NewFormQuery>,
+) -> Html<String> {
     let site_title = state.site_title();
     let base_url = state.site_base_url();
 
@@ -252,11 +263,22 @@ pub async fn new_form(State(state): State<Arc<AppState>>) -> Html<String> {
     }
     sections.sort();
 
+    // `?preselect=<slug>` comes from the inline "+ New section" flow: the user
+    // just created a section from this form and we want the dropdown to
+    // remember it. Falls back to `posts` (the default scaffold has one).
+    let preselect = params.preselect.as_deref().unwrap_or("posts");
+
+    let flash_html = if params.preselect.is_some() {
+        r#"<div class="flash flash-success">Section created — selected below.</div>"#
+    } else {
+        ""
+    };
+
     let section_options: String = sections
         .iter()
         .map(|s| {
             let label = if s.is_empty() { "(root)" } else { s.as_str() };
-            let selected = if s == "posts" { " selected" } else { "" };
+            let selected = if s == preselect { " selected" } else { "" };
             format!(
                 r#"<option value="{s}"{selected}>{label}</option>"#,
                 s = escape(s),
@@ -269,7 +291,7 @@ pub async fn new_form(State(state): State<Arc<AppState>>) -> Html<String> {
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
     let body = format!(
-        r#"<div class="toolbar">
+        r#"{flash_html}<div class="toolbar">
   <h2>New Page</h2>
   <div class="toolbar-right">
     <a href="/pages" class="btn">Back to Pages</a>
@@ -283,7 +305,7 @@ pub async fn new_form(State(state): State<Arc<AppState>>) -> Html<String> {
         <input type="text" name="title" placeholder="My New Page" required>
       </div>
       <div class="form-group">
-        <label>Section</label>
+        <label>Section <a href="/sections/new?then=page" style="font-weight: normal; text-transform: none; font-size: 0.75rem; margin-left: 8px;">+ new section</a></label>
         <select name="section">
           {section_options}
         </select>
