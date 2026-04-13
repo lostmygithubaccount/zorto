@@ -1,0 +1,7 @@
+# Reserve Mach-O header padding so `install_name_tool -change` + `-add_rpath`
+# in bin/relocate-macos can rewrite load commands without triggering
+# "larger updated load commands do not fit" on Apple linkers that default
+# to minimal headerpad (e.g. GitHub Actions macOS runners). See issue #146
+# + the v0.23.0 release-workflow failure (run 24369879766).
+[target.'cfg(target_os = "macos")']
+rustflags = ["-C", "link-arg=-Wl,-headerpad_max_install_names"]
