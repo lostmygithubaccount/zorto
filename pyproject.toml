@@ -18,7 +18,14 @@ Issues = "https://github.com/dkdc-io/zorto/issues"
 zorto = "zorto:main"
 
 [dependency-groups]
-dev = ["maturin>=1.0,<2.0", "ruff>=0.9", "ty>=0.0.19", "pytest>=8"]
+dev = [
+    "maturin>=1.0,<2.0",
+    "ruff>=0.9",
+    "ty>=0.0.19",
+    "pytest>=8",
+    "cargo-zigbuild>=0.20",
+    "ziglang>=0.13",
+]
 
 [tool.maturin]
 module-name = "zorto.core"
