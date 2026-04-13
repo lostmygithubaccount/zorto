@@ -172,7 +172,7 @@ wheels = [
 
 [[package]]
 name = "zorto"
-version = "0.23.0"
+version = "0.23.1"
 source = { editable = "." }
 
 [package.dev-dependencies]
