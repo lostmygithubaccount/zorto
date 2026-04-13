@@ -99,6 +99,11 @@ pub(crate) fn app(state: Arc<AppState>) -> Router {
         .route("/pages/delete/{*path}", post(pages::delete))
         .route("/sections", get(sections::list))
         .route(
+            "/sections/new",
+            get(sections::new_form).post(sections::create),
+        )
+        .route("/sections/delete/{*path}", post(sections::delete))
+        .route(
             "/sections/{*path}",
             get(sections::edit).post(sections::save),
         )
