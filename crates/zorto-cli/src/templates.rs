@@ -35,26 +35,6 @@ const DEFAULT_FILES: &[TemplateFile] = &[
         content: include_str!("../templates/default/content/posts/hello.md"),
         executable: false,
     },
-    TemplateFile {
-        path: "templates/base.html",
-        content: include_str!("../templates/default/templates/base.html"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "templates/index.html",
-        content: include_str!("../templates/default/templates/index.html"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "templates/section.html",
-        content: include_str!("../templates/default/templates/section.html"),
-        executable: false,
-    },
-    TemplateFile {
-        path: "templates/page.html",
-        content: include_str!("../templates/default/templates/page.html"),
-        executable: false,
-    },
 ];
 
 // ── Blog template ───────────────────────────────────────────────────────

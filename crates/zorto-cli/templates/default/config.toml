@@ -1,6 +1,8 @@
 base_url = "https://example.com"
 title = "My Site"
+description = "A new site built with Zorto."
+theme = "default"
 generate_feed = true
 
 [extra]
-copyright_html = '<a href="/">My Site</a> by Author via <a href="https://zorto.dev" target="_blank" rel="noopener">Zorto</a>'
+copyright_html = '<a href="/">My Site</a> via <a href="https://zorto.dev" target="_blank" rel="noopener">Zorto</a>'
