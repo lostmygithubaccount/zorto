@@ -2759,7 +2759,6 @@ dependencies = [
  "http-body-util",
  "open",
  "serde",
- "serde_json",
  "slug",
  "tempfile",
  "tokio",
