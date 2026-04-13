@@ -371,6 +371,309 @@ async fn section_save_traversal_blocked() {
     assert!(body.contains("Invalid path"));
 }
 
+// ── Section CRUD (wave-4 H2) ───────────────────────────────────────
+
+#[tokio::test]
+async fn section_new_form_returns_ok() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let (status, body) = get(&app, "/sections/new").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.contains("New Section"));
+    assert!(body.contains("name=\"title\""));
+    assert!(body.contains("name=\"slug\""));
+    assert!(body.contains("name=\"sort_by\""));
+}
+
+#[tokio::test]
+async fn section_create_writes_index_md() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let form = "title=Marketing&slug=marketing&description=Campaigns&sort_by=date&paginate_by=5";
+    let (status, _body) = post_form(&app, "/sections/new", form).await;
+    assert!(
+        status == StatusCode::SEE_OTHER || status == StatusCode::FOUND,
+        "expected redirect after create, got {status}"
+    );
+
+    let index = tmp.path().join("site/content/marketing/_index.md");
+    assert!(index.exists(), "marketing/_index.md should exist");
+    let written = std::fs::read_to_string(&index).unwrap();
+    assert!(written.contains("title = \"Marketing\""));
+    assert!(written.contains("description = \"Campaigns\""));
+    assert!(written.contains("sort_by = \"date\""));
+    assert!(written.contains("paginate_by = 5"));
+}
+
+#[tokio::test]
+async fn section_create_derives_slug_from_title_when_blank() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let form = "title=Case+Studies&slug=&description=&sort_by=date&paginate_by=";
+    let (_status, _body) = post_form(&app, "/sections/new", form).await;
+
+    let index = tmp.path().join("site/content/case-studies/_index.md");
+    assert!(index.exists(), "slug should default to slugify(title)");
+}
+
+#[tokio::test]
+async fn section_create_rejects_missing_title() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let form = "title=&slug=anything&description=&sort_by=date&paginate_by=";
+    let (status, _body) = post_form(&app, "/sections/new", form).await;
+    // Redirect back to form with error flag
+    assert!(
+        status == StatusCode::SEE_OTHER || status == StatusCode::FOUND,
+        "expected redirect on empty title, got {status}"
+    );
+    // And the directory was NOT created
+    let dir = tmp.path().join("site/content/anything");
+    assert!(!dir.exists(), "no section should be created when title is empty");
+}
+
+#[tokio::test]
+async fn section_create_rejects_duplicate_slug() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    // `posts` already exists in the fixture
+    let form = "title=Posts+Redux&slug=posts&description=&sort_by=date&paginate_by=";
+    let (_status, _body) = post_form(&app, "/sections/new", form).await;
+
+    // Existing index content must be untouched
+    let existing = std::fs::read_to_string(tmp.path().join("site/content/posts/_index.md")).unwrap();
+    assert!(
+        existing.contains("Blog"),
+        "existing posts/_index.md must not be overwritten on duplicate-slug attempt"
+    );
+}
+
+#[tokio::test]
+async fn section_create_rejects_unsafe_slug() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    // Path traversal, whitespace, uppercase all invalid per slug_is_safe.
+    for slug in ["../escape", "has space", "UPPER", "dots.in.name", ".hidden"] {
+        let form = format!(
+            "title=Something&slug={}&description=&sort_by=date&paginate_by=",
+            urlencode(slug)
+        );
+        let (_status, _body) = post_form(&app, "/sections/new", &form).await;
+    }
+
+    // None of those should have created a section directory anywhere.
+    for bad in [
+        "site/content/has space",
+        "site/content/UPPER",
+        "site/content/dots.in.name",
+        "site/content/.hidden",
+    ] {
+        assert!(
+            !tmp.path().join(bad).exists(),
+            "unsafe slug produced an unexpected directory: {bad}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn section_create_then_page_redirects_to_page_form_with_preselect() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let form = "title=Projects&slug=projects&description=&sort_by=date&paginate_by=&then=page";
+    let req = Request::builder()
+        .method("POST")
+        .uri("/sections/new")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from(form.to_string()))
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert!(
+        resp.status() == StatusCode::SEE_OTHER || resp.status() == StatusCode::FOUND,
+        "expected redirect, got {}",
+        resp.status()
+    );
+    let location = resp
+        .headers()
+        .get("location")
+        .expect("Location header")
+        .to_str()
+        .unwrap();
+    assert_eq!(
+        location, "/pages/new?preselect=projects",
+        "inline-create path must return to /pages/new with preselect"
+    );
+}
+
+#[tokio::test]
+async fn pages_new_preselects_from_query() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    // Create a section first
+    let form = "title=Team&slug=team&description=&sort_by=date&paginate_by=";
+    let _ = post_form(&app, "/sections/new", form).await;
+
+    let (status, body) = get(&app, "/pages/new?preselect=team").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains(r#"value="team" selected"#),
+        "team option must be preselected"
+    );
+    assert!(
+        body.contains("Section created"),
+        "success flash should appear when preselect is present"
+    );
+}
+
+#[tokio::test]
+async fn pages_new_shows_inline_create_link() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let (status, body) = get(&app, "/pages/new").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains("/sections/new?then=page"),
+        "New Page form must link to inline section creation"
+    );
+}
+
+#[tokio::test]
+async fn section_delete_empty_section() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    // Create a section with no pages
+    let form = "title=Empty&slug=empty&description=&sort_by=date&paginate_by=";
+    let _ = post_form(&app, "/sections/new", form).await;
+    let section_dir = tmp.path().join("site/content/empty");
+    assert!(section_dir.exists(), "precondition: empty/ should exist");
+
+    let (status, _body) = post_form(&app, "/sections/delete/empty/_index.md", "").await;
+    assert!(
+        status == StatusCode::SEE_OTHER || status == StatusCode::FOUND,
+        "expected redirect after delete, got {status}"
+    );
+    assert!(
+        !section_dir.exists(),
+        "empty/ should have been removed after delete"
+    );
+}
+
+#[tokio::test]
+async fn section_delete_refuses_when_section_has_pages() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    // `posts` has hello.md + draft.md per fixture — delete must refuse.
+    let req = Request::builder()
+        .method("POST")
+        .uri("/sections/delete/posts/_index.md")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    let location = resp
+        .headers()
+        .get("location")
+        .expect("Location header")
+        .to_str()
+        .unwrap();
+    assert!(
+        location.contains("error=not_empty"),
+        "expected not_empty error flag, got {location}"
+    );
+
+    // Directory and pages still intact
+    assert!(tmp.path().join("site/content/posts/_index.md").exists());
+    assert!(tmp.path().join("site/content/posts/hello.md").exists());
+    assert!(tmp.path().join("site/content/posts/draft.md").exists());
+}
+
+#[tokio::test]
+async fn section_delete_refuses_root_section() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/sections/delete/_index.md")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    let location = resp
+        .headers()
+        .get("location")
+        .expect("Location header")
+        .to_str()
+        .unwrap();
+    // Root either classifies as not_empty (content/ has posts/ + other files)
+    // or as root_section depending on fixture state. Either way, the delete
+    // MUST NOT succeed: content/_index.md must still exist.
+    assert!(
+        location.contains("error="),
+        "root section delete must carry an error flag: {location}"
+    );
+    assert!(
+        tmp.path().join("site/content/_index.md").exists(),
+        "root _index.md must not be deleted"
+    );
+}
+
+#[tokio::test]
+async fn section_delete_traversal_blocked() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/sections/delete/../../etc/evil")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    let location = resp
+        .headers()
+        .get("location")
+        .expect("Location header")
+        .to_str()
+        .unwrap();
+    assert!(
+        location.contains("error=invalid_path"),
+        "traversal must redirect with invalid_path, got {location}"
+    );
+}
+
+#[tokio::test]
+async fn section_list_shows_new_section_after_create() {
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+
+    let form = "title=Docs+Hub&slug=docs&description=&sort_by=date&paginate_by=";
+    let _ = post_form(&app, "/sections/new", form).await;
+
+    let (_status, body) = get(&app, "/sections").await;
+    assert!(
+        body.contains("Docs Hub"),
+        "new section should appear in the list"
+    );
+}
+
+/// Minimal url-encoder for test fixture slugs. Only handles the characters
+/// our test cases need.
+fn urlencode(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            ' ' => "+".to_string(),
+            '/' => "%2F".to_string(),
+            '.' => "%2E".to_string(),
+            _ => c.to_string(),
+        })
+        .collect()
+}
+
 // ── Assets ─────────────────────────────────────────────────────────
 
 #[tokio::test]
