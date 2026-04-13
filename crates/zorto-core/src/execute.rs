@@ -1,6 +1,9 @@
+use std::io::Read;
 use std::path::Path;
+use std::process::{Command, Stdio};
 #[cfg(feature = "python")]
 use std::sync::Once;
+use std::time::{Duration, Instant};
 
 /// A single visualization captured from a Python code block.
 #[derive(Debug, Clone)]
@@ -24,6 +27,11 @@ pub struct ExecutableBlock {
 
 /// Execute all pending code blocks for a page.
 ///
+/// `timeout_seconds` bounds the wall-clock runtime of each individual
+/// bash/sh/node block; a value of 0 disables the timeout. Python blocks
+/// run under the embedded PyO3 interpreter and are NOT subject to this
+/// timeout — see `crate::config::ExecuteConfig::timeout_seconds`.
+///
 /// Each block's `output` and `error` fields are populated with the execution
 /// results. Errors in individual blocks are stored in `block.error` (they are
 /// rendered inline as `<div class="code-error">`) and also surfaced via the
@@ -32,6 +40,7 @@ pub fn execute_blocks(
     blocks: &mut [ExecutableBlock],
     working_dir: &Path,
     site_root: &Path,
+    timeout_seconds: u64,
 ) -> Vec<String> {
     let mut errors = Vec::new();
 
@@ -57,26 +66,29 @@ pub fn execute_blocks(
                 }
                 #[cfg(not(feature = "python"))]
                 {
+                    let _ = site_root;
                     let msg =
                         "Python execution not available (built without python feature)".to_string();
                     block.error = Some(msg.clone());
                     errors.push(msg);
                 }
             }
-            "node" | "javascript" | "js" => match execute_node(block, working_dir) {
-                Ok((stdout, stderr)) => {
-                    block.output = Some(stdout);
-                    if !stderr.is_empty() {
-                        block.error = Some(stderr);
+            "node" | "javascript" | "js" => {
+                match execute_node(block, working_dir, timeout_seconds) {
+                    Ok((stdout, stderr)) => {
+                        block.output = Some(stdout);
+                        if !stderr.is_empty() {
+                            block.error = Some(stderr);
+                        }
+                    }
+                    Err(e) => {
+                        let msg = format!("Node.js execution error: {e}");
+                        block.error = Some(msg.clone());
+                        errors.push(msg);
                     }
                 }
-                Err(e) => {
-                    let msg = format!("Node.js execution error: {e}");
-                    block.error = Some(msg.clone());
-                    errors.push(msg);
-                }
-            },
-            "bash" | "sh" => match execute_bash(block, working_dir) {
+            }
+            "bash" | "sh" => match execute_bash(block, working_dir, timeout_seconds) {
                 Ok((stdout, stderr)) => {
                     block.output = Some(stdout);
                     if !stderr.is_empty() {
@@ -98,6 +110,74 @@ pub fn execute_blocks(
     }
 
     errors
+}
+
+/// Run a `Command` with stdout/stderr captured and an optional wall-clock
+/// timeout. `timeout_seconds == 0` means no timeout (legacy `Command::output`
+/// behaviour).
+///
+/// stdout and stderr are drained on background threads while the parent polls
+/// for completion. Without that the child can block writing to a full pipe
+/// while we sit in the wait loop, producing a spurious "timeout" for a
+/// program that was actually trying to finish quickly.
+fn run_with_timeout(mut cmd: Command, timeout_seconds: u64) -> anyhow::Result<(String, String)> {
+    cmd.stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdin(Stdio::null());
+    let mut child = cmd.spawn()?;
+
+    let stdout_pipe = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("failed to capture child stdout"))?;
+    let stderr_pipe = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("failed to capture child stderr"))?;
+
+    let stdout_thread = std::thread::spawn(move || -> std::io::Result<String> {
+        let mut buf = String::new();
+        let mut pipe = stdout_pipe;
+        pipe.read_to_string(&mut buf)?;
+        Ok(buf)
+    });
+    let stderr_thread = std::thread::spawn(move || -> std::io::Result<String> {
+        let mut buf = String::new();
+        let mut pipe = stderr_pipe;
+        pipe.read_to_string(&mut buf)?;
+        Ok(buf)
+    });
+
+    let timed_out = if timeout_seconds == 0 {
+        let _status = child.wait()?;
+        false
+    } else {
+        let deadline = Instant::now() + Duration::from_secs(timeout_seconds);
+        loop {
+            match child.try_wait()? {
+                Some(_status) => break false,
+                None => {
+                    if Instant::now() >= deadline {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        break true;
+                    }
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+            }
+        }
+    };
+
+    let stdout = stdout_thread.join().unwrap_or_else(|_| Ok(String::new()))?;
+    let stderr = stderr_thread.join().unwrap_or_else(|_| Ok(String::new()))?;
+
+    if timed_out {
+        anyhow::bail!(
+            "execution exceeded the {timeout_seconds}-second timeout (configurable via `[execute] timeout_seconds` in config.toml; set to 0 to disable)"
+        );
+    }
+
+    Ok((stdout, stderr))
 }
 
 /// Find a .venv directory: check site root, walk up parents, then fall back to VIRTUAL_ENV env var
@@ -397,54 +477,56 @@ fn execute_python(
     Ok(result)
 }
 
-/// Execute a bash code block
-fn execute_bash(block: &ExecutableBlock, working_dir: &Path) -> anyhow::Result<(String, String)> {
+/// Execute a bash code block.
+fn execute_bash(
+    block: &ExecutableBlock,
+    working_dir: &Path,
+    timeout_seconds: u64,
+) -> anyhow::Result<(String, String)> {
     let code = if let Some(ref file) = block.file_ref {
         std::fs::read_to_string(working_dir.join(file))?
     } else {
         block.source.clone()
     };
 
-    let output = std::process::Command::new("bash")
-        .arg("-c")
-        .arg(&code)
-        .current_dir(working_dir)
-        .output()?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-
-    Ok((stdout, stderr))
+    let mut cmd = Command::new("bash");
+    cmd.arg("-c").arg(&code).current_dir(working_dir);
+    run_with_timeout(cmd, timeout_seconds)
 }
 
-/// Execute a Node.js code block via `node -e`
-fn execute_node(block: &ExecutableBlock, working_dir: &Path) -> anyhow::Result<(String, String)> {
+/// Execute a Node.js code block via `node -e`.
+fn execute_node(
+    block: &ExecutableBlock,
+    working_dir: &Path,
+    timeout_seconds: u64,
+) -> anyhow::Result<(String, String)> {
     let code = if let Some(ref file) = block.file_ref {
         std::fs::read_to_string(working_dir.join(file))?
     } else {
         block.source.clone()
     };
 
-    let output = std::process::Command::new("node")
-        .arg("-e")
-        .arg(&code)
-        .current_dir(working_dir)
-        .output()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                anyhow::anyhow!(
+    let mut cmd = Command::new("node");
+    cmd.arg("-e").arg(&code).current_dir(working_dir);
+    match run_with_timeout(cmd, timeout_seconds) {
+        Ok(out) => Ok(out),
+        Err(e) => {
+            // Distinguish "node not installed" from runtime failures so the
+            // user gets an actionable message instead of a generic spawn error.
+            let msg = e.to_string();
+            if msg.contains("No such file or directory")
+                || msg.contains("program not found")
+                || msg.contains("cannot find the file")
+            {
+                Err(anyhow::anyhow!(
                     "Node.js is not installed or not in PATH. \
                      Install it from https://nodejs.org to use {{node}} code blocks."
-                )
+                ))
             } else {
-                anyhow::anyhow!("Failed to run node: {e}")
+                Err(e)
             }
-        })?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-
-    Ok((stdout, stderr))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -463,7 +545,7 @@ mod tests {
             error: None,
             viz: Vec::new(),
         }];
-        execute_blocks(&mut blocks, tmp.path(), tmp.path());
+        execute_blocks(&mut blocks, tmp.path(), tmp.path(), 0);
         assert_eq!(blocks[0].output.as_deref(), Some("hello\n"));
         assert!(blocks[0].error.is_none());
     }
@@ -479,7 +561,7 @@ mod tests {
             error: None,
             viz: Vec::new(),
         }];
-        execute_blocks(&mut blocks, tmp.path(), tmp.path());
+        execute_blocks(&mut blocks, tmp.path(), tmp.path(), 0);
         assert_eq!(blocks[0].output.as_deref(), Some(""));
         assert_eq!(blocks[0].error.as_deref(), Some("oops\n"));
     }
@@ -496,7 +578,7 @@ mod tests {
             error: None,
             viz: Vec::new(),
         }];
-        execute_blocks(&mut blocks, tmp.path(), tmp.path());
+        execute_blocks(&mut blocks, tmp.path(), tmp.path(), 0);
         assert_eq!(blocks[0].output.as_deref(), Some("from-file\n"));
     }
 
@@ -511,7 +593,7 @@ mod tests {
             error: None,
             viz: Vec::new(),
         }];
-        execute_blocks(&mut blocks, tmp.path(), tmp.path());
+        execute_blocks(&mut blocks, tmp.path(), tmp.path(), 0);
         assert_eq!(blocks[0].output.as_deref(), Some("hello from node\n"));
         assert!(blocks[0].error.is_none());
     }
@@ -527,7 +609,7 @@ mod tests {
             error: None,
             viz: Vec::new(),
         }];
-        execute_blocks(&mut blocks, tmp.path(), tmp.path());
+        execute_blocks(&mut blocks, tmp.path(), tmp.path(), 0);
         assert_eq!(blocks[0].output.as_deref(), Some(""));
         assert_eq!(blocks[0].error.as_deref(), Some("oops\n"));
     }
@@ -543,7 +625,7 @@ mod tests {
             error: None,
             viz: Vec::new(),
         }];
-        execute_blocks(&mut blocks, tmp.path(), tmp.path());
+        execute_blocks(&mut blocks, tmp.path(), tmp.path(), 0);
         assert_eq!(blocks[0].output.as_deref(), Some("3\n"));
         assert!(blocks[0].error.is_none());
     }
@@ -559,7 +641,7 @@ mod tests {
             error: None,
             viz: Vec::new(),
         }];
-        execute_blocks(&mut blocks, tmp.path(), tmp.path());
+        execute_blocks(&mut blocks, tmp.path(), tmp.path(), 0);
         assert_eq!(blocks[0].output.as_deref(), Some("js alias\n"));
         assert!(blocks[0].error.is_none());
     }
@@ -576,7 +658,61 @@ mod tests {
             error: None,
             viz: Vec::new(),
         }];
-        execute_blocks(&mut blocks, tmp.path(), tmp.path());
+        execute_blocks(&mut blocks, tmp.path(), tmp.path(), 0);
         assert_eq!(blocks[0].output.as_deref(), Some("from-file\n"));
+    }
+
+    #[test]
+    fn test_execute_bash_timeout_kills_runaway() {
+        // Regression: a bash block that never returns used to wedge the entire
+        // build forever. With a finite timeout it must be killed and surfaced
+        // as a per-block error, not hang.
+        let tmp = TempDir::new().unwrap();
+        let mut blocks = vec![ExecutableBlock {
+            language: "bash".into(),
+            // sleep longer than the timeout; if the kill path is broken, this
+            // test hangs (and CI catches it).
+            source: "sleep 30".into(),
+            file_ref: None,
+            output: None,
+            error: None,
+            viz: Vec::new(),
+        }];
+        let started = std::time::Instant::now();
+        let errors = execute_blocks(&mut blocks, tmp.path(), tmp.path(), 1);
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < std::time::Duration::from_secs(10),
+            "timeout did not fire within 10s wall-clock (took {elapsed:?})"
+        );
+        assert_eq!(errors.len(), 1, "expected a single per-block error");
+        assert!(
+            errors[0].to_lowercase().contains("timeout")
+                || errors[0].to_lowercase().contains("exceeded"),
+            "error message should mention the timeout: {}",
+            errors[0]
+        );
+        assert!(
+            blocks[0].error.is_some(),
+            "block.error must be populated so the timeout renders inline"
+        );
+    }
+
+    #[test]
+    fn test_execute_bash_timeout_zero_disables_limit() {
+        // timeout_seconds == 0 must mean "no timeout" — short-running blocks
+        // still complete and produce output.
+        let tmp = TempDir::new().unwrap();
+        let mut blocks = vec![ExecutableBlock {
+            language: "bash".into(),
+            source: "echo unbounded".into(),
+            file_ref: None,
+            output: None,
+            error: None,
+            viz: Vec::new(),
+        }];
+        let errors = execute_blocks(&mut blocks, tmp.path(), tmp.path(), 0);
+        assert!(errors.is_empty(), "no errors expected: {errors:?}");
+        assert_eq!(blocks[0].output.as_deref(), Some("unbounded\n"));
     }
 }

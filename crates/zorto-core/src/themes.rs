@@ -336,3 +336,105 @@ impl Theme {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Iterate Theme::available() and exercise the full lifecycle: name lookup,
+    /// templates(), scss(), and Theme::name() round-trip. Catches drift between
+    /// the four parallel match arms (from_name / templates / scss / name) which
+    /// the four `#[allow(unreachable_patterns)]` annotations would otherwise mask.
+    #[test]
+    fn test_every_available_theme_round_trips() {
+        let names = Theme::available();
+        assert!(
+            !names.is_empty(),
+            "Theme::available() must list at least one theme under default features"
+        );
+
+        for name in names {
+            let theme = Theme::from_name(name)
+                .unwrap_or_else(|| panic!("Theme::from_name({name:?}) returned None"));
+            assert_eq!(
+                theme.name(),
+                name,
+                "Theme::{theme:?}.name() must round-trip with from_name input"
+            );
+
+            let templates = theme.templates();
+            assert!(
+                !templates.is_empty(),
+                "theme {name} must expose at least one template"
+            );
+            for (tmpl_name, content) in &templates {
+                assert!(
+                    !tmpl_name.is_empty(),
+                    "theme {name} template name must be non-empty"
+                );
+                assert!(
+                    !content.is_empty(),
+                    "theme {name} template {tmpl_name} content must be non-empty"
+                );
+            }
+
+            let scss = theme.scss();
+            assert!(
+                !scss.is_empty(),
+                "theme {name} must expose at least one SCSS file"
+            );
+            // Every theme bundles the shared partials plus its own style.scss.
+            let scss_names: Vec<&str> = scss.iter().map(|(n, _)| *n).collect();
+            assert!(
+                scss_names.contains(&"_structure.scss"),
+                "theme {name} missing shared _structure.scss"
+            );
+            assert!(
+                scss_names.contains(&"_components.scss"),
+                "theme {name} missing shared _components.scss"
+            );
+            assert!(
+                scss_names.contains(&"style.scss"),
+                "theme {name} missing its own style.scss (likely an unreachable_patterns drift)"
+            );
+            for (scss_name, content) in &scss {
+                assert!(
+                    !content.is_empty(),
+                    "theme {name} SCSS file {scss_name} content must be non-empty"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_from_name_unknown_returns_none() {
+        assert!(Theme::from_name("nonexistent-theme-name").is_none());
+        assert!(Theme::from_name("").is_none());
+        // Mixed case: theme names are lowercase only.
+        assert!(Theme::from_name("Zorto").is_none() || cfg!(feature = "theme-zorto"));
+    }
+
+    #[test]
+    fn test_templates_include_required_files() {
+        let names = Theme::available();
+        if names.is_empty() {
+            return;
+        }
+        let theme = Theme::from_name(names[0]).expect("first available theme parses");
+        let names: Vec<&str> = theme.templates().iter().map(|(n, _)| *n).collect();
+        // Required by Site::build (page.html / section.html / index.html / 404.html).
+        for required in [
+            "base.html",
+            "page.html",
+            "section.html",
+            "index.html",
+            "404.html",
+        ] {
+            assert!(
+                names.contains(&required),
+                "theme {} missing required template {required}",
+                theme.name()
+            );
+        }
+    }
+}

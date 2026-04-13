@@ -64,6 +64,9 @@ pub struct Config {
     /// Code block execution cache configuration.
     #[serde(default, skip_serializing)]
     pub cache: CacheConfig,
+    /// Code block execution configuration (timeouts, etc.).
+    #[serde(default, skip_serializing)]
+    pub execute: ExecuteConfig,
 }
 
 /// Where to insert anchor links on headings.
@@ -136,6 +139,35 @@ pub struct CacheConfig {
     /// Enable caching of executable code block results (default: `false`).
     #[serde(default)]
     pub enable: bool,
+}
+
+/// Default per-block execution timeout in seconds.
+pub(crate) const DEFAULT_EXEC_TIMEOUT_SECONDS: u64 = 120;
+
+fn default_exec_timeout_seconds() -> u64 {
+    DEFAULT_EXEC_TIMEOUT_SECONDS
+}
+
+/// Configuration for executable code blocks.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ExecuteConfig {
+    /// Maximum seconds for any single bash/sh/node code block to run before
+    /// being killed. Default: 120. Set to 0 to disable the timeout.
+    ///
+    /// Python code blocks are NOT subject to this timeout — zorto uses an
+    /// embedded PyO3 interpreter that cannot safely be interrupted from
+    /// another thread. Wrap long-running Python in a subprocess
+    /// (`subprocess.run(..., timeout=...)`) if you need a deadline.
+    #[serde(default = "default_exec_timeout_seconds")]
+    pub timeout_seconds: u64,
+}
+
+impl Default for ExecuteConfig {
+    fn default() -> Self {
+        Self {
+            timeout_seconds: default_exec_timeout_seconds(),
+        }
+    }
 }
 
 /// A taxonomy definition from `[[taxonomies]]` in `config.toml`.
