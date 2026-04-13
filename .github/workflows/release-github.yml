@@ -8,10 +8,15 @@ on:
       tag:
         description: "Tag to release (e.g. v0.1.0)"
         required: true
+      publish:
+        description: "Create GitHub Release (default false — workflow_dispatch is verify-only)"
+        type: boolean
+        default: false
 
 jobs:
   release:
     uses: dkdc-io/.github/.github/workflows/release-github.yml@v1
+    if: github.event_name == 'push' || inputs.publish
     with:
       binary: zorto
     permissions:

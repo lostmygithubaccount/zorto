@@ -2,16 +2,17 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-# Pin manylinux compatibility to manylinux2014 (glibc 2.17) for Linux wheel
-# builds. Without an explicit --compatibility, maturin tags wheels with the
-# host runner's glibc — release runners (ubuntu-latest = glibc 2.39) were
-# producing manylinux_2_39 wheels that pip / uv refuse to install on Ubuntu
-# 22.04 (2.35), Debian 12 (2.36), RHEL 9 (2.34), or Amazon Linux 2023 (2.34).
-# manylinux2014 is the broadest reasonable target and covers ~all distros
-# people actually run.
+# Linux wheels use --zig so the binary is linked against glibc 2.17
+# regardless of the host runner's glibc. Without --zig, building on
+# ubuntu-latest (glibc 2.39) produces a .so with GLIBC_2.39 symbol
+# references, which pip refuses to install on Ubuntu 22.04 (2.35),
+# Debian 12 (2.36), RHEL 9 (2.34), or Amazon Linux 2023 (2.34).
+# --compatibility alone only sets the wheel tag; auditwheel rejects the
+# build when actual symbols exceed the pinned manylinux level.
+# manylinux2014 (glibc 2.17) is the broadest reasonable target.
 echo "Building zorto wheels..."
 if [[ "$*" == *linux* ]]; then
-  uv run maturin build --release --compatibility manylinux2014 "$@"
+  uv run maturin build --release --zig --compatibility manylinux2014 "$@"
 else
   uv run maturin build --release "$@"
 fi
