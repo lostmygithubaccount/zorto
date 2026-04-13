@@ -14,6 +14,10 @@ Step-by-step guides for common Zorto tasks.
 - [Organize content with sections](organize-content.md): nested sections, templates, external content
 - [Set up multiple authors](multiple-authors.md): taxonomies and frontmatter
 
+## Presentations
+
+- [Create a presentation](create-presentation.md): slide deck with reveal.js, one markdown file per slide
+
 ## Visualizations
 
 - [Create charts with matplotlib](matplotlib.md): static line charts, bar charts, subplots

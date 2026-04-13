@@ -1,5 +1,5 @@
 +++
-title = "executable visualizations"
+title = "Executable visualizations"
 date = "2026-04-04"
 author = "Cody"
 description = "Zorto now renders Python visualizations inline — matplotlib, plotly, seaborn, altair. Just write the code."
@@ -10,7 +10,7 @@ Zorto can now render Python visualizations inline. No configuration, no magic co
 
 <!-- more -->
 
-## matplotlib
+## Matplotlib
 
 The most popular Python plotting library. Just `import matplotlib.pyplot as plt` and plot:
 
@@ -30,7 +30,7 @@ plt.grid(True, alpha=0.3)
 plt.tight_layout()
 ```
 
-## plotly
+## Plotly
 
 Interactive charts that respond to hover, zoom, and pan:
 
@@ -53,7 +53,7 @@ fig.update_layout(
 )
 ```
 
-## seaborn
+## Seaborn
 
 Statistical visualizations built on matplotlib — automatically captured:
 
@@ -76,7 +76,7 @@ plt.grid(True, alpha=0.3, axis='y')
 plt.tight_layout()
 ```
 
-## altair
+## Altair
 
 Declarative statistical visualization:
 
@@ -100,7 +100,7 @@ chart = alt.Chart(data).mark_line(strokeWidth=3).encode(
 )
 ```
 
-## multiple plots in one block
+## Multiple plots in one block
 
 ```{python}
 import matplotlib.pyplot as plt
@@ -125,7 +125,7 @@ ax2.set_ylabel('y')
 plt.tight_layout()
 ```
 
-## how it works
+## How it works
 
 Zorto's executable code blocks run Python at build time via an embedded interpreter. After your code executes, Zorto checks if any visualization libraries produced output:
 

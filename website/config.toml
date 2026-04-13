@@ -1,7 +1,7 @@
 # zorto.dev: zorto configuration
 base_url = "https://zorto.dev"
 title = "Zorto"
-description = "The AI-native static site generator (SSG) with executable code blocks."
+description = "Turn plain Markdown into websites, blog posts, and slide decks — built for humans and AI agents."
 theme = "zorto"
 generate_feed = true
 generate_llms_txt = true
@@ -54,13 +54,15 @@ social_links = [
 ]
 
 hero_title = "Zorto"
-hero_subtitle = "The AI-native static site generator (SSG) with executable code blocks."
+hero_subtitle = "Turn plain Markdown into websites, blog posts, and slide decks — built for humans and AI agents."
 hero_actions = [
   { name = "Get started", url = "/docs/getting-started/", style = "default" },
+  { name = "See a slide deck", url = "/presentations/intro-to-zorto/", style = "outline" },
   { name = "GitHub", url = "https://github.com/dkdc-io/zorto", style = "outline", external = true },
 ]
 
 features = [
+  { name = "Slide decks", description = "Build reveal.js presentations from markdown — one file per slide, weight-ordered, with layouts, backgrounds, transitions, and speaker notes. Keyboard navigation and fullscreen built in.", url = "/docs/concepts/presentations/" },
   { name = "Executable code blocks", description = "Run Python and Bash at build time. Matplotlib, Plotly, Altair, and Seaborn charts rendered inline. Output baked into static HTML.", url = "/docs/concepts/executable-code/" },
   { name = "Fast", description = "Written in Rust. Sites build in milliseconds. Live reload with instant browser refresh during development.", url = "/docs/concepts/fast/" },
   { name = "16 themes", description = "Built-in themes with light and dark mode. Switch instantly. Override any template or style locally.", url = "/docs/concepts/themes/" },

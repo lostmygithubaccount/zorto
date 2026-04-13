@@ -6,7 +6,9 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/dkdc-io/zorto/ci.yml?branch=main&label=CI)](https://github.com/dkdc-io/zorto/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-8A2BE2.svg)](https://github.com/dkdc-io/zorto/blob/main/LICENSE)
 
-The AI-native static site generator (SSG) with executable code blocks, inspired by [Zola](https://github.com/getzola/zola) and [Quarto](https://github.com/quarto-dev/quarto-cli).
+Zorto turns plain Markdown into polished websites, blog posts, and slide decks — same files, same workflow, no HTML gymnastics. Point it at a folder of `.md` files and get a production-ready site with search, themes, and a reveal.js-powered presentation mode (arrow keys, speaker view, fullscreen). Designed so you — or an AI agent working alongside you — can draft a landing page, an engineering blog post, or your next all-hands deck in minutes, not days.
+
+Prior art: inspired by [Zola](https://github.com/getzola/zola) (fast Rust SSG) and [Quarto](https://github.com/quarto-dev/quarto-cli) (executable documents). Zorto is MIT-licensed and free and open source forever.
 
 ## Install
 
@@ -47,6 +49,14 @@ uvx zorto
 ```{bash}
 zorto --help
 ```
+
+## Slide decks
+
+Zorto ships a reveal.js-powered presentation mode: one markdown file per slide, with frontmatter for layout, background, and transitions. Arrow keys, speaker view, fullscreen, and overview mode are built in, so a deck is just a directory of `.md` files that a human or agent can draft, reorder, or hand off without touching HTML.
+
+- [Live intro deck](https://zorto.dev/presentations/intro-to-zorto/) — what a Zorto-built deck looks like.
+- [Create a presentation](https://zorto.dev/docs/how-to/create-presentation/) — step-by-step guide.
+- [Presentations concept](https://zorto.dev/docs/concepts/presentations/) — the content model behind decks.
 
 ## Executable code blocks
 

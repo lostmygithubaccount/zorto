@@ -43,7 +43,7 @@ Five types: `NOTE`, `TIP`, `WARNING`, `CAUTION`, `IMPORTANT`.
 
 ## Shortcodes
 
-Eight built-in shortcodes: `include`, `tabs`, `note`, `details`, `figure`, `youtube`, `gist`, `mermaid`. Plus you can create your own with Tera templates.
+Nineteen built-in shortcodes, spanning content (`include`, `tabs`, `note`, `details`, `figure`, `youtube`, `gist`, `mermaid`), diagrams (`flow`, `layers`, `tree`, `compare`, `cascade`), API references (`pyref`, `configref`), and presentations (`slide_image`, `speaker_notes`, `fragment`, `columns`). Plus you can create your own with Tera templates.
 
 ## Template linting
 

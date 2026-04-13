@@ -7,6 +7,7 @@ Core concepts behind how Zorto works. Each page explains a feature in depth — 
 - [Free & open source](open-source.md): MIT license, distribution channels, contributing
 - [AI-native](ai-native.md): explicit contracts, build-time validation, llms.txt
 - [Executable code blocks](executable-code.md): run Python and Bash at build time
+- [Presentations](presentations.md): slide decks from markdown, one file per slide, reveal.js-powered
 - [Fast](fast.md): Rust, efficient rendering, embedded themes
 - [Callouts](callouts.md): GitHub-style alert boxes in markdown
 - [Shortcodes](shortcodes.md): rich content components without HTML
