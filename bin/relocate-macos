@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Rewrite the pyo3-linked Python.framework install_name to an @rpath-relative
+# form and add rpath entries covering common macOS Python install locations
+# (python.org installer, Homebrew arm64, Homebrew x86_64). Without this the
+# prebuilt binary would only load on the exact machine that built it. See
+# issue #146.
+set -euo pipefail
+
+bin="${1:?usage: $0 <path-to-binary>}"
+if [[ ! -x "$bin" ]]; then
+    echo "relocate-macos: $bin is not an executable" >&2
+    exit 1
+fi
+
+old="$(otool -L "$bin" | awk '/Python\.framework.*\/Python[[:space:]]*\(/ {print $1; exit}')"
+if [[ -z "$old" ]]; then
+    echo "relocate-macos: no Python.framework load command in $bin (nothing to do)"
+    exit 0
+fi
+
+version="$(printf '%s\n' "$old" | sed -nE 's#.*Versions/([0-9][0-9.]*)/Python$#\1#p')"
+if [[ -z "$version" ]]; then
+    echo "relocate-macos: could not parse Python version from '$old'" >&2
+    exit 1
+fi
+
+new="@rpath/Python.framework/Versions/$version/Python"
+echo "relocate-macos: $old -> $new"
+install_name_tool -change "$old" "$new" "$bin"
+
+existing_rpaths="$(otool -l "$bin" | awk '/LC_RPATH/{f=1;next} f && /path/{print $2; f=0}')"
+for rp in \
+    "/Library/Frameworks" \
+    "/opt/homebrew/opt/python@$version/Frameworks" \
+    "/usr/local/opt/python@$version/Frameworks"
+do
+    if ! printf '%s\n' "$existing_rpaths" | grep -Fxq "$rp"; then
+        install_name_tool -add_rpath "$rp" "$bin"
+        echo "relocate-macos: added rpath $rp"
+    fi
+done
+
+codesign --force --sign - "$bin" 2>/dev/null || true
