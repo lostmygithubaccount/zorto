@@ -991,67 +991,99 @@ async fn preview_uses_user_markdown_config_anchor_links() {
 }
 
 #[tokio::test]
-async fn preview_stubs_inline_shortcodes_with_visible_placeholder() {
+async fn preview_renders_inline_figure_shortcode() {
+    // Previously stubbed (pre-#151). Now that
+    // `zorto_core::shortcodes::process_shortcodes` is pub, the preview
+    // pane renders figure/youtube/etc. shortcodes to their actual HTML
+    // identical to `zorto build`.
     let tmp = TempDir::new().unwrap();
     let app = test_app(&tmp);
     let content = "Some text\n\n{{ figure(src=\"a.png\", alt=\"x\") }}\n\nMore text";
     let (status, body) = post_body(&app, "/_render-markdown", content).await;
     assert_eq!(status, StatusCode::OK);
     assert!(
-        body.contains("preview-shortcode-stub"),
-        "shortcode stub class must appear: {body}"
+        body.contains("<figure"),
+        "figure shortcode must produce a real <figure>: {body}"
     );
     assert!(
-        body.contains(r#"data-name="figure""#),
-        "stub must label which shortcode was unrenderable: {body}"
+        body.contains("a.png"),
+        "src passed through into the rendered image: {body}"
     );
-    // The user's actual args must NOT survive — the stub uses `(…)` to
-    // represent them. (The stub's `<code>{{ figure(…) }}</code>` label DOES
-    // contain `{{ figure`, so we can't assert against that fragment.)
+    // No stub markers left anywhere.
     assert!(
-        !body.contains("src=\"a.png\""),
-        "user's actual shortcode args must not survive in preview: {body}"
+        !body.contains("preview-shortcode-stub"),
+        "full-fidelity rendering must not emit the stub wrapper: {body}"
     );
     assert!(
-        !body.contains(r#"alt="x""#),
-        "user's actual shortcode args must not survive: {body}"
+        !body.contains("preview unavailable"),
+        "must not carry the pre-#151 'preview unavailable' copy: {body}"
     );
-    // Disclaimer banner appears
+    // No shortcode count in disclaimer (shortcodes rendered, not stubbed).
     assert!(
-        body.contains("preview-disclaimer"),
-        "disclaimer banner must mention shortcode stubbing: {body}"
-    );
-    assert!(
-        body.contains("1 shortcode stubbed"),
-        "disclaimer must count shortcodes: {body}"
+        !body.contains("shortcode stubbed"),
+        "disclaimer must not claim stubbing when rendering succeeded: {body}"
     );
 }
 
 #[tokio::test]
-async fn preview_stubs_body_shortcodes_with_visible_placeholder() {
+async fn preview_renders_body_note_shortcode() {
+    // Body shortcodes (`{% name(args) %}…{% end %}`) render to their real
+    // HTML too. The `note` shortcode produces a callout div.
     let tmp = TempDir::new().unwrap();
     let app = test_app(&tmp);
     let content = "Before\n\n{% note(type=\"info\") %}Some body content here.{% end %}\n\nAfter";
     let (status, body) = post_body(&app, "/_render-markdown", content).await;
     assert_eq!(status, StatusCode::OK);
     assert!(
-        body.contains(r#"data-kind="body""#),
-        "body shortcode must be classified as kind=body: {body}"
+        body.contains("callout--info"),
+        "note body shortcode renders as an info callout: {body}"
     );
     assert!(
-        body.contains(r#"data-name="note""#),
-        "body shortcode name must be labelled: {body}"
-    );
-    // The actual body content + the user's args must not survive — the stub
-    // uses `(…)…{% end %}` placeholder syntax. (The stub's own representation
-    // includes `{% note(…) %}` literally, so we don't assert on `{% note`.)
-    assert!(
-        !body.contains("type=\"info\""),
-        "user's shortcode args must not survive: {body}"
+        body.contains("Some body content here"),
+        "body content survives into the rendered callout: {body}"
     );
     assert!(
-        !body.contains("Some body content here"),
-        "user's body content must not survive (it's swallowed into the stub): {body}"
+        !body.contains("preview-shortcode-stub"),
+        "no stub wrapper should remain: {body}"
+    );
+}
+
+#[tokio::test]
+async fn preview_renders_body_tabs_shortcode() {
+    // Covers the third shortcode class in the wave-B brief (figure ✓,
+    // note ✓, tabs — here).
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    let content = "{% tabs(labels=\"A|B\") %}\naaa\n<!-- tab -->\nbbb\n{% end %}";
+    let (status, body) = post_body(&app, "/_render-markdown", content).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains("tabs"),
+        "tabs shortcode must produce tab markup: {body}"
+    );
+    assert!(
+        body.contains("aaa") && body.contains("bbb"),
+        "both panels survive into the rendered output: {body}"
+    );
+}
+
+#[tokio::test]
+async fn preview_surfaces_shortcode_errors_in_disclaimer() {
+    // A malformed shortcode (missing required arg) should produce a
+    // disclaimer banner rather than silently swallowing the line.
+    let tmp = TempDir::new().unwrap();
+    let app = test_app(&tmp);
+    // figure() with no src — real shortcode error.
+    let content = "{{ figure() }}";
+    let (status, body) = post_body(&app, "/_render-markdown", content).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains("preview-disclaimer"),
+        "disclaimer must appear when process_shortcodes errors: {body}"
+    );
+    assert!(
+        body.contains("shortcode error"),
+        "disclaimer must flag the error class: {body}"
     );
 }
 
@@ -1103,18 +1135,26 @@ async fn preview_no_disclaimer_for_plain_markdown() {
 }
 
 #[tokio::test]
-async fn preview_disclaimer_counts_both_shortcodes_and_exec() {
+async fn preview_disclaimer_reports_exec_only_when_shortcodes_render() {
+    // Shortcodes now render fully (no shortcode count in the disclaimer).
+    // Exec blocks are still suppressed, so the disclaimer reports just
+    // the exec count.
     let tmp = TempDir::new().unwrap();
     let app = test_app(&tmp);
     let content = "{{ youtube(id=\"abc\") }}\n\n```{bash}\necho hi\n```";
     let (_, body) = post_body(&app, "/_render-markdown", content).await;
     assert!(
-        body.contains("1 shortcode stubbed"),
-        "shortcode count: {body}"
+        !body.contains("shortcode stubbed"),
+        "rendered shortcodes must not be reported as stubbed: {body}"
     );
     assert!(
         body.contains("1 executable code block"),
-        "exec count: {body}"
+        "exec count still appears: {body}"
+    );
+    // youtube renders as an iframe; assert the shortcode actually ran.
+    assert!(
+        body.contains("youtube") || body.contains("iframe"),
+        "youtube shortcode rendered: {body}"
     );
 }
 
