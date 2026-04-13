@@ -9,6 +9,6 @@ echo "Running clippy..."
 cargo clippy --all-targets --all-features --workspace -- -D warnings
 
 echo "Running Rust tests..."
-cargo test --workspace
+cargo test --all-targets --all-features --workspace
 
 echo "Rust checks passed!"

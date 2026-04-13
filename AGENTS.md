@@ -35,7 +35,7 @@ bin/install        # Install CLI (Rust + Python)
 bin/bump-version   # Bump version (--patch, --minor (default), --major)
 ```
 
-Rust checks: `cargo fmt --check`, `cargo clippy --all-targets --all-features --workspace -- -D warnings`, `cargo test --workspace`
+Rust checks: `cargo fmt -- --check`, `cargo clippy --all-targets --all-features --workspace -- -D warnings`, `cargo test --all-targets --all-features --workspace`
 Python checks: `ruff check .`, `ruff format --check .`, `ty check`
 
 ## website (zorto.dev)
