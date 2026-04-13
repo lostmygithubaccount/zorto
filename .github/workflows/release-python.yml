@@ -8,6 +8,10 @@ on:
       tag:
         description: "Tag to release (e.g. v0.1.0)"
         required: true
+      publish:
+        description: "Publish to PyPI (default false — workflow_dispatch is verify-only)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -21,6 +25,7 @@ jobs:
   publish:
     name: Publish to PyPI
     needs: build
+    if: github.event_name == 'push' || inputs.publish
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
