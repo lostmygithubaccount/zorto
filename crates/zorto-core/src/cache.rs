@@ -36,6 +36,45 @@ pub fn hash_source(source: &str) -> String {
     format!("{:x}", hasher.finalize())
 }
 
+/// Compute a cache key for an executable block.
+///
+/// For inline blocks (no `file_ref`) this matches the legacy
+/// `hash_source("{language}:{source}")` format so existing on-disk caches
+/// remain valid.
+///
+/// For `file_ref` blocks, the key includes the language, the inline source,
+/// the referenced path, and the file's contents — so editing the referenced
+/// script invalidates the cache, and two `file=` blocks pointing at different
+/// files no longer collide on an empty inline body.
+///
+/// `working_dir` is the directory the executor would resolve `file_ref` against
+/// (typically the page's content directory). If the file is unreadable, a stable
+/// `<unreadable>` marker is hashed in its place — re-runs after the file appears
+/// will naturally miss and re-execute.
+pub fn block_cache_key(
+    language: &str,
+    source: &str,
+    file_ref: Option<&str>,
+    working_dir: &Path,
+) -> String {
+    let Some(file) = file_ref else {
+        return hash_source(&format!("{language}:{source}"));
+    };
+    let mut hasher = Sha256::new();
+    hasher.update(b"v1\x00");
+    hasher.update(language.as_bytes());
+    hasher.update(b"\x00");
+    hasher.update(source.as_bytes());
+    hasher.update(b"\x00file=");
+    hasher.update(file.as_bytes());
+    hasher.update(b"\x00");
+    match std::fs::read(working_dir.join(file)) {
+        Ok(bytes) => hasher.update(&bytes),
+        Err(_) => hasher.update(b"<unreadable>"),
+    }
+    format!("{:x}", hasher.finalize())
+}
+
 /// Return the cache directory path for a site root.
 pub fn cache_dir(site_root: &Path) -> PathBuf {
     site_root.join(CACHE_DIR)
@@ -197,5 +236,80 @@ mod tests {
         for _ in 0..100 {
             assert_eq!(hash_source(source), reference);
         }
+    }
+
+    #[test]
+    fn test_block_cache_key_inline_matches_legacy() {
+        // Backward-compat: blocks without file_ref must hash to the same value
+        // as the previous `hash_source("{language}:{source}")` formulation so
+        // existing on-disk caches continue to hit.
+        let tmp = TempDir::new().unwrap();
+        let key = block_cache_key("python", "print('hi')", None, tmp.path());
+        let legacy = hash_source("python:print('hi')");
+        assert_eq!(key, legacy);
+    }
+
+    #[test]
+    fn test_block_cache_key_file_ref_includes_contents() {
+        // Regression: two file_ref blocks with empty inline source but different
+        // referenced files used to collide on the same hash. Now they're
+        // distinct because the file path AND contents are mixed in.
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("a.py"), "print('a')").unwrap();
+        std::fs::write(tmp.path().join("b.py"), "print('b')").unwrap();
+        let key_a = block_cache_key("python", "", Some("a.py"), tmp.path());
+        let key_b = block_cache_key("python", "", Some("b.py"), tmp.path());
+        assert_ne!(
+            key_a, key_b,
+            "two file_ref blocks pointing at different files must not collide"
+        );
+    }
+
+    #[test]
+    fn test_block_cache_key_busts_on_file_change() {
+        // Regression: modifying the referenced file used to leave the cache key
+        // unchanged (since the inline source — typically empty — was the only
+        // input to the hash).
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("script.py");
+        std::fs::write(&path, "print('v1')").unwrap();
+        let key_v1 = block_cache_key("python", "", Some("script.py"), tmp.path());
+        std::fs::write(&path, "print('v2')").unwrap();
+        let key_v2 = block_cache_key("python", "", Some("script.py"), tmp.path());
+        assert_ne!(
+            key_v1, key_v2,
+            "editing the referenced file must invalidate the cache key"
+        );
+    }
+
+    #[test]
+    fn test_block_cache_key_unreadable_file_is_deterministic() {
+        // If the referenced file is missing, key generation must not panic and
+        // must produce a stable (deterministic) value, so subsequent runs hit
+        // the same key — and the moment the file appears, the key changes and
+        // the cache misses to re-execute.
+        let tmp = TempDir::new().unwrap();
+        let key1 = block_cache_key("python", "", Some("missing.py"), tmp.path());
+        let key2 = block_cache_key("python", "", Some("missing.py"), tmp.path());
+        assert_eq!(key1, key2, "missing-file key must be deterministic");
+        std::fs::write(tmp.path().join("missing.py"), "print('appeared')").unwrap();
+        let key3 = block_cache_key("python", "", Some("missing.py"), tmp.path());
+        assert_ne!(
+            key1, key3,
+            "key must change once the previously-missing file appears"
+        );
+    }
+
+    #[test]
+    fn test_block_cache_key_inline_vs_file_ref_distinct() {
+        // A block whose inline source happens to equal the file's contents
+        // must NOT collide with a file_ref block — execution semantics differ
+        // (working_dir, error reporting), so cached outputs aren't interchangeable.
+        let tmp = TempDir::new().unwrap();
+        let body = "print('hi')";
+        std::fs::write(tmp.path().join("x.py"), body).unwrap();
+        let inline = block_cache_key("python", body, None, tmp.path());
+        let from_file = block_cache_key("python", "", Some("x.py"), tmp.path());
+        assert_ne!(inline, from_file);
     }
 }

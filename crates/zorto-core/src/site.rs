@@ -518,37 +518,43 @@ impl Site {
             self.pages.retain(|_, p| !p.draft);
         }
 
-        self.render_all_markdown()?;
-        content::assign_pages_to_sections(&mut self.sections, &self.pages);
-
-        let templates_dir = self.root.join("templates");
-        let _tera = templates::setup_tera(&templates_dir, &self.config, &self.sections)?;
-
         let mut warnings = Vec::new();
 
-        // Lint templates
-        warnings.extend(crate::lint::lint_templates(&templates_dir));
-
-        // Lint internal links
+        // Lint internal links BEFORE render_all_markdown. The link resolver
+        // overwrites raw_content with permalink-resolved text, so the `@/`
+        // markers vanish; running this lint after render produces zero hits.
         warnings.extend(crate::lint::lint_internal_links(
             &self.pages,
             &self.sections,
         ));
 
-        // Lint frontmatter
-        warnings.extend(crate::lint::lint_frontmatter(&self.pages, &self.sections));
+        // Print accumulated warnings even if render_all_markdown subsequently
+        // errors (e.g. on the same broken links the resolver hard-fails on).
+        let render_result = self.render_all_markdown();
+        for w in &warnings {
+            eprintln!("{w}");
+        }
+        render_result?;
 
-        // Lint missing assets
+        content::assign_pages_to_sections(&mut self.sections, &self.pages);
+
+        let templates_dir = self.root.join("templates");
+        let _tera = templates::setup_tera(&templates_dir, &self.config, &self.sections)?;
+
+        let mut post_render_warnings = Vec::new();
+        post_render_warnings.extend(crate::lint::lint_templates(&templates_dir));
+        post_render_warnings.extend(crate::lint::lint_frontmatter(&self.pages, &self.sections));
         let static_dir = self.root.join("static");
-        warnings.extend(crate::lint::lint_missing_assets(
+        post_render_warnings.extend(crate::lint::lint_missing_assets(
             &self.pages,
             &self.sections,
             &static_dir,
         ));
-
-        for w in &warnings {
+        for w in &post_render_warnings {
             eprintln!("{w}");
         }
+        warnings.extend(post_render_warnings);
+
         if deny_warnings && !warnings.is_empty() {
             anyhow::bail!(
                 "{} lint warning{} found (--deny-warnings is set)",
@@ -807,7 +813,12 @@ fn render_markdown_content(
         let mut any_executed = false;
 
         for (idx, block) in exec_blocks.iter_mut().enumerate() {
-            let source_hash = cache::hash_source(&format!("{}:{}", block.language, block.source));
+            let source_hash = cache::block_cache_key(
+                &block.language,
+                &block.source,
+                block.file_ref.as_deref(),
+                &working_dir,
+            );
             let idx_key = idx.to_string();
 
             // Check cache for a hit
@@ -828,8 +839,12 @@ fn render_markdown_content(
                     .collect();
             } else {
                 // Execute this single block
-                let errors =
-                    execute::execute_blocks(std::slice::from_mut(block), &working_dir, root);
+                let errors = execute::execute_blocks(
+                    std::slice::from_mut(block),
+                    &working_dir,
+                    root,
+                    config.execute.timeout_seconds,
+                );
                 for err in &errors {
                     eprintln!("warning: {key}: {err}");
                 }

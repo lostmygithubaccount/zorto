@@ -219,10 +219,12 @@ pub fn page(title: &str, site_title: &str, active: &str, body: &str, base_url: &
     }});
   }});
   </script>
+  {livereload}
 </body>
 </html>"##,
         title = escape(title),
         site_title = escape(site_title),
         base_url = escape(base_url),
+        livereload = crate::LIVERELOAD_JS,
     )
 }

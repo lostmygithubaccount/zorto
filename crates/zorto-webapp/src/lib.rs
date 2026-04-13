@@ -1,7 +1,10 @@
 //! Zorto webapp — HTMX-based local CMS for managing zorto sites.
 
 use axum::Router;
-use axum::routing::{get, post};
+use axum::extract::State;
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::response::Response;
+use axum::routing::{any, get, post};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -14,17 +17,51 @@ mod dashboard;
 mod html;
 mod onboarding;
 mod pages;
+mod preview;
 mod sections;
 
 const DEFAULT_WEBAPP_PORT: u16 = 1112;
-const DEFAULT_PREVIEW_URL: &str = "http://localhost:1111";
+/// Origin-relative mount point for the embedded preview server. Every CMS
+/// page passes this to the sidebar "View Site" link; every rebuilt site
+/// gets its `base_url` pinned here so internal links resolve against the
+/// same origin.
+const PREVIEW_MOUNT: &str = "/preview";
 const RELOAD_CHANNEL_CAPACITY: usize = 16;
+
+/// Client-side livereload snippet. Opens a WebSocket to `/__livereload`
+/// and reloads the page on each `"reload"` message. Reconnects with backoff
+/// so that webapp restarts do not leave the page dead.
+pub(crate) const LIVERELOAD_JS: &str = r#"
+<script>
+(function() {
+    var reconnectInterval = 1000;
+    var maxReconnect = 30000;
+    function connect() {
+        var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        var ws = new WebSocket(proto + '//' + location.host + '/__livereload');
+        ws.onmessage = function(event) {
+            if (event.data === 'reload') { location.reload(); }
+        };
+        ws.onclose = function() {
+            setTimeout(connect, reconnectInterval);
+            reconnectInterval = Math.min(reconnectInterval * 1.5, maxReconnect);
+        };
+        ws.onopen = function() { reconnectInterval = 1000; };
+    }
+    connect();
+})();
+</script>
+"#;
 
 pub(crate) struct AppState {
     pub root: PathBuf,
     pub output_dir: PathBuf,
     pub sandbox: Option<PathBuf>,
     pub reload_tx: broadcast::Sender<()>,
+    /// Absolute base URL used when rebuilding the site for preview, e.g.
+    /// `http://127.0.0.1:1112/preview`. Bakes the webapp's actual port so
+    /// links in the generated HTML route back through the preview mount.
+    pub preview_base_url: String,
 }
 
 impl AppState {
@@ -44,18 +81,11 @@ impl AppState {
         self.root.join("config.toml").exists()
     }
 
+    /// URL for the CMS's sidebar "View Site" link. Always the embedded
+    /// preview mount — the user's config.toml `base_url` remains the deploy
+    /// URL but isn't what we want for "look at what I just edited".
     fn site_base_url(&self) -> String {
-        let config_path = self.root.join("config.toml");
-        if let Ok(content) = std::fs::read_to_string(&config_path) {
-            if let Ok(config) = toml::from_str::<toml::Value>(&content) {
-                if let Some(url) = config.get("base_url").and_then(|v| v.as_str()) {
-                    if !url.is_empty() {
-                        return url.trim_end_matches('/').to_string();
-                    }
-                }
-            }
-        }
-        DEFAULT_PREVIEW_URL.to_string()
+        PREVIEW_MOUNT.to_string()
     }
 }
 
@@ -77,8 +107,12 @@ pub(crate) fn app(state: Arc<AppState>) -> Router {
         .route("/assets/upload", post(assets::upload))
         .route("/assets/delete", post(assets::delete))
         .route("/build", post(build::trigger))
-        .route("/preview/render", post(build::render_preview))
+        .route("/_render-markdown", post(build::render_preview))
+        .route("/preview", get(preview::serve))
+        .route("/preview/", get(preview::serve))
+        .route("/preview/{*path}", get(preview::serve))
         .route("/static/htmx.min.js", get(serve_htmx))
+        .route("/__livereload", any(livereload_ws))
         // Onboarding wizard routes
         .route("/setup", get(onboarding::welcome))
         .route(
@@ -102,22 +136,9 @@ pub(crate) fn app(state: Arc<AppState>) -> Router {
 pub fn run_webapp(root: &Path, output_dir: &Path, sandbox: Option<&Path>) -> anyhow::Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
+        // Bind listener first so we know the actual port. The preview base
+        // URL bakes the port into every rebuilt site's internal links.
         let port: u16 = DEFAULT_WEBAPP_PORT;
-        let (reload_tx, _) = broadcast::channel::<()>(RELOAD_CHANNEL_CAPACITY);
-
-        let state = Arc::new(AppState {
-            root: root.to_path_buf(),
-            output_dir: output_dir.to_path_buf(),
-            sandbox: sandbox.map(|p| p.to_path_buf()),
-            reload_tx,
-        });
-
-        // Determine start page based on whether a site exists
-        let start_path = if state.site_exists() { "/" } else { "/setup" };
-
-        let app = app(state);
-
-        // Bind to 0.0.0.0 so the webapp is accessible on LAN
         let addr = SocketAddr::from(([0, 0, 0, 0], port));
         let listener = match tokio::net::TcpListener::bind(addr).await {
             Ok(l) => l,
@@ -129,13 +150,33 @@ pub fn run_webapp(root: &Path, output_dir: &Path, sandbox: Option<&Path>) -> any
             Err(e) => return Err(e.into()),
         };
         let actual_addr = listener.local_addr()?;
+        let actual_port = actual_addr.port();
+        let preview_base_url = format!("http://127.0.0.1:{actual_port}{PREVIEW_MOUNT}");
 
-        println!("zorto webapp: http://localhost:{}", actual_addr.port());
-        let _ = open::that(format!(
-            "http://localhost:{}{}",
-            actual_addr.port(),
-            start_path
-        ));
+        let (reload_tx, _) = broadcast::channel::<()>(RELOAD_CHANNEL_CAPACITY);
+
+        let state = Arc::new(AppState {
+            root: root.to_path_buf(),
+            output_dir: output_dir.to_path_buf(),
+            sandbox: sandbox.map(|p| p.to_path_buf()),
+            reload_tx,
+            preview_base_url,
+        });
+
+        // If a site already exists, rebuild once at startup so `/preview`
+        // serves fresh output pinned to the webapp's port.
+        if state.site_exists() {
+            if let Err(e) = rebuild_site(&state) {
+                eprintln!("initial rebuild failed: {e}");
+            }
+        }
+
+        let start_path = if state.site_exists() { "/" } else { "/setup" };
+
+        let app = app(state);
+
+        println!("zorto webapp: http://localhost:{actual_port}");
+        let _ = open::that(format!("http://localhost:{actual_port}{start_path}"));
 
         axum::serve(listener, app)
             .with_graceful_shutdown(async {
@@ -156,10 +197,30 @@ async fn serve_htmx() -> impl axum::response::IntoResponse {
     )
 }
 
+/// WebSocket upgrade handler for live reload. Subscribes to
+/// [`AppState::reload_tx`] and emits `"reload"` on each broadcast.
+async fn livereload_ws(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+    ws.on_upgrade(move |socket| handle_livereload(socket, state))
+}
+
+async fn handle_livereload(mut socket: WebSocket, state: Arc<AppState>) {
+    let mut rx = state.reload_tx.subscribe();
+    while rx.recv().await.is_ok() {
+        if socket
+            .send(Message::Text(String::from("reload").into()))
+            .await
+            .is_err()
+        {
+            break;
+        }
+    }
+}
+
 pub(crate) fn rebuild_site(state: &AppState) -> Result<(), String> {
     match zorto_core::site::Site::load(&state.root, &state.output_dir, true) {
         Ok(mut site) => {
             site.sandbox = state.sandbox.clone();
+            site.set_base_url(state.preview_base_url.clone());
             site.build().map_err(|e| e.to_string())?;
             let _ = state.reload_tx.send(());
             Ok(())
