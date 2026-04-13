@@ -62,6 +62,13 @@ Never run `zorto build` directly inside `website/` — it will fail with sandbox
 - do clone Zola & Quarto (and any other repos) into the .gitignored 'external' directory and use them as references for how to implement the features in this project.
 - Python distribution (via PyO3/maturin) is a hard requirement. The `crates/zorto-py/` bindings and `py/zorto/` wrapper must be maintained.
 
+## threat model
+
+- **site authors** (config, templates, theme frontmatter): trusted. They own the build environment — Python code blocks execute with their credentials.
+- **post authors** (markdown bodies, shortcode args): partly trusted in multi-author setups. Shortcode validators (`is_safe_css_length`, class allow-list, etc.) treat this as the untrusted boundary.
+- **end readers** (browser): fully untrusted outputs — any path from author content to executed JS/CSS in their browser must be inspected (XSS through viz specs, CSS injection through shortcode args, theme URL injection, CDN supply chain).
+- **Python code blocks** execute at build time in the author's venv — by design, NOT a sandbox.
+
 ## style conventions
 
 - **Sentence case** for headings in documentation and on the website. Zorto is an independent open source project — it does NOT follow dkdc's all-lowercase brand style.
