@@ -4,7 +4,7 @@
 <div class="page-content">
     <div class="posts">
         {%- if config.generate_feed %}
-        <a href="/atom.xml" class="feed-banner" title="Subscribe to the Atom feed">
+        <a href="{{ get_url(path='atom.xml') | safe }}" class="feed-banner" title="Subscribe to the Atom feed">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
             <span>Subscribe via Atom feed</span>
         </a>
@@ -30,7 +30,7 @@
             <div class="pagination__buttons">
             {%- if paginator.previous %}
                 <span class="button previous">
-                    <a href="{{ paginator.previous | replace(from=config.base_url, to="") }}">
+                    <a href="{{ paginator.previous | safe }}">
                         <span class="button__icon">&larr;</span>&nbsp;
                         <span class="button__text">newer posts</span>
                     </a>
@@ -38,7 +38,7 @@
             {% endif %}
             {%- if paginator.next %}
                 <span class="button next">
-                    <a href="{{ paginator.next | replace(from=config.base_url, to="") }}">
+                    <a href="{{ paginator.next | safe }}">
                         <span class="button__text">older posts</span>&nbsp;
                         <span class="button__icon">&rarr;</span>
                     </a>
