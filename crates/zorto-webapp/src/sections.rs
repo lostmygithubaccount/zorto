@@ -1,16 +1,45 @@
-//! Section listing and editing routes.
+//! Section listing, creation, editing, and deletion routes.
 
 use axum::extract::{Path, State};
-use axum::response::Html;
+use axum::response::{Html, IntoResponse, Redirect};
 use std::sync::Arc;
 
 use crate::html;
-use crate::{AppState, escape, validate_path};
+use crate::{AppState, escape, rebuild_site, validate_path};
 
-pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
+/// Characters allowed in a section slug. Intentionally strict: lowercase
+/// alphanumerics plus `-` and `_`. Rejects spaces, slashes, dots, unicode,
+/// and anything that could change URL semantics or path resolution.
+fn slug_is_safe(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 64
+        && s.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_')
+        && !s.starts_with('-')
+        && !s.starts_with('_')
+}
+
+pub async fn list(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<ListQuery>,
+) -> Html<String> {
     let site_title = state.site_title();
     let base_url = state.site_base_url();
     let content_dir = state.root.join("content");
+
+    let flash_html = if params.created.is_some() {
+        r#"<div class="flash flash-success">Section created and site rebuilt.</div>"#.to_string()
+    } else if params.deleted.is_some() {
+        r#"<div class="flash flash-success">Section deleted and site rebuilt.</div>"#.to_string()
+    } else {
+        match params.error.as_deref() {
+            Some("not_empty") => r#"<div class="flash flash-error">Cannot delete a section that still contains pages or subsections — move or delete them first.</div>"#.to_string(),
+            Some("root_section") => r#"<div class="flash flash-error">Cannot delete the root section (<code>content/_index.md</code>).</div>"#.to_string(),
+            Some("invalid_path") => r#"<div class="flash flash-error">Invalid section path.</div>"#.to_string(),
+            Some("delete_failed") => r#"<div class="flash flash-error">Delete failed. Check server logs for details.</div>"#.to_string(),
+            _ => String::new(),
+        }
+    };
 
     let mut rows = Vec::new();
     if content_dir.exists() {
@@ -77,9 +106,15 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
     rows.sort();
     let table_body = rows.join("\n");
 
-    let body = format!(
-        r#"<h2>Sections</h2>
-<div class="card">
+    let table_html = if rows.is_empty() {
+        r#"<div class="empty-state">
+  <p>No sections yet — create one!</p>
+  <a href="/sections/new" class="btn btn-primary">New Section</a>
+</div>"#
+            .to_string()
+    } else {
+        format!(
+            r#"<div class="card">
   <table>
     <thead>
       <tr><th>Title</th><th>URL Path</th><th>Pages</th></tr>
@@ -89,6 +124,17 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
     </tbody>
   </table>
 </div>"#
+        )
+    };
+
+    let body = format!(
+        r#"{flash_html}<div class="toolbar">
+  <h2>Sections</h2>
+  <div class="toolbar-right">
+    <a href="/sections/new" class="btn btn-primary">New Section</a>
+  </div>
+</div>
+{table_html}"#
     );
 
     Html(html::page(
@@ -100,7 +146,294 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Html<String> {
     ))
 }
 
-pub async fn edit(State(state): State<Arc<AppState>>, Path(path): Path<String>) -> Html<String> {
+pub async fn new_form(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<NewFormQuery>,
+) -> Html<String> {
+    let site_title = state.site_title();
+    let base_url = state.site_base_url();
+
+    let flash_html = match params.error.as_deref() {
+        Some("slug_exists") => {
+            r#"<div class="flash flash-error">A section with that slug already exists.</div>"#
+        }
+        Some("slug_invalid") => {
+            r#"<div class="flash flash-error">Slug may only contain lowercase letters, digits, <code>-</code>, and <code>_</code>.</div>"#
+        }
+        Some("title_required") => r#"<div class="flash flash-error">Title is required.</div>"#,
+        _ => "",
+    };
+
+    // The `?then=page` variant is the inline-create path from the New Page
+    // form: on success we return the user to /pages/new with the freshly
+    // created section preselected, rather than dropping them into the section
+    // editor. Carry the flag through the form as a hidden input.
+    let (then_input, back_target) = if params.then.as_deref() == Some("page") {
+        (
+            r#"<input type="hidden" name="then" value="page">"#,
+            "/pages/new",
+        )
+    } else {
+        ("", "/sections")
+    };
+    let back_label = if back_target == "/pages/new" {
+        "Back to New Page"
+    } else {
+        "Back to Sections"
+    };
+
+    let body = format!(
+        r#"{flash_html}<div class="toolbar">
+  <h2>New Section</h2>
+  <div class="toolbar-right">
+    <a href="{back_target}" class="btn">{back_label}</a>
+  </div>
+</div>
+<form method="POST" action="/sections/new">
+  {then_input}
+  <div class="card">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Title</label>
+        <input type="text" name="title" placeholder="Blog" required autofocus>
+      </div>
+      <div class="form-group">
+        <label>Slug <span style="color: #666680; font-size: 0.7rem; text-transform: none;">(URL path — lowercase, <code>-</code>/<code>_</code> only; blank = derive from title)</span></label>
+        <input type="text" name="slug" placeholder="blog">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input type="text" name="description" placeholder="Short summary of this section">
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="max-width: 200px;">
+        <label>Sort By</label>
+        <select name="sort_by">
+          <option value="date" selected>Date</option>
+          <option value="title">Title</option>
+          <option value="weight">Weight</option>
+        </select>
+      </div>
+      <div class="form-group" style="max-width: 200px;">
+        <label>Paginate By</label>
+        <input type="text" name="paginate_by" placeholder="e.g. 10">
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Create Section</button>
+  </div>
+</form>"#
+    );
+
+    Html(html::page(
+        "New Section",
+        &site_title,
+        "sections",
+        &body,
+        &base_url,
+    ))
+}
+
+#[derive(serde::Deserialize)]
+pub struct NewFormQuery {
+    #[serde(default)]
+    error: Option<String>,
+    /// Continuation hint carried from the caller: `then=page` means the user
+    /// arrived from the New Page form and should be returned there, with the
+    /// new section pre-selected, after create succeeds.
+    #[serde(default)]
+    then: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct ListQuery {
+    #[serde(default)]
+    created: Option<String>,
+    #[serde(default)]
+    deleted: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+}
+
+pub async fn create(
+    State(state): State<Arc<AppState>>,
+    axum::Form(form): axum::Form<NewSectionForm>,
+) -> axum::response::Response {
+    // Keep `?then=page` plumbed across every error redirect so the user stays
+    // on the inline-create path rather than getting kicked to the bare
+    // new-section form with no return breadcrumb.
+    let suffix = if form.then.as_deref() == Some("page") {
+        "&then=page"
+    } else {
+        ""
+    };
+    let error_redirect =
+        |code: &str| Redirect::to(&format!("/sections/new?error={code}{suffix}")).into_response();
+
+    let title = form.title.trim().to_string();
+    if title.is_empty() {
+        return error_redirect("title_required");
+    }
+
+    // Derive slug if the user left the field blank.
+    let raw_slug = form.slug.trim().to_string();
+    let slug = if raw_slug.is_empty() {
+        slug::slugify(&title)
+    } else {
+        raw_slug
+    };
+
+    if !slug_is_safe(&slug) {
+        return error_redirect("slug_invalid");
+    }
+
+    let content_dir = state.root.join("content");
+    // Ensure the content dir exists so validate_path can canonicalize it.
+    let _ = std::fs::create_dir_all(&content_dir);
+
+    // Validate the slug path doesn't escape — slug_is_safe already precludes
+    // `..` / `/`, but we defence-in-depth through validate_path on the target
+    // directory's parent.
+    if validate_path(&content_dir, &slug).is_err() {
+        return error_redirect("slug_invalid");
+    }
+
+    let section_dir = content_dir.join(&slug);
+    let index_path = section_dir.join("_index.md");
+    if index_path.exists() || section_dir.exists() {
+        return error_redirect("slug_exists");
+    }
+
+    if let Err(e) = std::fs::create_dir_all(&section_dir) {
+        eprintln!("Error creating section dir {slug}: {e}");
+        return Redirect::to("/sections").into_response();
+    }
+
+    // Build the _index.md frontmatter.
+    let mut table = toml::map::Map::new();
+    table.insert("title".into(), toml::Value::String(title.clone()));
+    let desc = form.description.trim();
+    if !desc.is_empty() {
+        table.insert("description".into(), toml::Value::String(desc.to_string()));
+    }
+    let sort_by = form.sort_by.trim();
+    if !sort_by.is_empty() && matches!(sort_by, "date" | "title" | "weight") {
+        table.insert("sort_by".into(), toml::Value::String(sort_by.to_string()));
+    }
+    let paginate = form.paginate_by.trim();
+    if !paginate.is_empty() {
+        if let Ok(n) = paginate.parse::<i64>() {
+            if n > 0 {
+                table.insert("paginate_by".into(), toml::Value::Integer(n));
+            }
+        }
+    }
+
+    let fm_toml = toml::to_string(&toml::Value::Table(table)).unwrap_or_default();
+    let content = format!("+++\n{fm_toml}+++\n");
+
+    if let Err(e) = std::fs::write(&index_path, &content) {
+        eprintln!("Error writing {}: {e}", index_path.display());
+        return Redirect::to("/sections").into_response();
+    }
+
+    if let Err(e) = rebuild_site(&state) {
+        eprintln!("Section created but site rebuild failed: {e}");
+    }
+
+    // Inline-create path: return to the New Page form with the new section
+    // preselected in the Section dropdown.
+    if form.then.as_deref() == Some("page") {
+        return Redirect::to(&format!("/pages/new?preselect={slug}")).into_response();
+    }
+
+    Redirect::to(&format!("/sections/{slug}/_index.md?created=1")).into_response()
+}
+
+#[derive(serde::Deserialize)]
+pub struct NewSectionForm {
+    title: String,
+    #[serde(default)]
+    slug: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    sort_by: String,
+    #[serde(default)]
+    paginate_by: String,
+    #[serde(default)]
+    then: Option<String>,
+}
+
+pub async fn delete(
+    State(state): State<Arc<AppState>>,
+    Path(path): Path<String>,
+) -> axum::response::Response {
+    let content_dir = state.root.join("content");
+    let index_path = match validate_path(&content_dir, &path) {
+        Ok(p) => p,
+        Err(_) => return Redirect::to("/sections?error=invalid_path").into_response(),
+    };
+
+    // The route matches the `_index.md` path; the section directory is its
+    // parent. Refuse to delete the root content dir itself.
+    let Some(section_dir) = index_path.parent() else {
+        return Redirect::to("/sections?error=invalid_path").into_response();
+    };
+    let canonical_content = match content_dir.canonicalize() {
+        Ok(p) => p,
+        Err(_) => return Redirect::to("/sections?error=invalid_path").into_response(),
+    };
+    if section_dir == canonical_content.as_path() {
+        // This is the root section (`content/_index.md`). Deleting it would
+        // wipe the entire content directory — refuse, and redirect with a
+        // clear error flag.
+        return Redirect::to("/sections?error=root_section").into_response();
+    }
+
+    // SAFETY: refuse if the section has pages, subsections, or other content
+    // files. The user must delete or move those first. This is the safer
+    // default per the brief — hard-delete of a directory is reversible only
+    // via filesystem trash / VCS, neither of which the webapp owns today.
+    let has_children = std::fs::read_dir(section_dir)
+        .map(|entries| {
+            entries.filter_map(|e| e.ok()).any(|e| {
+                let name = e.file_name();
+                name != std::ffi::OsStr::new("_index.md")
+            })
+        })
+        .unwrap_or(false);
+    if has_children {
+        return Redirect::to("/sections?error=not_empty").into_response();
+    }
+
+    // Delete the `_index.md` then the (now-empty) section directory.
+    if index_path.exists() {
+        if let Err(e) = std::fs::remove_file(&index_path) {
+            eprintln!("Error deleting section index {}: {e}", index_path.display());
+            return Redirect::to("/sections?error=delete_failed").into_response();
+        }
+    }
+    if let Err(e) = std::fs::remove_dir(section_dir) {
+        eprintln!(
+            "Error removing empty section directory {}: {e}",
+            section_dir.display()
+        );
+        // Index is already gone; surface the dir-removal error but proceed.
+    }
+
+    if let Err(e) = rebuild_site(&state) {
+        eprintln!("Section deleted but site rebuild failed: {e}");
+    }
+
+    Redirect::to("/sections?deleted=1").into_response()
+}
+
+pub async fn edit(
+    State(state): State<Arc<AppState>>,
+    Path(path): Path<String>,
+    axum::extract::Query(params): axum::extract::Query<EditQuery>,
+) -> Html<String> {
     let site_title = state.site_title();
     let base_url = state.site_base_url();
     let content_dir = state.root.join("content");
@@ -118,13 +451,25 @@ pub async fn edit(State(state): State<Arc<AppState>>, Path(path): Path<String>) 
     };
     let content = std::fs::read_to_string(&file_path).unwrap_or_default();
 
+    let flash = if params.created.is_some() {
+        Some(("success", "Section created and site rebuilt."))
+    } else {
+        None
+    };
+
     Html(render_section_editor(
         &site_title,
         &path,
         &content,
-        None,
+        flash,
         &base_url,
     ))
+}
+
+#[derive(serde::Deserialize)]
+pub struct EditQuery {
+    #[serde(default)]
+    created: Option<String>,
 }
 
 pub async fn save(
@@ -360,6 +705,21 @@ fn render_section_editor(
         r#"</h2>
   <div class="toolbar-right">
     <a href="/sections" class="btn">Back to Sections</a>
+    <button type="button" class="btn" style="color: #f87171; border-color: #5c2a2a;" onclick="document.getElementById('delete-dialog').style.display='flex'">Delete</button>
+    <div id="delete-dialog" class="confirm-overlay" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+      <div class="confirm-dialog">
+        <h3>Delete this section?</h3>
+        <p>The section directory must be empty first. If the section still contains pages or subsections, the delete will be refused and you'll be sent back to the list with an explanation.</p>
+        <div class="confirm-actions">
+          <button type="button" class="btn" onclick="document.getElementById('delete-dialog').style.display='none'">Cancel</button>
+          <form method="POST" action="/sections/delete/"#,
+        &e_path,
+        r#"" style="display:inline;">
+            <button type="submit" class="btn btn-danger">Delete Section</button>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 <form method="POST" action="/sections/"#,
@@ -445,5 +805,3 @@ document.addEventListener('DOMContentLoaded', function() {
         base_url,
     )
 }
-
-use crate::rebuild_site;
