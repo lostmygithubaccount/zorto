@@ -1312,3 +1312,239 @@ async fn config_save_visual_mode_updates_fields() {
         "feed flag should be set"
     );
 }
+
+// ── Config partial-update (wave-4 H1) ──────────────────────────────
+
+#[tokio::test]
+async fn config_visual_save_preserves_explicit_sitemap_true() {
+    // Regression for agent3 H1: a user sets `generate_sitemap = true`
+    // explicitly in raw TOML, then saves a different field via the visual
+    // tab without touching the sitemap checkbox. The checkbox in the visual
+    // form was pre-checked from disk, so the form submission carries
+    // `generate_sitemap=true`. The save must round-trip true; the bug was
+    // that the handler unconditionally wrote whatever the form said,
+    // independent of the on-disk default semantics.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("site");
+    std::fs::create_dir_all(root.join("content")).unwrap();
+    std::fs::create_dir_all(root.join("templates")).unwrap();
+    std::fs::create_dir_all(root.join("static")).unwrap();
+    std::fs::write(
+        root.join("config.toml"),
+        "base_url = \"https://example.com\"\ntitle = \"Test\"\ngenerate_sitemap = true\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("content/_index.md"), "+++\ntitle=\"Home\"\n+++\n").unwrap();
+    std::fs::write(root.join("templates/index.html"), "<html>{{section.title}}</html>").unwrap();
+    let (reload_tx, _) = broadcast::channel::<()>(16);
+    let state = Arc::new(AppState {
+        root: root.clone(),
+        output_dir: root.join("public"),
+        sandbox: None,
+        reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
+    });
+    let app = app(state);
+
+    // The form mirrors what a browser would submit when the user only
+    // changed the title: both checkboxes were pre-rendered checked by the
+    // editor (because their values are on disk OR effectively-true) and
+    // are submitted as "true".
+    let form = "mode=visual&content=&title=New+Title&base_url=https%3A%2F%2Fexample.com&description=&theme=&generate_feed=&generate_sitemap=true";
+    let _ = post_form(&app, "/config", form).await;
+
+    let file = std::fs::read_to_string(root.join("config.toml")).unwrap();
+    assert!(
+        file.contains("generate_sitemap = true"),
+        "sitemap=true must survive a visual save: {file}"
+    );
+}
+
+#[tokio::test]
+async fn config_visual_save_does_not_stomp_default_sitemap() {
+    // The trickier H1 case: user has NO `generate_sitemap` line — they're
+    // relying on the zorto-core default (true). The visual form's checkbox
+    // must reflect that effective state and submit `generate_sitemap=true`,
+    // and the handler must NOT promote that into an explicit `false` (or
+    // even an explicit `true`) on save. The field stays absent so future
+    // default changes propagate.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("site");
+    std::fs::create_dir_all(root.join("content")).unwrap();
+    std::fs::create_dir_all(root.join("templates")).unwrap();
+    std::fs::create_dir_all(root.join("static")).unwrap();
+    // No generate_sitemap line — relying on zorto-core default (true).
+    std::fs::write(
+        root.join("config.toml"),
+        "base_url = \"https://example.com\"\ntitle = \"Test\"\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("content/_index.md"), "+++\ntitle=\"Home\"\n+++\n").unwrap();
+    std::fs::write(root.join("templates/index.html"), "<html>{{section.title}}</html>").unwrap();
+    let (reload_tx, _) = broadcast::channel::<()>(16);
+    let state = Arc::new(AppState {
+        root: root.clone(),
+        output_dir: root.join("public"),
+        sandbox: None,
+        reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
+    });
+    let app = app(state);
+
+    // Browser submits the visual form. Because the checkbox is now rendered
+    // from the default-applied Config (sitemap=true), the user sees it
+    // checked and the submission carries "true".
+    let form = "mode=visual&content=&title=Updated&base_url=https%3A%2F%2Fexample.com&description=&theme=&generate_feed=&generate_sitemap=true";
+    let _ = post_form(&app, "/config", form).await;
+
+    let file = std::fs::read_to_string(root.join("config.toml")).unwrap();
+    assert!(
+        !file.contains("generate_sitemap"),
+        "absent-but-default sitemap must remain absent after a no-op save (was promoted to explicit, file: {file})"
+    );
+    assert!(file.contains("Updated"), "title update must still apply");
+}
+
+#[tokio::test]
+async fn config_visual_save_unchecks_explicit_true_to_false() {
+    // The other side of the partial-update rule: when the user actually
+    // unchecks a previously-true boolean, that change must persist. Browser
+    // sends NO `generate_feed` field at all when unchecked.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("site");
+    std::fs::create_dir_all(root.join("content")).unwrap();
+    std::fs::create_dir_all(root.join("templates")).unwrap();
+    std::fs::create_dir_all(root.join("static")).unwrap();
+    std::fs::write(
+        root.join("config.toml"),
+        "base_url = \"https://example.com\"\ntitle = \"Test\"\ngenerate_feed = true\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("content/_index.md"), "+++\ntitle=\"Home\"\n+++\n").unwrap();
+    std::fs::write(root.join("templates/index.html"), "<html>{{section.title}}</html>").unwrap();
+    let (reload_tx, _) = broadcast::channel::<()>(16);
+    let state = Arc::new(AppState {
+        root: root.clone(),
+        output_dir: root.join("public"),
+        sandbox: None,
+        reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
+    });
+    let app = app(state);
+
+    // generate_feed is OMITTED entirely — that's how browsers serialize an
+    // unchecked checkbox.
+    let form = "mode=visual&content=&title=Same&base_url=https%3A%2F%2Fexample.com&description=&theme=&generate_sitemap=true";
+    let _ = post_form(&app, "/config", form).await;
+
+    let file = std::fs::read_to_string(root.join("config.toml")).unwrap();
+    assert!(
+        file.contains("generate_feed = false"),
+        "unchecking an explicit true must persist as explicit false (file: {file})"
+    );
+}
+
+#[tokio::test]
+async fn config_visual_save_preserves_unrelated_sections() {
+    // Saving via the visual form must not touch [extra], [[taxonomies]],
+    // [markdown], or any other table the form doesn't render. Round-trip
+    // through toml::Value preserves these — but only if we don't accidentally
+    // serialize through a typed struct that drops unknown fields.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("site");
+    std::fs::create_dir_all(root.join("content")).unwrap();
+    std::fs::create_dir_all(root.join("templates")).unwrap();
+    std::fs::create_dir_all(root.join("static")).unwrap();
+    let original = r#"base_url = "https://example.com"
+title = "Test"
+
+[extra]
+twitter = "@example"
+analytics_id = "UA-12345"
+
+[markdown]
+smart_punctuation = true
+external_links_target_blank = true
+
+[[taxonomies]]
+name = "categories"
+"#;
+    std::fs::write(root.join("config.toml"), original).unwrap();
+    std::fs::write(root.join("content/_index.md"), "+++\ntitle=\"Home\"\n+++\n").unwrap();
+    std::fs::write(root.join("templates/index.html"), "<html>{{section.title}}</html>").unwrap();
+    let (reload_tx, _) = broadcast::channel::<()>(16);
+    let state = Arc::new(AppState {
+        root: root.clone(),
+        output_dir: root.join("public"),
+        sandbox: None,
+        reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
+    });
+    let app = app(state);
+
+    let form = "mode=visual&content=&title=Updated&base_url=https%3A%2F%2Fexample.com&description=&theme=&generate_feed=&generate_sitemap=true";
+    let _ = post_form(&app, "/config", form).await;
+
+    let file = std::fs::read_to_string(root.join("config.toml")).unwrap();
+    assert!(file.contains("Updated"), "title update should apply");
+    assert!(
+        file.contains("twitter") && file.contains("@example"),
+        "[extra].twitter must survive: {file}"
+    );
+    assert!(
+        file.contains("UA-12345"),
+        "[extra].analytics_id must survive"
+    );
+    assert!(
+        file.contains("smart_punctuation"),
+        "[markdown] table must survive"
+    );
+    assert!(
+        file.contains("external_links_target_blank"),
+        "[markdown] settings must survive"
+    );
+    assert!(
+        file.contains("[[taxonomies]]") && file.contains("categories"),
+        "[[taxonomies]] must survive"
+    );
+}
+
+#[tokio::test]
+async fn config_visual_form_renders_default_sitemap_as_checked() {
+    // The render side of the H1 fix: a config without `generate_sitemap`
+    // relies on the zorto-core default (true). The visual checkbox must
+    // show that — otherwise the UI lies about what the build will do, and
+    // the next save bakes the lie into disk.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("site");
+    std::fs::create_dir_all(root.join("content")).unwrap();
+    std::fs::create_dir_all(root.join("templates")).unwrap();
+    std::fs::create_dir_all(root.join("static")).unwrap();
+    std::fs::write(
+        root.join("config.toml"),
+        "base_url = \"https://example.com\"\ntitle = \"Test\"\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("content/_index.md"), "+++\ntitle=\"Home\"\n+++\n").unwrap();
+    std::fs::write(root.join("templates/index.html"), "<html>{{section.title}}</html>").unwrap();
+    let (reload_tx, _) = broadcast::channel::<()>(16);
+    let state = Arc::new(AppState {
+        root,
+        output_dir: tmp.path().join("site/public"),
+        sandbox: None,
+        reload_tx,
+        preview_base_url: "http://127.0.0.1:0/preview".to_string(),
+    });
+    let app = app(state);
+
+    let (status, body) = get(&app, "/config").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains(r#"name="generate_sitemap" value="true" checked"#),
+        "sitemap checkbox must render checked when relying on default"
+    );
+    assert!(
+        !body.contains(r#"name="generate_feed" value="true" checked"#),
+        "feed checkbox must render unchecked (default is false)"
+    );
+}
