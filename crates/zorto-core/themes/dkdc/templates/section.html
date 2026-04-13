@@ -24,7 +24,7 @@
             <div class="pagination__buttons">
             {%- if paginator.previous %}
                 <span class="button previous">
-                    <a href="{{ paginator.previous | replace(from=config.base_url, to="") }}">
+                    <a href="{{ paginator.previous | safe }}">
                         <span class="button__icon">&larr;</span>&nbsp;
                         <span class="button__text">newer posts</span>
                     </a>
@@ -32,7 +32,7 @@
             {% endif %}
             {%- if paginator.next %}
                 <span class="button next">
-                    <a href="{{ paginator.next | replace(from=config.base_url, to="") }}">
+                    <a href="{{ paginator.next | safe }}">
                         <span class="button__text">older posts</span>&nbsp;
                         <span class="button__icon">&rarr;</span>
                     </a>

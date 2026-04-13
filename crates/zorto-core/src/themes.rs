@@ -437,4 +437,51 @@ mod tests {
             );
         }
     }
+
+    /// Guard against regressions of the `/preview/`-breaking absolute-asset
+    /// pattern (see issue #140). Theme templates must not bake root-relative
+    /// asset URLs (`href="/style.css"`, `src="/..."`, `fetch('/...')`) nor
+    /// strip the base URL via `replace(from=config.base_url, to="")` — both
+    /// produce URLs that only work when the site is mounted at host root and
+    /// collapse when served under a sub-path (the embedded `/preview` mount
+    /// in zorto-webapp being the motivating example). All asset references
+    /// must flow through `get_url(path=...)` or keep the full `permalink` /
+    /// `config.base_url` prefix.
+    #[test]
+    fn test_no_root_relative_asset_paths_in_theme_templates() {
+        // Patterns that indicate a broken absolute reference.
+        // A leading quote + slash + alnum catches `href="/foo`, `src='/bar`,
+        // `fetch('/baz'` — but NOT `href="{{ ... }}"`, `href="#anchor"`, or
+        // `href="https://..."`.
+        let bad_patterns: &[&str] = &[
+            "href=\"/",
+            "href='/",
+            "src=\"/",
+            "src='/",
+            "fetch(\"/",
+            "fetch('/",
+            // Strip-base-url pattern: produces root-relative URLs that break
+            // under a sub-path mount.
+            "replace(from=config.base_url",
+        ];
+
+        for name in Theme::available() {
+            let theme = Theme::from_name(name).expect("available theme parses");
+            for (tmpl_name, content) in theme.templates() {
+                for pat in bad_patterns {
+                    if let Some(idx) = content.find(pat) {
+                        // Short context window for the failure message.
+                        let start = idx.saturating_sub(20);
+                        let end = (idx + pat.len() + 40).min(content.len());
+                        panic!(
+                            "theme {name} / template {tmpl_name} contains forbidden \
+                             pattern {pat:?} — use get_url(path=...) or keep the \
+                             base_url prefix. Context: {ctx:?}",
+                            ctx = &content[start..end]
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
