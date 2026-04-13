@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Clear any runner-specific RUNPATH the pyo3 build embedded (e.g.
+# /opt/hostedtoolcache/Python/3.X.Y/x64/lib from actions/setup-python)
+# and rely on the ELF soname + ld.so defaults to find libpython at
+# runtime. See issue #146.
+set -euo pipefail
+
+bin="${1:?usage: $0 <path-to-binary>}"
+if [[ ! -x "$bin" ]]; then
+    echo "relocate-linux: $bin is not an executable" >&2
+    exit 1
+fi
+
+if ! command -v patchelf >/dev/null 2>&1; then
+    echo "relocate-linux: patchelf not installed; skipping (binary may retain runner-specific RUNPATH)" >&2
+    exit 0
+fi
+
+rpath="$(patchelf --print-rpath "$bin" 2>/dev/null || true)"
+if [[ -n "$rpath" ]]; then
+    echo "relocate-linux: removing RUNPATH '$rpath'"
+    patchelf --remove-rpath "$bin"
+fi

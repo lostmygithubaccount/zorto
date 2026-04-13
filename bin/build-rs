@@ -5,4 +5,31 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 echo "Building zorto..."
 cargo build "$@"
 
+# On release builds only, rewrite the Python load path so the binary is
+# relocatable across machines that have a matching Python version installed
+# at any standard location. pyo3 links libpython at build time and embeds
+# the framework's absolute install_name into the binary (see issue #146).
+is_release=0; target=""; next_is_target=0
+for arg in "$@"; do
+    if [[ $next_is_target -eq 1 ]]; then target="$arg"; next_is_target=0; continue; fi
+    case "$arg" in
+        --release) is_release=1 ;;
+        --target) next_is_target=1 ;;
+        --target=*) target="${arg#--target=}" ;;
+    esac
+done
+
+if [[ $is_release -eq 1 ]]; then
+    out_dir="target/${target:+$target/}release"
+    bin="$out_dir/zorto"
+    if [[ -x "$bin" ]]; then
+        host="$(uname -s)"
+        if [[ "$host" == "Darwin" ]] || [[ "$target" == *-apple-darwin ]]; then
+            bin/relocate-macos "$bin"
+        elif [[ "$host" == "Linux" ]] || [[ "$target" == *-unknown-linux-* ]]; then
+            bin/relocate-linux "$bin"
+        fi
+    fi
+fi
+
 echo "Rust build complete!"
