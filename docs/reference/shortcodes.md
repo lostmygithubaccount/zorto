@@ -371,7 +371,9 @@ Progressive reveal — content appears on each click/advance within a slide.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `style` | string | `"fade-in"` | Animation style: `fade-in`, `fade-out`, `fade-up`, `fade-down`, `fade-left`, `fade-right`, `grow`, `shrink`, `strike`, `highlight-red`, `highlight-blue`, `highlight-green` |
+| `style` | string | `"fade-in"` | Animation style. Validated against an allowlist; an unknown value errors at build time rather than rendering a no-op fragment. |
+
+Allowed styles: `fade-in`, `fade-out`, `fade-up`, `fade-down`, `fade-left`, `fade-right`, `grow`, `shrink`, `strike`, `highlight-red`, `highlight-blue`, `highlight-green`, `highlight-current-red`, `highlight-current-blue`, `highlight-current-green`.
 
 **Syntax:**
 

@@ -1,0 +1,7 @@
+base_url = "https://example.com"
+title = "My Deck"
+generate_feed = false
+generate_search = false
+
+[extra]
+copyright_html = '<a href="/">My Deck</a> by Author via <a href="https://zorto.dev" target="_blank" rel="noopener">Zorto</a>'

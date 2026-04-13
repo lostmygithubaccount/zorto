@@ -1168,19 +1168,44 @@ fn builtin_speaker_notes(body: Option<&str>) -> anyhow::Result<String> {
     ))
 }
 
+/// Reveal.js fragment animation styles. Mirrors the documented set in
+/// reveal.js 5.x; a typo here silently renders a non-animating fragment, so we
+/// validate at shortcode time and surface an actionable error instead.
+const FRAGMENT_STYLES: &[&str] = &[
+    "fade-in",
+    "fade-out",
+    "fade-up",
+    "fade-down",
+    "fade-left",
+    "fade-right",
+    "grow",
+    "shrink",
+    "strike",
+    "highlight-red",
+    "highlight-blue",
+    "highlight-green",
+    "highlight-current-red",
+    "highlight-current-blue",
+    "highlight-current-green",
+];
+
 /// Built-in `fragment` shortcode: progressive reveal in presentations.
 ///
 /// Arguments:
 /// - `style` (optional): reveal.js fragment style (default: "fade-in").
-///   Options: fade-in, fade-out, fade-up, fade-down, fade-left, fade-right,
-///   grow, shrink, strike, highlight-red, highlight-blue, highlight-green.
+///   Allowed values: see `FRAGMENT_STYLES`.
 fn builtin_fragment(args_str: &str, body: Option<&str>) -> anyhow::Result<String> {
     let args = parse_args(args_str);
     let style = args.get("style").map(|s| s.as_str()).unwrap_or("fade-in");
+    if !FRAGMENT_STYLES.contains(&style) {
+        anyhow::bail!(
+            "fragment: `style` must be one of {} (got `{style}`)",
+            FRAGMENT_STYLES.join(", ")
+        );
+    }
     let body = body.ok_or_else(|| anyhow::anyhow!("fragment shortcode requires a body"))?;
     Ok(format!(
-        "<div class=\"fragment {}\">\n\n{}\n\n</div>",
-        escape_html(style),
+        "<div class=\"fragment {style}\">\n\n{}\n\n</div>",
         body.trim()
     ))
 }
@@ -1191,15 +1216,35 @@ fn builtin_fragment(args_str: &str, body: Option<&str>) -> anyhow::Result<String
 ///
 /// Arguments:
 /// - `widths` (optional): pipe-separated column widths (e.g. "60%|40%").
-///   Defaults to equal-width flex columns.
+///   Each width must be a CSS length (`is_safe_css_length`). The count must
+///   match the number of `<!-- column -->`-separated parts. Omit for equal
+///   flex columns.
 fn builtin_columns(args_str: &str, body: Option<&str>) -> anyhow::Result<String> {
     let args = parse_args(args_str);
     let body = body.ok_or_else(|| anyhow::anyhow!("columns shortcode requires a body"))?;
     let parts: Vec<&str> = body.split("<!-- column -->").collect();
     let widths: Vec<&str> = args
         .get("widths")
-        .map(|w| w.split('|').collect())
+        .map(|w| w.split('|').map(str::trim).collect())
         .unwrap_or_default();
+
+    if !widths.is_empty() {
+        if widths.len() != parts.len() {
+            anyhow::bail!(
+                "columns: `widths` has {} entries but body has {} column(s) (split on `<!-- column -->`). \
+                 Either match the counts or omit `widths` for equal columns.",
+                widths.len(),
+                parts.len()
+            );
+        }
+        for w in &widths {
+            if !is_safe_css_length(w) {
+                anyhow::bail!(
+                    "columns: each `widths` entry must be a CSS length (e.g. `60%`, `200px`, `auto`), got `{w}`"
+                );
+            }
+        }
+    }
 
     let mut html = String::from(
         "<div class=\"slide-columns\" style=\"display: flex; gap: 2em; width: 100%;\">\n",
@@ -1207,7 +1252,7 @@ fn builtin_columns(args_str: &str, body: Option<&str>) -> anyhow::Result<String>
     for (i, part) in parts.iter().enumerate() {
         let width_style = widths
             .get(i)
-            .map(|w| format!(" style=\"flex: 0 0 {}\"", escape_html(w.trim())))
+            .map(|w| format!(" style=\"flex: 0 0 {w}\""))
             .unwrap_or_else(|| " style=\"flex: 1\"".to_string());
         html.push_str(&format!(
             "<div class=\"slide-column\"{width_style}>\n\n{}\n\n</div>\n",
@@ -3046,5 +3091,110 @@ mod tests {
         for bad in ["", "evil;", "a b;c", "url(x)", "a\"b"] {
             assert!(!is_safe_class_list(bad), "expected reject: {bad}");
         }
+    }
+
+    #[test]
+    fn fragment_default_style_renders() {
+        let html = builtin_fragment("", Some("Hello")).unwrap();
+        assert!(html.contains("class=\"fragment fade-in\""), "got: {html}");
+        assert!(html.contains("Hello"), "got: {html}");
+    }
+
+    #[test]
+    fn fragment_accepts_all_documented_styles() {
+        for style in FRAGMENT_STYLES {
+            let args = format!(r#"style="{style}""#);
+            let html = builtin_fragment(&args, Some("body")).unwrap();
+            assert!(
+                html.contains(&format!("class=\"fragment {style}\"")),
+                "style {style} did not render: {html}"
+            );
+        }
+    }
+
+    #[test]
+    fn fragment_rejects_typo_with_actionable_error() {
+        let err = builtin_fragment(r#"style="fade-ins""#, Some("body"))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("fade-ins"), "got: {err}");
+        assert!(err.contains("fade-in"), "expected listing: {err}");
+    }
+
+    #[test]
+    fn fragment_rejects_empty_style() {
+        let err = builtin_fragment(r#"style="""#, Some("body"))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("must be one of"), "got: {err}");
+    }
+
+    #[test]
+    fn fragment_missing_body_errors() {
+        let err = builtin_fragment("", None).unwrap_err().to_string();
+        assert!(err.contains("body"), "got: {err}");
+    }
+
+    #[test]
+    fn columns_no_widths_uses_flex() {
+        let body = "left\n<!-- column -->\nright";
+        let html = builtin_columns("", Some(body)).unwrap();
+        assert_eq!(html.matches("flex: 1").count(), 2, "got: {html}");
+        assert!(html.contains("left"), "got: {html}");
+        assert!(html.contains("right"), "got: {html}");
+    }
+
+    #[test]
+    fn columns_valid_widths_render() {
+        let body = "left\n<!-- column -->\nright";
+        let html = builtin_columns(r#"widths="60%|40%""#, Some(body)).unwrap();
+        assert!(html.contains("flex: 0 0 60%"), "got: {html}");
+        assert!(html.contains("flex: 0 0 40%"), "got: {html}");
+    }
+
+    #[test]
+    fn columns_rejects_invalid_width_value() {
+        let body = "left\n<!-- column -->\nright";
+        let err = builtin_columns(r#"widths="60%|abc""#, Some(body))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("CSS length"), "got: {err}");
+        assert!(err.contains("abc"), "got: {err}");
+    }
+
+    #[test]
+    fn columns_rejects_count_mismatch_too_many_widths() {
+        let body = "left\n<!-- column -->\nright";
+        let err = builtin_columns(r#"widths="50%|30%|20%""#, Some(body))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("3 entries"), "got: {err}");
+        assert!(err.contains("2 column"), "got: {err}");
+    }
+
+    #[test]
+    fn columns_rejects_count_mismatch_too_few_widths() {
+        let body = "a\n<!-- column -->\nb\n<!-- column -->\nc";
+        let err = builtin_columns(r#"widths="50%|50%""#, Some(body))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("2 entries"), "got: {err}");
+        assert!(err.contains("3 column"), "got: {err}");
+    }
+
+    #[test]
+    fn columns_rejects_css_injection_via_widths() {
+        // Was previously html-escaped only; now blocked at validation.
+        let body = "left\n<!-- column -->\nright";
+        let err = builtin_columns(r#"widths="60%|40%; background: url(x)""#, Some(body))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("CSS length"), "got: {err}");
+    }
+
+    #[test]
+    fn columns_missing_body_errors() {
+        let err = builtin_columns("", None).unwrap_err().to_string();
+        assert!(err.contains("body"), "got: {err}");
     }
 }

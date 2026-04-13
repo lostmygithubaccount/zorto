@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="{{ config.default_language | default(value='en') }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ section.title }} | {{ config.title }}</title>
+    {% if section.description -%}
+    <meta name="description" content="{{ section.description }}">
+    {%- endif %}
+    {#- SRI pins. A jsdelivr republish or npm account takeover would otherwise
+        execute attacker-controlled JS/CSS in every reader's browser. Hashes
+        computed per resource at pin time; regenerate with `openssl dgst -sha384`
+        if you bump a version. -#}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css"
+        integrity="sha384-AJKv9Ui5SfA0VsFksFI9GuA1ztX9Ca3CLP6HGfX4YY/tYSVodC+PUszaQZFIlkuy" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css"
+        integrity="sha384-YgvgKeZJykuztG+iQPoZHNZENTFZvOcOJ/uRzmJTje6GHYN9zAw+y5rx/L8MQKA/" crossorigin="anonymous">
+    {#- Known reveal.js theme names. Anything else in [extra].reveal_theme is
+        ignored at render time AND skipped at client-side swap. -#}
+    {%- set known_themes = ["black", "white", "league", "beige", "night", "serif", "simple", "solarized", "blood", "moon", "dracula", "sky"] -%}
+    {%- set default_theme = section.extra.reveal_theme | default(value='black') -%}
+    {%- if default_theme not in known_themes -%}{%- set default_theme = "black" -%}{%- endif -%}
+    {#- SRI per theme. Server-side lookup resolves `default_sri`; the same
+        map is emitted as JS below so the client-side swap can set the right
+        integrity before changing href. Regenerate with `openssl dgst -sha384`
+        if you bump reveal.js. Tera has no dict literals so we keep this as
+        an if-chain plus a hand-written JS map — both must stay in sync. -#}
+    {%- if default_theme == "black" -%}{%- set default_sri = "sha384-rGf1FAL+Buyw4LpDboONln7P/UqlyCftbnLG8bC6nNAaW3LcuHtUg5t5KYY3U+L8" -%}
+    {%- elif default_theme == "white" -%}{%- set default_sri = "sha384-/TZMdZeq0ZGi4iePTHhOMXOkyv2f72ZcwmhAtOmSZlPkx+5qCOfyc/U1kjd5Su6S" -%}
+    {%- elif default_theme == "league" -%}{%- set default_sri = "sha384-TGjsKwPMycz86Iifg+w6QmLVOVn20sb7sI+eJWqAWKb/A4b2Gp4QHBmFuGs6pspc" -%}
+    {%- elif default_theme == "beige" -%}{%- set default_sri = "sha384-rt6XN0bOEUE+uunPfkXDxJRCcGfZlXwt88npmRTw9RWNMTY7aXztsHNOm+gBCAaT" -%}
+    {%- elif default_theme == "night" -%}{%- set default_sri = "sha384-Q9XI5NaX0hqK5y+JskI9jDNh8uHfYHD4uT8MI5rLL2TIoViEL2JvQMzyYQDRgPCP" -%}
+    {%- elif default_theme == "serif" -%}{%- set default_sri = "sha384-eFbSgIKvgH02fkNrerwHS6PfnPIWVjqW8ASZVOQEpIW5PE9f/yk4MSII6KZge91O" -%}
+    {%- elif default_theme == "simple" -%}{%- set default_sri = "sha384-v5nh2ExKPN2sC3ymxjQsE5HaZHtom6tg98CZHuAIDStnwTP3u6Sv0W9RRrjH5oOo" -%}
+    {%- elif default_theme == "solarized" -%}{%- set default_sri = "sha384-llmy26dJQpqxYl2glG5JVQHBlLBGrfcp+x0to2MkIyogkd5InkyZ6U46F7bPFyBe" -%}
+    {%- elif default_theme == "blood" -%}{%- set default_sri = "sha384-m2cEmb3mMoGtVvYrs1JddqDUDCTG25g7zTaQw3EK9ckkAhDk+Ec5XaLzoYGazhBv" -%}
+    {%- elif default_theme == "moon" -%}{%- set default_sri = "sha384-eWZjS0sXChUT3FAnEu8uRlj4HnLp3fb1c/9FsG0VHOJwn0PaQUeoN+BSBUrUw5Iw" -%}
+    {%- elif default_theme == "dracula" -%}{%- set default_sri = "sha384-xIpHe7yOfVP6P05c+JY1b6jSvEoUM1ZewibGWxXBh9/1R+OgC4R3ICNsh/vjGvuV" -%}
+    {%- elif default_theme == "sky" -%}{%- set default_sri = "sha384-4D+nRiTQX2o4Kyn+c/HCSJJVLcy66CTnqLDyISKnyyqEMtWyg838lVnoQhiFc/Ph" -%}
+    {%- endif -%}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/{{ default_theme }}.css"
+        id="theme" integrity="{{ default_sri }}" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css"
+        integrity="sha384-0rrWATPYzlkqxkUhsXu1QkrO6K3rq4d6FqJQhcCJ7jQcZhb6plkpODMjpoiAYidE" crossorigin="anonymous">
+    {#- Preload any per-slide theme referenced in [page.extra.reveal_theme] to
+        avoid FOUC on swap. Preloads intentionally have no `integrity` — the
+        integrity check happens when the stylesheet is *activated* on the
+        main `<link>` below, so an attacker-served preload payload gets
+        discarded there. Keeping preloads SRI-free dodges the Tera
+        no-dict-literal limitation without widening the attack surface. -#}
+    {%- set_global preloaded = [default_theme] -%}
+    {%- for page in section.pages -%}
+        {%- set t = page.extra.reveal_theme | default(value="") -%}
+        {%- if t and t in known_themes and t not in preloaded -%}
+    <link rel="preload" as="style" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/{{ t }}.css" crossorigin="anonymous">
+            {%- set_global preloaded = preloaded | concat(with=t) -%}
+        {%- endif -%}
+    {%- endfor %}
+    {%- if config.extra.favicon %}
+    <link rel="icon" type="{{ config.extra.favicon_mimetype | default(value='image/png') }}" href="{{ config.extra.favicon }}">
+    {%- endif %}
+    <style>
+        /* Zorto presentation overrides */
+        .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+            text-transform: none;
+        }
+        .reveal .zorto-anchor {
+            display: none;
+        }
+        .reveal .slide-image {
+            max-width: none;
+        }
+        /* Content wrapper inside each section. We attach overflow and flex
+           here rather than on the section itself so that reveal.js's own
+           transform-based slide transitions and centering are preserved. */
+        .reveal .slides > section > .slide-content {
+            width: 100%;
+            max-height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(124, 58, 237, 0.4) transparent;
+        }
+        .reveal .slides > section > .slide-content::-webkit-scrollbar { width: 8px; }
+        .reveal .slides > section > .slide-content::-webkit-scrollbar-thumb {
+            background: rgba(124, 58, 237, 0.4);
+            border-radius: 4px;
+        }
+        .reveal .slide-columns {
+            width: 100%;
+            text-align: left;
+        }
+        .reveal .slide-column ul,
+        .reveal .slide-column ol {
+            display: block;
+        }
+        .reveal section.layout-center > .slide-content {
+            text-align: center;
+        }
+        .reveal section.layout-center h1,
+        .reveal section.layout-center h2,
+        .reveal section.layout-center h3 {
+            text-align: center;
+        }
+        .reveal section.layout-image-left > .slide-content,
+        .reveal section.layout-image-right > .slide-content {
+            display: flex;
+            align-items: center;
+            gap: 2em;
+            text-align: left;
+        }
+        .reveal section.layout-image-left > .slide-content > *,
+        .reveal section.layout-image-right > .slide-content > * {
+            flex: 1;
+            min-width: 0;
+        }
+        .reveal section.layout-image-left img,
+        .reveal section.layout-image-right img {
+            max-width: 100%;
+            height: auto;
+        }
+        .reveal section.layout-image-full > .slide-content {
+            text-align: center;
+        }
+        .reveal section.layout-title > .slide-content {
+            text-align: center;
+        }
+        .reveal section.layout-title h1 {
+            font-size: 2.5em;
+        }
+        .reveal .slides section .fragment {
+            transition: all 0.3s ease;
+        }
+        /* Code block styling */
+        .reveal pre {
+            width: 100%;
+            font-size: 0.55em;
+        }
+        .reveal code {
+            max-height: 500px;
+        }
+        /* Visualization output inside slides */
+        .reveal .code-viz {
+            margin: 0.5em auto;
+            max-width: 100%;
+        }
+        .reveal .code-viz img {
+            max-height: 420px;
+            object-fit: contain;
+        }
+        .reveal .code-viz .plotly-graph-div,
+        .reveal .code-viz .js-plotly-plot {
+            max-height: 380px !important;
+        }
+        /* Tighter spacing + smaller base text so more fits by default */
+        .reveal { font-size: 32px; }
+        .reveal h1 { font-size: 2em; }
+        .reveal h2 { font-size: 1.4em; margin-bottom: 0.35em; }
+        .reveal h3 { font-size: 1.15em; }
+        .reveal p, .reveal li { font-size: 0.9em; }
+        .reveal ul, .reveal ol { line-height: 1.35; }
+        .reveal section.layout-title h1 { font-size: 2.2em; }
+        /* Logo animations */
+        @keyframes logo-float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-16px); }
+        }
+        @keyframes logo-pulse {
+            0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(124, 58, 237, 0)); }
+            50% { transform: scale(1.04); filter: drop-shadow(0 0 24px rgba(124, 58, 237, 0.6)); }
+        }
+        @keyframes logo-spin-in {
+            0% { transform: rotate(-180deg) scale(0); opacity: 0; }
+            100% { transform: rotate(0deg) scale(1); opacity: 1; }
+        }
+        @keyframes logo-glow {
+            0%, 100% { filter: drop-shadow(0 0 4px rgba(124, 58, 237, 0.4)); }
+            50% { filter: drop-shadow(0 0 32px rgba(124, 58, 237, 0.9)) drop-shadow(0 0 12px rgba(6, 182, 212, 0.6)); }
+        }
+        @keyframes logo-sway {
+            0%, 100% { transform: rotate(-4deg); }
+            50% { transform: rotate(4deg); }
+        }
+        @keyframes logo-fade-in {
+            0% { opacity: 0; transform: translateY(12px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .logo-float { animation: logo-float 3.5s ease-in-out infinite; }
+        .logo-pulse { animation: logo-pulse 2.5s ease-in-out infinite; }
+        .logo-spin-in { animation: logo-spin-in 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+        .logo-glow { animation: logo-glow 2.8s ease-in-out infinite; }
+        .logo-sway { animation: logo-sway 4s ease-in-out infinite; }
+        .logo-fade-in { animation: logo-fade-in 1s ease-out both; }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+            {%- for page in section.pages %}
+            {%- set page_theme = page.extra.reveal_theme | default(value="") -%}
+            {%- if page_theme and page_theme not in known_themes -%}{%- set page_theme = "" -%}{%- endif -%}
+            {#- `background_image` is interpolated by reveal.js into a CSS
+                `url(...)` on a style property. Setting via `.style.backgroundImage`
+                doesn't allow declaration injection (value is parsed for that
+                property only), but we still strip paren/quote/semicolon to
+                keep the emitted CSS clean and defensively block any future
+                consumer that uses `cssText`. -#}
+            {%- set bg_image = page.extra.background_image | default(value="")
+                | replace(from=")", to="") | replace(from="(", to="")
+                | replace(from=";", to="") | replace(from='"', to="")
+                | replace(from="'", to="") -%}
+            <section
+                {%- if bg_image %} data-background-image="{{ bg_image }}"{% endif %}
+                {%- if page.extra.background_color %} data-background-color="{{ page.extra.background_color }}"{% endif %}
+                {%- if page.extra.background_size %} data-background-size="{{ page.extra.background_size }}"{% endif %}
+                {%- if page.extra.background_opacity %} data-background-opacity="{{ page.extra.background_opacity }}"{% endif %}
+                {%- if page.extra.transition %} data-transition="{{ page.extra.transition }}"{% endif %}
+                {%- if page_theme %} data-reveal-theme="{{ page_theme }}"{% endif %}
+                {%- if page.extra.layout %} class="layout-{{ page.extra.layout }}"{% endif %}
+            >
+                <div class="slide-content">
+                    {{ page.content | safe }}
+                </div>
+            </section>
+            {%- endfor %}
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"
+        integrity="sha384-M/JtqCVlLcK9lwVnBnMXP0V577CBULkjodKsR/PITOe4MSKNbbwqCemEyluOw0+5" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"
+        integrity="sha384-vGIe90H8q0nlnrw/zr9vn+r39OtjvzBfai9voOybn5Bx+KmKLtSxhM+YIfcrsfI3" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"
+        integrity="sha384-NUSGSUaJDMJ4EYNyUIGbV/meNnf3WqIvGfjqD3BDJdvWEI3K/zrL38QWB52JLIMW" crossorigin="anonymous"></script>
+    <script>
+        Reveal.initialize({
+            hash: true,
+            slideNumber: true,
+            width: {{ section.extra.width | default(value=1050) }},
+            height: {{ section.extra.height | default(value=700) }},
+            margin: {{ section.extra.margin | default(value=0.04) }},
+            transition: '{{ section.extra.transition | default(value="slide") }}',
+            center: true,
+            plugins: [ RevealNotes, RevealHighlight ]
+        });
+        // Per-slide reveal-theme switching. Set `reveal_theme = "moon"` on a
+        // slide's [extra] table to swap the theme stylesheet when that slide
+        // is active. Both the server (template) and client (here) enforce the
+        // same allow-list so an attacker-controlled frontmatter value cannot
+        // load arbitrary CSS from the jsdelivr namespace.
+        (function () {
+            // ALLOWED is rendered from the `known_themes` literal above.
+            // THEME_SRI is hand-written here (Tera has no dict literal) and
+            // must stay in sync with the server-side if-chain above — both
+            // list the same 12 known reveal.js themes with their sha384
+            // hashes. If you widen `known_themes` to include user-provided
+            // values, drop the `| safe` below and revalidate; an attacker-
+            // controlled name could otherwise disable SRI (missing integrity
+            // → no validation) via the swap.
+            var ALLOWED = {{ known_themes | json_encode | safe }};
+            var THEME_SRI = {
+                "black": "sha384-rGf1FAL+Buyw4LpDboONln7P/UqlyCftbnLG8bC6nNAaW3LcuHtUg5t5KYY3U+L8",
+                "white": "sha384-/TZMdZeq0ZGi4iePTHhOMXOkyv2f72ZcwmhAtOmSZlPkx+5qCOfyc/U1kjd5Su6S",
+                "league": "sha384-TGjsKwPMycz86Iifg+w6QmLVOVn20sb7sI+eJWqAWKb/A4b2Gp4QHBmFuGs6pspc",
+                "beige": "sha384-rt6XN0bOEUE+uunPfkXDxJRCcGfZlXwt88npmRTw9RWNMTY7aXztsHNOm+gBCAaT",
+                "night": "sha384-Q9XI5NaX0hqK5y+JskI9jDNh8uHfYHD4uT8MI5rLL2TIoViEL2JvQMzyYQDRgPCP",
+                "serif": "sha384-eFbSgIKvgH02fkNrerwHS6PfnPIWVjqW8ASZVOQEpIW5PE9f/yk4MSII6KZge91O",
+                "simple": "sha384-v5nh2ExKPN2sC3ymxjQsE5HaZHtom6tg98CZHuAIDStnwTP3u6Sv0W9RRrjH5oOo",
+                "solarized": "sha384-llmy26dJQpqxYl2glG5JVQHBlLBGrfcp+x0to2MkIyogkd5InkyZ6U46F7bPFyBe",
+                "blood": "sha384-m2cEmb3mMoGtVvYrs1JddqDUDCTG25g7zTaQw3EK9ckkAhDk+Ec5XaLzoYGazhBv",
+                "moon": "sha384-eWZjS0sXChUT3FAnEu8uRlj4HnLp3fb1c/9FsG0VHOJwn0PaQUeoN+BSBUrUw5Iw",
+                "dracula": "sha384-xIpHe7yOfVP6P05c+JY1b6jSvEoUM1ZewibGWxXBh9/1R+OgC4R3ICNsh/vjGvuV",
+                "sky": "sha384-4D+nRiTQX2o4Kyn+c/HCSJJVLcy66CTnqLDyISKnyyqEMtWyg838lVnoQhiFc/Ph"
+            };
+            var themeLink = document.getElementById('theme');
+            var defaultHref = themeLink.getAttribute('href');
+            var defaultSri = themeLink.getAttribute('integrity');
+            function themeUrl(name) {
+                return 'https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/' + name + '.css';
+            }
+            function apply(slide) {
+                if (!slide) return;
+                var t = slide.getAttribute('data-reveal-theme');
+                // Swap integrity BEFORE href — the browser validates the new
+                // resource against whichever integrity is current when the
+                // load fires. Setting href first could race to load without
+                // the right hash.
+                if (t && ALLOWED.indexOf(t) !== -1 && THEME_SRI[t]) {
+                    themeLink.setAttribute('integrity', THEME_SRI[t]);
+                    themeLink.setAttribute('href', themeUrl(t));
+                } else {
+                    themeLink.setAttribute('integrity', defaultSri);
+                    themeLink.setAttribute('href', defaultHref);
+                }
+            }
+            Reveal.on('slidechanged', function (event) { apply(event.currentSlide); });
+            Reveal.on('ready', function () { apply(Reveal.getCurrentSlide()); });
+        })();
+    </script>
+</body>
+</html>

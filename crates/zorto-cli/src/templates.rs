@@ -117,6 +117,81 @@ const BUSINESS_FILES: &[TemplateFile] = &[
     },
 ];
 
+// ── Presentation template ────────────────────────────────────────────────
+
+const PRESENTATION_FILES: &[TemplateFile] = &[
+    TemplateFile {
+        path: "config.toml",
+        content: include_str!("../templates/presentation/config.toml"),
+        executable: false,
+    },
+    TemplateFile {
+        path: "content/_index.md",
+        content: include_str!("../templates/presentation/content/_index.md"),
+        executable: false,
+    },
+    TemplateFile {
+        path: "content/intro/_index.md",
+        content: include_str!("../templates/presentation/content/intro/_index.md"),
+        executable: false,
+    },
+    TemplateFile {
+        path: "content/intro/title.md",
+        content: include_str!("../templates/presentation/content/intro/title.md"),
+        executable: false,
+    },
+    TemplateFile {
+        path: "content/intro/bullets.md",
+        content: include_str!("../templates/presentation/content/intro/bullets.md"),
+        executable: false,
+    },
+    TemplateFile {
+        path: "content/intro/code.md",
+        content: include_str!("../templates/presentation/content/intro/code.md"),
+        executable: false,
+    },
+    TemplateFile {
+        path: "content/intro/fragments.md",
+        content: include_str!("../templates/presentation/content/intro/fragments.md"),
+        executable: false,
+    },
+    TemplateFile {
+        path: "content/intro/columns.md",
+        content: include_str!("../templates/presentation/content/intro/columns.md"),
+        executable: false,
+    },
+    TemplateFile {
+        path: "content/intro/thank-you.md",
+        content: include_str!("../templates/presentation/content/intro/thank-you.md"),
+        executable: false,
+    },
+    TemplateFile {
+        path: "templates/base.html",
+        content: include_str!("../templates/presentation/templates/base.html"),
+        executable: false,
+    },
+    TemplateFile {
+        path: "templates/index.html",
+        content: include_str!("../templates/presentation/templates/index.html"),
+        executable: false,
+    },
+    TemplateFile {
+        path: "templates/section.html",
+        content: include_str!("../templates/presentation/templates/section.html"),
+        executable: false,
+    },
+    TemplateFile {
+        path: "templates/page.html",
+        content: include_str!("../templates/presentation/templates/page.html"),
+        executable: false,
+    },
+    TemplateFile {
+        path: "templates/presentation.html",
+        content: include_str!("../templates/presentation/templates/presentation.html"),
+        executable: false,
+    },
+];
+
 /// Template metadata for interactive selection.
 pub struct TemplateInfo {
     pub name: &'static str,
@@ -141,10 +216,14 @@ pub const TEMPLATES: &[TemplateInfo] = &[
         name: "business",
         description: "Business / landing page",
     },
+    TemplateInfo {
+        name: "presentation",
+        description: "reveal.js slide deck (one file per slide)",
+    },
 ];
 
 /// Available template names.
-pub const TEMPLATE_NAMES: &[&str] = &["default", "blog", "docs", "business"];
+pub const TEMPLATE_NAMES: &[&str] = &["default", "blog", "docs", "business", "presentation"];
 
 /// Write all files for the given template into `target`.
 pub fn write_template(target: &Path, template: &str) -> anyhow::Result<()> {
@@ -153,6 +232,7 @@ pub fn write_template(target: &Path, template: &str) -> anyhow::Result<()> {
         "blog" => BLOG_FILES,
         "docs" => DOCS_FILES,
         "business" => BUSINESS_FILES,
+        "presentation" => PRESENTATION_FILES,
         _ => anyhow::bail!(
             "unknown template \"{template}\". Available templates: {}",
             TEMPLATE_NAMES.join(", ")
