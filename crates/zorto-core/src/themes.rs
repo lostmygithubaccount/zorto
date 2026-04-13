@@ -423,7 +423,13 @@ mod tests {
         let theme = Theme::from_name(names[0]).expect("first available theme parses");
         let names: Vec<&str> = theme.templates().iter().map(|(n, _)| *n).collect();
         // Required by Site::build (page.html / section.html / index.html / 404.html).
-        for required in ["base.html", "page.html", "section.html", "index.html", "404.html"] {
+        for required in [
+            "base.html",
+            "page.html",
+            "section.html",
+            "index.html",
+            "404.html",
+        ] {
             assert!(
                 names.contains(&required),
                 "theme {} missing required template {required}",
