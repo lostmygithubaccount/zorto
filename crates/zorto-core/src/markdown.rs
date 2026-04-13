@@ -245,7 +245,10 @@ pub fn replace_exec_placeholders(
                 block_html.push_str(&render_viz_output(v));
             }
             block_html.push_str("</div>");
-            result = result.replace(&placeholder, &block_html);
+            // replacen with limit 1 so that an executed block whose output text
+            // happens to contain another block's placeholder string does not
+            // cause that later substitution to land in the wrong place.
+            result = result.replacen(&placeholder, &block_html, 1);
         }
     }
 
@@ -647,5 +650,43 @@ mod tests {
         ));
         assert!(!is_external_url("/relative/path", "https://example.com"));
         assert!(!is_external_url("#anchor", "https://example.com"));
+    }
+
+    #[test]
+    fn test_replace_exec_placeholder_collision() {
+        // Regression: block 0's output happens to contain block 1's placeholder
+        // string. Without the replacen-with-limit-1 fix, the second pass would
+        // substitute that copy and corrupt block 0's output.
+        let html = "<!-- EXEC_BLOCK_0 -->\n<!-- EXEC_BLOCK_1 -->";
+        let blocks = vec![
+            ExecutableBlock {
+                language: "python".into(),
+                source: "print('a')".into(),
+                file_ref: None,
+                output: Some("<!-- EXEC_BLOCK_1 -->".into()),
+                error: None,
+                viz: Vec::new(),
+            },
+            ExecutableBlock {
+                language: "python".into(),
+                source: "print('b')".into(),
+                file_ref: None,
+                output: Some("BLOCK_ONE_OUTPUT".into()),
+                error: None,
+                viz: Vec::new(),
+            },
+        ];
+        let result = replace_exec_placeholders(html, &blocks, &default_config());
+        assert!(
+            result.contains("BLOCK_ONE_OUTPUT"),
+            "block 1 must still be replaced at its original position"
+        );
+        // Block 0's literal placeholder text in its output is HTML-escaped, so
+        // the comment form is gone — but the escaped form must survive,
+        // proving block 1's substitution did not consume it.
+        assert!(
+            result.contains("&lt;!-- EXEC_BLOCK_1 --&gt;"),
+            "block 0's output (containing the escaped placeholder text) must survive"
+        );
     }
 }
