@@ -2414,8 +2414,13 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(
-            err.contains("sandbox boundary") || err.contains("cannot resolve"),
+            err.contains("escapes sandbox") || err.contains("cannot resolve"),
             "expected sandbox escape error, got: {err}"
+        );
+        // The actionable error should mention --sandbox so users know the recovery path.
+        assert!(
+            !err.contains("escapes sandbox") || err.contains("--sandbox"),
+            "escape error missing --sandbox guidance: {err}"
         );
     }
 

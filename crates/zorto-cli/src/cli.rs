@@ -169,8 +169,17 @@ where
     }
 
     let Some(command) = cli.command else {
-        Cli::parse_from(["zorto", "--help"]);
-        unreachable!();
+        if root.join("config.toml").exists() {
+            println!(
+                "Detected a zorto site at {}.\n\
+                 Run `zorto preview` to serve it with live reload, \
+                 or `zorto --help` for the full command list.",
+                display_root.display()
+            );
+        } else {
+            Cli::parse_from(["zorto", "--help"]);
+        }
+        return Ok(());
     };
 
     match command {
@@ -473,19 +482,6 @@ mod tests {
     #[test]
     fn parse_skill_install() {
         let cli = Cli::parse_from(["zorto", "skill", "install", "--target", "/tmp/skills"]);
-        assert!(matches!(cli.command, Some(Commands::Skill { .. })));
-    }
-
-    #[test]
-    fn parse_skill_install_all() {
-        let cli = Cli::parse_from([
-            "zorto",
-            "skill",
-            "install",
-            "--target",
-            "/tmp/skills",
-            "--all",
-        ]);
         assert!(matches!(cli.command, Some(Commands::Skill { .. })));
     }
 

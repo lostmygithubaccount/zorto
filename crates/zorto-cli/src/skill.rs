@@ -6,7 +6,7 @@ const SKILL_ZORTO: &str = include_str!("skill-zorto.md");
 
 #[derive(Subcommand)]
 pub(crate) enum SkillCommands {
-    /// Install zorto skill(s)
+    /// Install the zorto skill
     #[command(arg_required_else_help = true)]
     Install {
         /// Target directory
@@ -14,20 +14,15 @@ pub(crate) enum SkillCommands {
         /// Examples: ./.claude/skills, ~/.claude/skills, ./.agents/skills
         #[arg(long, required = true)]
         target: String,
-        /// Install all skills
-        #[arg(long)]
-        all: bool,
     },
 }
 
 pub(crate) fn handle_skill(cmd: Option<SkillCommands>) -> Result<()> {
     let Some(cmd) = cmd else {
-        // No subcommand given — clap's arg_required_else_help on Install
-        // means we won't actually reach here in normal usage, but handle it gracefully.
         anyhow::bail!("run `zorto skill install --help` for usage");
     };
     match cmd {
-        SkillCommands::Install { target, all: _ } => {
+        SkillCommands::Install { target } => {
             let target = if target.starts_with("~/") || target == "~" {
                 let home = std::env::var("HOME").context("HOME environment variable not set")?;
                 PathBuf::from(target.replacen('~', &home, 1))
@@ -69,7 +64,7 @@ mod tests {
     fn install_writes_skill_file() {
         let tmp = tempfile::tempdir().unwrap();
         let target = tmp.path().to_str().unwrap().to_string();
-        handle_skill(Some(SkillCommands::Install { target, all: false })).unwrap();
+        handle_skill(Some(SkillCommands::Install { target })).unwrap();
         let skill_path = tmp.path().join("zorto").join("SKILL.md");
         assert!(skill_path.exists());
         let content = std::fs::read_to_string(&skill_path).unwrap();
@@ -86,7 +81,7 @@ mod tests {
             .to_str()
             .unwrap()
             .to_string();
-        handle_skill(Some(SkillCommands::Install { target, all: false })).unwrap();
+        handle_skill(Some(SkillCommands::Install { target })).unwrap();
         let skill_path = tmp
             .path()
             .join("deep")
