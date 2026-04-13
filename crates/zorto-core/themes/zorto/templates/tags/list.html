@@ -7,7 +7,7 @@
         <ul class="taxonomy-terms">
         {%- for term in terms %}
             <li>
-                <a href="{{ term.permalink | replace(from=config.base_url, to="") }}">{{ term.name }}</a>
+                <a href="{{ term.permalink | safe }}">{{ term.name }}</a>
                 <span class="taxonomy-count">({{ term.pages | length }})</span>
             </li>
         {%- endfor %}

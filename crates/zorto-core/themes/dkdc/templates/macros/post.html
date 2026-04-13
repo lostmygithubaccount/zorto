@@ -1,5 +1,5 @@
 {% macro header(page) %}
-<h1 class="post-title"><a href="{{ page.permalink | replace(from=config.base_url, to="") }}">{{ page.title }}</a></h1>
+<h1 class="post-title"><a href="{{ page.permalink | safe }}">{{ page.title }}</a></h1>
 <div class="post-meta-inline">
     <span class="post-date">
         {%- if page.date %}{{ page.date | date(format="%Y-%m-%d") }}{% endif %}
@@ -14,7 +14,7 @@
 {% elif summary and page.summary %}
     <div class="post-content">{{ page.summary | safe }}</div>
     <div>
-        <a class="read-more button" href="{{ page.permalink | replace(from=config.base_url, to="") }}">
+        <a class="read-more button" href="{{ page.permalink | safe }}">
             <span class="button__text">read more</span>&nbsp;
             <span class="button__icon">&#8617;&#xFE0E;</span>
         </a>
@@ -31,7 +31,7 @@
         {% else %}:: tags:&nbsp;{% set sep = "&nbsp;" %}
         {% endif %}
         {%- for tag in page.taxonomies.tags | sort %}
-            <a class="post-tag" href="{{ get_taxonomy_url(kind='tags', name=tag) | replace(from=config.base_url, to="") }}">#{{ tag }}</a>
+            <a class="post-tag" href="{{ get_taxonomy_url(kind='tags', name=tag) | safe }}">#{{ tag }}</a>
             {%- if not loop.last %}{{ sep | safe }}{% endif %}
         {%- endfor %}
     </span>
