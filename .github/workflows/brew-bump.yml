@@ -1,0 +1,34 @@
+name: Bump Homebrew formula
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to bump the formula to (e.g. v0.22.1)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    name: brew bump-formula-pr
+    runs-on: macos-latest
+    steps:
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: dawidd6/action-homebrew-bump-formula@v4
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          tap: dkdc-io/homebrew-tap
+          formula: zorto
+          tag: ${{ steps.tag.outputs.tag }}
+          force: false
