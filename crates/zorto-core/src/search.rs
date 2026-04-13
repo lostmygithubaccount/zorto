@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn test_generate_search_index() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let pages = vec![make_page(
+        let pages = [make_page(
             "Test Page",
             "https://example.com/test/",
             Some("A test page"),
@@ -287,7 +287,7 @@ mod tests {
     #[test]
     fn test_title_matches_rank_higher_than_content_only() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let pages = vec![
+        let pages = [
             make_page(
                 "Themes",
                 "/themes/",
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn test_exact_title_match_ranks_highest() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let pages = vec![
+        let pages = [
             make_page("Themes", "/themes/", None, "<p>All themes.</p>"),
             make_page(
                 "Custom Themes Guide",
@@ -344,7 +344,7 @@ mod tests {
     #[test]
     fn test_case_insensitive_matching() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let pages = vec![make_page(
+        let pages = [make_page(
             "Hello World",
             "/hello/",
             None,
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn test_empty_query_returns_nothing() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let pages = vec![make_page("Test", "/test/", None, "<p>Content</p>")];
+        let pages = [make_page("Test", "/test/", None, "<p>Content</p>")];
 
         generate_search_index(pages.iter(), std::iter::empty(), "", tmp.path()).unwrap();
         let conn = rusqlite::Connection::open(tmp.path().join("search.db")).unwrap();
@@ -379,7 +379,7 @@ mod tests {
     #[test]
     fn test_special_characters_dont_break_queries() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let pages = vec![make_page(
+        let pages = [make_page(
             "C++ Guide",
             "/cpp/",
             Some("Learn C++ basics"),

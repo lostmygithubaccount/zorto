@@ -426,9 +426,11 @@ mod tests {
     use crate::content::{Frontmatter, build_page, build_section};
 
     fn make_page(relative_path: &str, raw_content: &str) -> Page {
-        let mut fm = Frontmatter::default();
-        fm.title = Some("Test".to_string());
-        fm.date = Some(toml::Value::String("2025-01-01".to_string()));
+        let fm = Frontmatter {
+            title: Some("Test".to_string()),
+            date: Some(toml::Value::String("2025-01-01".to_string())),
+            ..Frontmatter::default()
+        };
         let mut page = build_page(fm, String::new(), relative_path, "https://example.com");
         page.raw_content = raw_content.to_string();
         page
@@ -525,8 +527,10 @@ mod tests {
     #[test]
     fn test_lint_with_title_no_warning() {
         let mut pages = HashMap::new();
-        let mut fm = Frontmatter::default();
-        fm.title = Some("About".to_string());
+        let fm = Frontmatter {
+            title: Some("About".to_string()),
+            ..Frontmatter::default()
+        };
         let page = build_page(fm, "content".into(), "about.md", "https://example.com");
         pages.insert("about.md".into(), page);
         let sections = HashMap::new();
@@ -540,9 +544,11 @@ mod tests {
     #[test]
     fn test_lint_missing_date_in_date_section() {
         let mut pages = HashMap::new();
-        let mut fm = Frontmatter::default();
-        fm.title = Some("Post".to_string());
-        // No date set
+        let fm = Frontmatter {
+            title: Some("Post".to_string()),
+            // No date set
+            ..Frontmatter::default()
+        };
         let page = build_page(
             fm,
             "content".into(),
@@ -552,8 +558,10 @@ mod tests {
         pages.insert("posts/no-date.md".into(), page);
 
         let mut sections = HashMap::new();
-        let mut sfm = Frontmatter::default();
-        sfm.sort_by = Some(crate::config::SortBy::Date);
+        let sfm = Frontmatter {
+            sort_by: Some(crate::config::SortBy::Date),
+            ..Frontmatter::default()
+        };
         let section = build_section(sfm, String::new(), "posts/_index.md", "https://example.com");
         sections.insert("posts/_index.md".into(), section);
 
@@ -567,9 +575,11 @@ mod tests {
     #[test]
     fn test_lint_date_not_required_in_title_section() {
         let mut pages = HashMap::new();
-        let mut fm = Frontmatter::default();
-        fm.title = Some("Item".to_string());
-        // No date, but section is title-sorted
+        let fm = Frontmatter {
+            title: Some("Item".to_string()),
+            // No date, but section is title-sorted
+            ..Frontmatter::default()
+        };
         let page = build_page(
             fm,
             "content".into(),
@@ -579,8 +589,10 @@ mod tests {
         pages.insert("items/thing.md".into(), page);
 
         let mut sections = HashMap::new();
-        let mut sfm = Frontmatter::default();
-        sfm.sort_by = Some(crate::config::SortBy::Title);
+        let sfm = Frontmatter {
+            sort_by: Some(crate::config::SortBy::Title),
+            ..Frontmatter::default()
+        };
         let section = build_section(sfm, String::new(), "items/_index.md", "https://example.com");
         sections.insert("items/_index.md".into(), section);
 
@@ -594,9 +606,11 @@ mod tests {
     #[test]
     fn test_lint_invalid_date_format() {
         let mut pages = HashMap::new();
-        let mut fm = Frontmatter::default();
-        fm.title = Some("Post".to_string());
-        fm.date = Some(toml::Value::String("not-a-date".to_string()));
+        let fm = Frontmatter {
+            title: Some("Post".to_string()),
+            date: Some(toml::Value::String("not-a-date".to_string())),
+            ..Frontmatter::default()
+        };
         let page = build_page(fm, "content".into(), "posts/bad.md", "https://example.com");
         pages.insert("posts/bad.md".into(), page);
         let sections = HashMap::new();
