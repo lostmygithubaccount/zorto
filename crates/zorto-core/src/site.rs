@@ -839,8 +839,12 @@ fn render_markdown_content(
                     .collect();
             } else {
                 // Execute this single block
-                let errors =
-                    execute::execute_blocks(std::slice::from_mut(block), &working_dir, root);
+                let errors = execute::execute_blocks(
+                    std::slice::from_mut(block),
+                    &working_dir,
+                    root,
+                    config.execute.timeout_seconds,
+                );
                 for err in &errors {
                     eprintln!("warning: {key}: {err}");
                 }
