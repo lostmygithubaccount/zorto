@@ -1,7 +1,10 @@
 //! Zorto webapp — HTMX-based local CMS for managing zorto sites.
 
 use axum::Router;
-use axum::routing::{get, post};
+use axum::extract::State;
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::response::Response;
+use axum::routing::{any, get, post};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -19,6 +22,31 @@ mod sections;
 const DEFAULT_WEBAPP_PORT: u16 = 1112;
 const DEFAULT_PREVIEW_URL: &str = "http://localhost:1111";
 const RELOAD_CHANNEL_CAPACITY: usize = 16;
+
+/// Client-side livereload snippet. Opens a WebSocket to `/__livereload`
+/// and reloads the page on each `"reload"` message. Reconnects with backoff
+/// so that webapp restarts do not leave the page dead.
+pub(crate) const LIVERELOAD_JS: &str = r#"
+<script>
+(function() {
+    var reconnectInterval = 1000;
+    var maxReconnect = 30000;
+    function connect() {
+        var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        var ws = new WebSocket(proto + '//' + location.host + '/__livereload');
+        ws.onmessage = function(event) {
+            if (event.data === 'reload') { location.reload(); }
+        };
+        ws.onclose = function() {
+            setTimeout(connect, reconnectInterval);
+            reconnectInterval = Math.min(reconnectInterval * 1.5, maxReconnect);
+        };
+        ws.onopen = function() { reconnectInterval = 1000; };
+    }
+    connect();
+})();
+</script>
+"#;
 
 pub(crate) struct AppState {
     pub root: PathBuf,
@@ -79,6 +107,7 @@ pub(crate) fn app(state: Arc<AppState>) -> Router {
         .route("/build", post(build::trigger))
         .route("/preview/render", post(build::render_preview))
         .route("/static/htmx.min.js", get(serve_htmx))
+        .route("/__livereload", any(livereload_ws))
         // Onboarding wizard routes
         .route("/setup", get(onboarding::welcome))
         .route(
@@ -154,6 +183,25 @@ async fn serve_htmx() -> impl axum::response::IntoResponse {
         [("content-type", "application/javascript")],
         include_str!("htmx.min.js"),
     )
+}
+
+/// WebSocket upgrade handler for live reload. Subscribes to
+/// [`AppState::reload_tx`] and emits `"reload"` on each broadcast.
+async fn livereload_ws(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+    ws.on_upgrade(move |socket| handle_livereload(socket, state))
+}
+
+async fn handle_livereload(mut socket: WebSocket, state: Arc<AppState>) {
+    let mut rx = state.reload_tx.subscribe();
+    while rx.recv().await.is_ok() {
+        if socket
+            .send(Message::Text(String::from("reload").into()))
+            .await
+            .is_err()
+        {
+            break;
+        }
+    }
 }
 
 pub(crate) fn rebuild_site(state: &AppState) -> Result<(), String> {
