@@ -42,7 +42,11 @@ tera = "1"
 pulldown-cmark = { version = "0.12", features = ["simd"] }
 
 # Syntax highlighting
-syntect = "5"
+# default-fancy swaps the onig (C FFI to Oniguruma) regex backend for
+# fancy-regex (pure Rust), removing a single-maintainer C wrapper from
+# the supply chain. bincode/yaml-rust remain transitive via dump-load
+# and yaml-load sub-features — those require upstream syntect moves.
+syntect = { version = "5", default-features = false, features = ["default-fancy"] }
 
 # SCSS
 grass = "0.13"
