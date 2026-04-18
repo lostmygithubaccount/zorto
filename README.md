@@ -78,3 +78,11 @@ for i in range(5):
 
 > [!TIP]
 > If you're reading elsewhere, see [https://zorto.dev](https://zorto.dev/#executable-code-blocks) for the rendered results of the code blocks above.
+
+## What Zorto is not
+
+- **Not a JavaScript SSG.** The engine is Rust, output is static HTML/CSS. There is no Node toolchain, bundler, or framework runtime.
+- **Not a notebook.** Code blocks execute at build time; the output is static HTML rendered alongside the source. There is no in-browser kernel, no reactive cells, no stateful session.
+- **Not a sandbox.** `{python}` and `{bash}` blocks run in the author's environment with the author's credentials. Treat zorto sites the way you treat a Makefile: trust the author, or pass `--no-exec`.
+- **Not a headless CMS.** The `--webapp` mode is a local single-user editor for your own content tree. It is not multi-tenant and is not meant to be exposed on the public internet.
+- **Not a general-purpose templating engine.** Tera templates are a build-time detail. Zorto renders sites, not arbitrary programs.
