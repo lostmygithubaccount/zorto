@@ -842,4 +842,36 @@ mod tests {
             "DEFAULT_BASE_URL should not be a localhost URL: {DEFAULT_BASE_URL}"
         );
     }
+
+    #[test]
+    fn error_chain_flat_display_surfaces_inner_cause() {
+        // Broken frontmatter: content.rs attaches `.context("in {file}")` over
+        // the toml parse error. The binary uses `{e:#}` to flatten the chain,
+        // so callers see both frames in one line. Lock that in.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(tmp.path().join("content")).unwrap();
+        std::fs::write(
+            tmp.path().join("config.toml"),
+            "title = \"t\"\nbase_url = \"https://example.com\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            tmp.path().join("content/_index.md"),
+            "+++\ntitle = [broken]\n[invalid toml\n+++\nbody\n",
+        )
+        .unwrap();
+        let err = run([
+            "zorto",
+            "--root",
+            tmp.path().to_str().unwrap(),
+            "build",
+        ])
+        .unwrap_err();
+        let flat = format!("{err:#}");
+        assert!(flat.contains("_index.md"), "missing file context: {flat}");
+        assert!(
+            flat.to_lowercase().contains("toml") || flat.contains("parse"),
+            "inner toml parse cause not surfaced by `{{:#}}`: {flat}"
+        );
+    }
 }
