@@ -884,7 +884,10 @@ mod tests {
 
     #[test]
     fn format_duration_second_and_above_uses_decimal_s() {
-        assert_eq!(format_duration(std::time::Duration::from_millis(1000)), "1.00s");
+        assert_eq!(
+            format_duration(std::time::Duration::from_millis(1000)),
+            "1.00s"
+        );
         assert_eq!(
             format_duration(std::time::Duration::from_millis(1234)),
             "1.23s"
@@ -912,13 +915,7 @@ mod tests {
             "+++\ntitle = [broken]\n[invalid toml\n+++\nbody\n",
         )
         .unwrap();
-        let err = run([
-            "zorto",
-            "--root",
-            tmp.path().to_str().unwrap(),
-            "build",
-        ])
-        .unwrap_err();
+        let err = run(["zorto", "--root", tmp.path().to_str().unwrap(), "build"]).unwrap_err();
         let flat = format!("{err:#}");
         assert!(flat.contains("_index.md"), "missing file context: {flat}");
         assert!(
