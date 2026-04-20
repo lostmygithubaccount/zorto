@@ -10,7 +10,7 @@ weight = 50
 ### Left
 
 - Use the `columns` shortcode
-- Split content with `<!-- column -->`
+- Split content with `&lt;!-- column --&gt;`
 
 <!-- column -->
 

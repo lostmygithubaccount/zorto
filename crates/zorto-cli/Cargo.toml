@@ -63,6 +63,7 @@ notify-debouncer-mini = "0.5"
 # Utilities
 anyhow = "1"
 open = "5"
+tempfile = "3"
 
 # Interactive TUI prompts
 dialoguer = "0.11"
@@ -72,4 +73,3 @@ zorto-webapp = { path = "../zorto-webapp", version = "0.23.1", optional = true }
 zorto-app = { path = "../zorto-app", version = "0.23.1", optional = true }
 
 [dev-dependencies]
-tempfile = "3"

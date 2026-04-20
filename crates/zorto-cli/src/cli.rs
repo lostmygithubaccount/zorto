@@ -1,5 +1,5 @@
 use anyhow::Context;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 use crate::serve;
@@ -65,6 +65,31 @@ enum Commands {
         /// Template to use (default, blog, docs, business)
         #[arg(short, long, default_value = "default")]
         template: String,
+    },
+
+    /// Create a new site without prompts
+    New {
+        /// Site directory name
+        name: String,
+
+        /// Preset to scaffold
+        #[arg(long, value_enum, default_value_t = Preset::Site)]
+        preset: Preset,
+    },
+
+    /// Start a temporary demo deck
+    Demo {
+        /// Output directory
+        #[arg(short, long, default_value = DEFAULT_OUTPUT_DIR)]
+        output: PathBuf,
+
+        /// Port number
+        #[arg(short, long, default_value = DEFAULT_PREVIEW_PORT)]
+        port: u16,
+
+        /// Bind address
+        #[arg(long, visible_alias = "host", visible_alias = "bind", default_value = DEFAULT_BIND_ADDRESS)]
+        interface: String,
     },
 
     /// Start preview server with live reload
@@ -134,6 +159,37 @@ enum Commands {
     },
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum Preset {
+    Deck,
+    Blog,
+    Site,
+    Docs,
+}
+
+#[derive(Debug)]
+pub struct CliExit {
+    code: i32,
+}
+
+impl CliExit {
+    fn new(code: i32) -> Self {
+        Self { code }
+    }
+
+    pub fn code(&self) -> i32 {
+        self.code
+    }
+}
+
+impl std::fmt::Display for CliExit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "exited with status {}", self.code)
+    }
+}
+
+impl std::error::Error for CliExit {}
+
 /// Run the zorto CLI with the given arguments.
 ///
 /// This is the main entry point, equivalent to calling `zorto` on the command line.
@@ -197,6 +253,7 @@ where
             drafts,
             base_url,
         } => {
+            ensure_site_exists(&root, &display_root)?;
             let display_output = display_output_path(&display_root, &output);
             let output = resolve_output(&root, output);
             let mut site = site::Site::load(&root, &output, drafts)?;
@@ -215,6 +272,7 @@ where
             open,
             interface,
         } => {
+            ensure_site_exists(&root, &display_root)?;
             let output = resolve_output(&root, output);
             let cfg = serve::ServeConfig {
                 root: &root,
@@ -225,6 +283,31 @@ where
                 interface: &interface,
                 port,
                 open_browser: open,
+            };
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(serve::serve(&cfg))?;
+        }
+        Commands::Demo {
+            output,
+            port,
+            interface,
+        } => {
+            let demo_dir = tempfile::tempdir().context("failed to create demo workspace")?;
+            create_site_with_defaults(demo_dir.path(), "presentation", Some("Demo Deck"))?;
+            let output = resolve_output(demo_dir.path(), output);
+            println!(
+                "Scaffolding demo deck at {}...",
+                demo_dir.path().display()
+            );
+            let cfg = serve::ServeConfig {
+                root: demo_dir.path(),
+                output_dir: &output,
+                drafts: true,
+                no_exec: cli.no_exec,
+                sandbox: sandbox.as_deref(),
+                interface: &interface,
+                port,
+                open_browser: true,
             };
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(serve::serve(&cfg))?;
@@ -257,10 +340,21 @@ where
                 init_site(&root, &target, &template)?;
             }
         }
+        Commands::New { name, preset } => {
+            let target = root.join(&name);
+            create_site_with_defaults(&target, preset.template_name(), None)?;
+            println!(
+                "Created {} (preset: {})",
+                target.display(),
+                preset.to_possible_value().expect("preset value").get_name()
+            );
+            print_next_steps(&root, &target);
+        }
         Commands::Check {
             drafts,
             deny_warnings,
         } => {
+            ensure_site_exists(&root, &display_root)?;
             let output = root.join(DEFAULT_OUTPUT_DIR);
             let mut site = site::Site::load(&root, &output, drafts)?;
             site.no_exec = cli.no_exec;
@@ -312,6 +406,17 @@ fn atty_stdin() -> bool {
     std::io::stdin().is_terminal()
 }
 
+fn ensure_site_exists(root: &std::path::Path, display_root: &std::path::Path) -> anyhow::Result<()> {
+    if root.join("config.toml").exists() {
+        return Ok(());
+    }
+    eprintln!(
+        "No zorto site in {}. Try `zorto new <name>` or `zorto init`.",
+        display_root.display()
+    );
+    Err(CliExit::new(2).into())
+}
+
 fn init_site(
     root: &std::path::Path,
     target: &std::path::Path,
@@ -338,6 +443,65 @@ fn init_site(
     );
     print_next_steps(root, target);
     Ok(())
+}
+
+fn create_site_with_defaults(
+    target: &std::path::Path,
+    template: &str,
+    title_override: Option<&str>,
+) -> anyhow::Result<()> {
+    if target.join("config.toml").exists() {
+        anyhow::bail!(
+            "A zorto site already exists in {} — run `zorto preview` to work with it",
+            target.display()
+        );
+    }
+    if target.join("website").join("config.toml").exists() {
+        anyhow::bail!(
+            "A zorto site already exists in {}/website/ — run `zorto --root website preview` to work with it",
+            target.display()
+        );
+    }
+
+    templates::write_template(target, template)?;
+    let title = title_override
+        .map(std::borrow::ToOwned::to_owned)
+        .unwrap_or_else(|| default_site_title(target));
+    templates::customize_config(
+        target,
+        &title,
+        DEFAULT_BASE_URL,
+        Some("zorto"),
+        None,
+    )?;
+    Ok(())
+}
+
+fn default_site_title(target: &std::path::Path) -> String {
+    target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(title_case_slug)
+        .filter(|title| !title.is_empty())
+        .unwrap_or_else(|| DEFAULT_SITE_TITLE.to_string())
+}
+
+fn title_case_slug(input: &str) -> String {
+    input
+        .split(['-', '_', ' '])
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            let Some(first) = chars.next() else {
+                return String::new();
+            };
+            let mut word = String::new();
+            word.extend(first.to_uppercase());
+            word.push_str(chars.as_str());
+            word
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Print a `Next steps:` block pointing the user at `zorto preview --open`.
@@ -511,6 +675,17 @@ fn interactive_init(
     Ok(())
 }
 
+impl Preset {
+    fn template_name(self) -> &'static str {
+        match self {
+            Self::Deck => "presentation",
+            Self::Blog => "blog",
+            Self::Site => "default",
+            Self::Docs => "docs",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -624,6 +799,32 @@ mod tests {
             }
             _ => panic!("expected Init"),
         }
+    }
+
+    #[test]
+    fn parse_new_with_preset() {
+        let cli = Cli::parse_from(["zorto", "new", "my-deck", "--preset", "deck"]);
+        match cli.command {
+            Some(Commands::New { name, preset }) => {
+                assert_eq!(name, "my-deck");
+                assert_eq!(preset, Preset::Deck);
+            }
+            _ => panic!("expected New"),
+        }
+    }
+
+    #[test]
+    fn title_case_slug_handles_common_names() {
+        assert_eq!(title_case_slug("my-deck"), "My Deck");
+        assert_eq!(title_case_slug("docs_site"), "Docs Site");
+    }
+
+    #[test]
+    fn ensure_site_exists_returns_exit_2() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = ensure_site_exists(dir.path(), dir.path()).unwrap_err();
+        let exit = err.downcast_ref::<CliExit>().expect("CliExit");
+        assert_eq!(exit.code(), 2);
     }
 
     #[test]
