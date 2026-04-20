@@ -10,11 +10,11 @@ cargo clippy --all-targets --all-features --workspace -- -D warnings
 
 echo "Checking for unused dependencies..."
 command -v cargo-machete >/dev/null 2>&1 || cargo install --locked cargo-machete
-cargo machete
+cargo-machete
 
 echo "Checking dependency advisories, licenses, bans, sources..."
 command -v cargo-deny >/dev/null 2>&1 || cargo install --locked cargo-deny
-cargo deny check
+cargo-deny check
 
 echo "Running Rust tests..."
 cargo test --all-targets --all-features --workspace

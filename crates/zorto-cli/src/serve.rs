@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn preview_open_url_prefers_single_presentation_section() {
-        let sections = vec![
+        let sections = [
             Section {
                 title: "Home".into(),
                 description: None,
@@ -581,7 +581,7 @@ mod tests {
 
     #[test]
     fn preview_open_url_falls_back_to_root_for_multiple_presentations() {
-        let sections = vec![
+        let sections = [
             Section {
                 title: "Deck One".into(),
                 description: None,
