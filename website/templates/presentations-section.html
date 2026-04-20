@@ -32,12 +32,12 @@
         gap: 1.5rem;
     }
     .presentation-card {
-        border: 1px solid rgba(128, 128, 160, 0.18);
+        border: 1px solid var(--border-color);
         border-radius: 1.25rem;
         background:
-            radial-gradient(circle at top left, rgba(64, 145, 255, 0.16), transparent 42%),
-            linear-gradient(180deg, rgba(20, 28, 45, 0.96), rgba(10, 14, 24, 0.98));
-        box-shadow: 0 18px 40px rgba(3, 8, 20, 0.28);
+            radial-gradient(circle at top left, var(--accent-alpha-20), transparent 42%),
+            linear-gradient(180deg, var(--background-raised), var(--background));
+        box-shadow: 0 18px 40px var(--accent-alpha-20);
     }
     .presentation-card-body {
         padding: 1.5rem;
@@ -48,7 +48,7 @@
         font-weight: 700;
         letter-spacing: 0.16em;
         text-transform: uppercase;
-        color: #7dd3fc;
+        color: var(--accent);
     }
     .presentation-card h2 {
         margin: 0;
@@ -60,7 +60,7 @@
     .presentation-card-description {
         margin: 0.8rem 0 1rem;
         max-width: 46rem;
-        color: rgba(226, 232, 240, 0.84);
+        color: var(--color);
     }
     .presentation-card-meta {
         display: flex;
@@ -68,11 +68,11 @@
         justify-content: space-between;
         gap: 1rem;
         font-size: 0.95rem;
-        color: rgba(191, 219, 254, 0.82);
+        color: var(--color-muted);
     }
     .presentation-card-cta {
         font-weight: 600;
-        color: #93c5fd;
+        color: var(--accent);
         text-decoration: none;
     }
     @media (max-width: 640px) {
