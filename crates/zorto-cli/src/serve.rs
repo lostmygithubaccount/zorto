@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::sync::broadcast;
+use zorto_core::content::Section;
 
 const RELOAD_CHANNEL_CAPACITY: usize = 16;
 const DEBOUNCE_MS: u64 = 300;
@@ -148,6 +149,7 @@ pub async fn serve(cfg: &ServeConfig<'_>) -> anyhow::Result<()> {
             println!("Hiding {draft_total} draft page(s). Remove --no-drafts to include them.");
         }
     }
+    let open_url = preview_open_url(&base_url, site.sections.values());
 
     // Set up broadcast channel for live reload
     let (reload_tx, _) = broadcast::channel::<LivereloadMsg>(RELOAD_CHANNEL_CAPACITY);
@@ -168,8 +170,9 @@ pub async fn serve(cfg: &ServeConfig<'_>) -> anyhow::Result<()> {
     }
 
     if cfg.open_browser {
-        if let Err(e) = open::that(&url) {
-            eprintln!("Could not open browser ({e}). Visit {url} manually.");
+        println!("Opening {open_url}");
+        if let Err(e) = open::that(&open_url) {
+            eprintln!("Could not open browser ({e}). Visit {open_url} manually.");
         }
     }
 
@@ -249,6 +252,28 @@ pub async fn serve(cfg: &ServeConfig<'_>) -> anyhow::Result<()> {
     drop(debouncer);
 
     Ok(())
+}
+
+fn preview_open_url<'a>(
+    base_url: &str,
+    sections: impl Iterator<Item = &'a Section>,
+) -> String {
+    let presentation_path = sections
+        .filter(|section| section.path != "/")
+        .filter(|section| section.template.as_deref() == Some("presentation.html"))
+        .map(|section| section.path.as_str())
+        .collect::<Vec<_>>();
+    if presentation_path.len() == 1 {
+        return join_preview_url(base_url, presentation_path[0]);
+    }
+    base_url.to_string()
+}
+
+fn join_preview_url(base_url: &str, path: &str) -> String {
+    if path == "/" {
+        return base_url.to_string();
+    }
+    format!("{}{}", base_url.trim_end_matches('/'), path)
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
@@ -517,5 +542,81 @@ mod tests {
         assert!(json.contains(r#"\""#), "got: {json}");
         assert!(json.contains(r"\\"), "got: {json}");
         assert!(json.contains(r"\n"), "got: {json}");
+    }
+
+    #[test]
+    fn preview_open_url_prefers_single_presentation_section() {
+        let sections = vec![
+            Section {
+                title: "Home".into(),
+                description: None,
+                path: "/".into(),
+                permalink: "http://127.0.0.1:1111/".into(),
+                content: String::new(),
+                raw_content: String::new(),
+                pages: vec![],
+                sort_by: None,
+                paginate_by: None,
+                template: None,
+                render_pages: true,
+                extra: Default::default(),
+                relative_path: "_index.md".into(),
+            },
+            Section {
+                title: "Deck".into(),
+                description: None,
+                path: "/intro/".into(),
+                permalink: "http://127.0.0.1:1111/intro/".into(),
+                content: String::new(),
+                raw_content: String::new(),
+                pages: vec![],
+                sort_by: None,
+                paginate_by: None,
+                template: Some("presentation.html".into()),
+                render_pages: false,
+                extra: Default::default(),
+                relative_path: "intro/_index.md".into(),
+            },
+        ];
+        let url = preview_open_url("http://127.0.0.1:1111", sections.iter());
+        assert_eq!(url, "http://127.0.0.1:1111/intro/");
+    }
+
+    #[test]
+    fn preview_open_url_falls_back_to_root_for_multiple_presentations() {
+        let sections = vec![
+            Section {
+                title: "Deck One".into(),
+                description: None,
+                path: "/intro/".into(),
+                permalink: String::new(),
+                content: String::new(),
+                raw_content: String::new(),
+                pages: vec![],
+                sort_by: None,
+                paginate_by: None,
+                template: Some("presentation.html".into()),
+                render_pages: false,
+                extra: Default::default(),
+                relative_path: "intro/_index.md".into(),
+            },
+            Section {
+                title: "Deck Two".into(),
+                description: None,
+                path: "/deep-dive/".into(),
+                permalink: String::new(),
+                content: String::new(),
+                raw_content: String::new(),
+                pages: vec![],
+                sort_by: None,
+                paginate_by: None,
+                template: Some("presentation.html".into()),
+                render_pages: false,
+                extra: Default::default(),
+                relative_path: "deep-dive/_index.md".into(),
+            },
+        ];
+        let url = preview_open_url("http://127.0.0.1:1111", sections.iter());
+        assert_eq!(url, "http://127.0.0.1:1111");
     }
 }

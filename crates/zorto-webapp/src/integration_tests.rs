@@ -1313,6 +1313,8 @@ async fn setup_template_page_returns_ok() {
     assert!(body.contains("Choose a template"));
     assert!(body.contains("blog"));
     assert!(body.contains("docs"));
+    assert!(body.contains("presentation"));
+    assert_eq!(body.matches("name=\"template\" value=\"").count(), 5);
 }
 
 // ── Asset delete ──────────────────────────────────────────────────

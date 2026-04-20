@@ -56,6 +56,11 @@ pub async fn template(State(state): State<Arc<AppState>>) -> impl IntoResponse {
             "Business",
             "Minimal landing page template. Best for company sites and portfolios.",
         ),
+        (
+            "presentation",
+            "Slide deck",
+            "reveal.js deck with one markdown file per slide. Layouts, themes, speaker notes built in.",
+        ),
     ];
 
     let cards: String = templates
@@ -95,7 +100,7 @@ pub async fn template(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 /// Handle template selection, redirect to theme step.
 pub async fn template_submit(axum::Form(form): axum::Form<TemplateForm>) -> impl IntoResponse {
     let t = &form.template;
-    let valid = ["default", "blog", "docs", "business"];
+    let valid = ["default", "blog", "docs", "business", "presentation"];
     let template = if valid.contains(&t.as_str()) {
         t
     } else {
