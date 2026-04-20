@@ -10,5 +10,5 @@ render_pages = false
 width = 1050
 height = 700
 transition = "slide"
-reveal_theme = "black"
+reveal_theme = "moon"
 +++

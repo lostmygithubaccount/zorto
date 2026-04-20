@@ -2,7 +2,7 @@
 {% block title %}{{ section.title | default(value=config.title) }}{% endblock title %}
 {% block content %}
 <div class="page-content">
-    <div class="posts">
+    <div class="presentations-list">
         {%- if section.content %}
         <div class="post">
             <div class="post-content">{{ section.content | safe }}</div>
@@ -10,17 +10,76 @@
         {% endif %}
         {%- for child_path in section.extra.presentations %}
         {%- set pres = get_section(path=child_path) %}
-        <div class="post on-list">
-            <div class="post-header">
+        <article class="presentation-card">
+            <div class="presentation-card-body">
+                <p class="presentation-card-kicker">Presentation</p>
                 <h2><a href="{{ pres.path }}">{{ pres.title }}</a></h2>
+                {%- if pres.description %}
+                <p class="presentation-card-description">{{ pres.description }}</p>
+                {%- endif %}
+                <div class="presentation-card-meta">
+                    <span>{{ pres.pages | length }} slides</span>
+                    <a class="presentation-card-cta" href="{{ pres.path }}">Launch deck &rarr;</a>
+                </div>
             </div>
-            {%- if pres.description %}
-            <div class="post-content">
-                <p>{{ pres.description }}</p>
-            </div>
-            {%- endif %}
-        </div>
+        </article>
         {%- endfor %}
     </div>
 </div>
+<style>
+    .presentations-list {
+        display: grid;
+        gap: 1.5rem;
+    }
+    .presentation-card {
+        border: 1px solid rgba(128, 128, 160, 0.18);
+        border-radius: 1.25rem;
+        background:
+            radial-gradient(circle at top left, rgba(64, 145, 255, 0.16), transparent 42%),
+            linear-gradient(180deg, rgba(20, 28, 45, 0.96), rgba(10, 14, 24, 0.98));
+        box-shadow: 0 18px 40px rgba(3, 8, 20, 0.28);
+    }
+    .presentation-card-body {
+        padding: 1.5rem;
+    }
+    .presentation-card-kicker {
+        margin: 0 0 0.55rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #7dd3fc;
+    }
+    .presentation-card h2 {
+        margin: 0;
+        font-size: clamp(1.4rem, 2vw, 1.9rem);
+    }
+    .presentation-card h2 a {
+        text-decoration: none;
+    }
+    .presentation-card-description {
+        margin: 0.8rem 0 1rem;
+        max-width: 46rem;
+        color: rgba(226, 232, 240, 0.84);
+    }
+    .presentation-card-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        font-size: 0.95rem;
+        color: rgba(191, 219, 254, 0.82);
+    }
+    .presentation-card-cta {
+        font-weight: 600;
+        color: #93c5fd;
+        text-decoration: none;
+    }
+    @media (max-width: 640px) {
+        .presentation-card-meta {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+</style>
 {% endblock content %}

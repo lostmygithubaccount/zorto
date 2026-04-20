@@ -60,6 +60,67 @@
     <link rel="icon" type="{{ config.extra.favicon_mimetype | default(value='image/png') }}" href="{{ config.extra.favicon }}">
     {%- endif %}
     <style>
+        :root {
+            color-scheme: dark;
+        }
+        body {
+            margin: 0;
+            background: #020617;
+        }
+        .presentation-topbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 32px;
+            padding: 0 12px;
+            background: rgba(2, 6, 23, 0.82);
+            border-bottom: 1px solid rgba(125, 211, 252, 0.16);
+            backdrop-filter: blur(14px);
+            color: rgba(226, 232, 240, 0.92);
+            font: 500 12px/1.1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            letter-spacing: 0.01em;
+        }
+        .presentation-topbar a {
+            color: #93c5fd;
+            text-decoration: none;
+        }
+        .presentation-topbar__title {
+            overflow: hidden;
+            padding: 0 12px;
+            font-weight: 600;
+            text-align: center;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .presentation-topbar__keys {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .presentation-topbar__key {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 22px;
+            height: 20px;
+            padding: 0 6px;
+            border: 1px solid rgba(148, 163, 184, 0.24);
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.78);
+            color: rgba(226, 232, 240, 0.92);
+        }
+        .presentation-shell {
+            min-height: 100vh;
+            padding-top: 32px;
+        }
+        .presentation-shell .reveal {
+            height: calc(100vh - 32px);
+        }
         /* Zorto presentation overrides */
         .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
             text-transform: none;
@@ -79,11 +140,11 @@
             overflow-y: auto;
             overflow-x: hidden;
             scrollbar-width: thin;
-            scrollbar-color: rgba(124, 58, 237, 0.4) transparent;
+            scrollbar-color: rgba(96, 165, 250, 0.22) transparent;
         }
         .reveal .slides > section > .slide-content::-webkit-scrollbar { width: 8px; }
         .reveal .slides > section > .slide-content::-webkit-scrollbar-thumb {
-            background: rgba(124, 58, 237, 0.4);
+            background: rgba(96, 165, 250, 0.22);
             border-radius: 4px;
         }
         .reveal .slide-columns {
@@ -191,11 +252,46 @@
         .logo-glow { animation: logo-glow 2.8s ease-in-out infinite; }
         .logo-sway { animation: logo-sway 4s ease-in-out infinite; }
         .logo-fade-in { animation: logo-fade-in 1s ease-out both; }
+        @media (prefers-reduced-motion: reduce) {
+            .reveal .slides section .fragment,
+            .logo-float,
+            .logo-pulse,
+            .logo-spin-in,
+            .logo-glow,
+            .logo-sway,
+            .logo-fade-in {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+        :fullscreen .presentation-topbar,
+        .presentation-shell:fullscreen .presentation-topbar,
+        .reveal:fullscreen ~ .presentation-topbar {
+            display: none;
+        }
+        :fullscreen .presentation-shell,
+        .presentation-shell:fullscreen {
+            padding-top: 0;
+        }
+        :fullscreen .presentation-shell .reveal,
+        .presentation-shell:fullscreen .reveal {
+            height: 100vh;
+        }
     </style>
 </head>
 <body>
-    <div class="reveal">
-        <div class="slides">
+    <div class="presentation-shell">
+        <div class="presentation-topbar">
+            <a href="/presentations/">&larr; Zorto</a>
+            <div class="presentation-topbar__title">{{ section.title }}</div>
+            <div class="presentation-topbar__keys">
+                <span class="presentation-topbar__key" title="Fullscreen">F</span>
+                <span class="presentation-topbar__key" title="Speaker notes">S</span>
+                <span class="presentation-topbar__key" title="Overview">ESC</span>
+            </div>
+        </div>
+        <div class="reveal">
+            <div class="slides">
             {%- for page in section.pages %}
             {%- set page_theme = page.extra.reveal_theme | default(value="") -%}
             {%- if page_theme and page_theme not in known_themes -%}{%- set page_theme = "" -%}{%- endif -%}
@@ -223,6 +319,7 @@
                 </div>
             </section>
             {%- endfor %}
+            </div>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"
