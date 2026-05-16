@@ -36,7 +36,7 @@ Currently, the executable code blocks are quite limited. I want to add support f
 
 ## ~~Built-in search~~ (done)
 
-Zorto now ships with built-in full-text search. Set `generate_search = true` in `config.toml` and Zorto generates a SQLite FTS5 search index at build time. The built-in themes include a search UI powered by sql.js (SQLite compiled to WebAssembly) — no external services, no API keys, entirely client-side.
+Zorto now ships with built-in search. Set `generate_search = true` in `config.toml` and Zorto generates a SQLite search database at build time. The built-in themes include a search UI powered by sql.js (SQLite compiled to WebAssembly) — no external services, no API keys, entirely client-side.
 
 ## Ease of use
 

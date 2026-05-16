@@ -109,13 +109,13 @@ When `generate_md_files = true` is also set, `llms.txt` links point to the `.md`
 
 ## Built-in search
 
-Zorto can generate a SQLite FTS5 search index for client-side search:
+Zorto can generate a SQLite search database for client-side search:
 
 ```toml
 generate_search = true
 ```
 
-This generates a `search.db` file in your output directory containing a full-text search index of all pages and sections. The built-in themes include a search UI that queries this database using sql.js (SQLite compiled to WebAssembly).
+This generates a `search.db` file in your output directory containing every page and section. The built-in themes include a search UI that queries this database using sql.js (SQLite compiled to WebAssembly).
 
 The search index supports:
 

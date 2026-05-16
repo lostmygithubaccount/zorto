@@ -42,11 +42,11 @@ pub struct Config {
     /// Taxonomy definitions (default: a single `"tags"` taxonomy).
     #[serde(default, skip_serializing)]
     pub taxonomies: Vec<TaxonomyConfig>,
-    /// Generate a SQLite FTS5 search index at `/search.db` (default: `false`).
+    /// Generate a SQLite search database at `/search.db` (default: `false`).
     ///
     /// When enabled, a `search.db` file is generated at build time containing
-    /// a full-text search index of all pages. The client-side uses sql.js
-    /// (SQLite WASM) to query the database in the browser.
+    /// all pages. The client-side uses sql.js (SQLite WASM) to query the
+    /// database in the browser.
     #[serde(default)]
     pub generate_search: bool,
     /// Generate `.md` output files alongside HTML for every page (default: `false`).

@@ -95,7 +95,7 @@ Domain names exist so humans don't have to remember these numbers. DNS translate
 
 ### Static site
 
-A website made entirely of pre-built files — HTML, CSS, JavaScript, images — served directly to browsers. The server just sends files; it doesn't run code, query a database, or generate pages on the fly.
+A website made entirely of pre-built files — HTML, CSS, JavaScript, images, and optional static data files — served directly to browsers. The server just sends files; it doesn't run application code, query a server-side database, or generate pages on the fly.
 
 {{ compare(left_title="Static site", left="Pre-built files. Served from CDN. No server-side code. Zorto is a static site generator.", right_title="Dynamic site", right="Generated per request. Requires a running server and database. WordPress, Rails, Django.") }}
 

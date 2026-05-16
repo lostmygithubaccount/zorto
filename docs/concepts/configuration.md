@@ -71,7 +71,7 @@ author = "Your Name"
 | `generate_sitemap` | bool | `true` | Generate sitemap.xml |
 | `generate_llms_txt` | bool | `true` | Generate llms.txt and llms-full.txt |
 | `generate_md_files` | bool | `false` | Generate .md versions of every page alongside HTML |
-| `generate_search` | bool | `false` | Generate SQLite FTS5 search index |
+| `generate_search` | bool | `false` | Generate a SQLite search database |
 | `compile_all_themes` | bool | `false` | Compile CSS for every built-in theme |
 | `default_language` | string | `"en"` | Default language code |
 

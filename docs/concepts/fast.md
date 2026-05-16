@@ -17,7 +17,7 @@ Typical result: under 1 second total. The build pipeline itself takes ~50ms; the
 - **Rust.** Compiled to native code. No garbage collector pauses.
 - **Efficient pipeline.** Minimal allocations, streaming I/O, parallel page rendering.
 - **Embedded themes.** Templates and styles compiled into the binary.
-- **Self-contained.** No runtime dependencies. Python is optional (for executable code blocks).
+- **Self-contained.** No server-side runtime dependencies for published sites. Python is optional at build time for executable code blocks.
 
 ## In practice
 

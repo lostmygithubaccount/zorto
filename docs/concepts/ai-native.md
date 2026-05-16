@@ -6,7 +6,7 @@ Zorto is a static site generator built for workflows where humans and AI agents 
 
 - **Explicit contracts.** One `config.toml` and markdown files with TOML frontmatter. No implicit file conventions or magic directories.
 - **Markdown-first content.** AI models understand markdown natively. No proprietary content formats.
-- **Predictable output.** Same input produces the same output. No runtime state, no database, no visitor-side side effects.
+- **Predictable output.** Same input produces the same output. No server-side runtime state, no server-side database, no visitor-side writes.
 - **Strings in config, not templates.** Text content belongs in `config.toml` or frontmatter, not hard-coded in HTML.
 - **Executable code blocks.** Dynamic output at build time, baked into static HTML.
 

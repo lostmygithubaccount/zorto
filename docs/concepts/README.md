@@ -14,6 +14,7 @@ Core concepts behind how Zorto works. Each page explains a feature in depth — 
 - [Blog, events, and more](blog.md): sections, pagination, taxonomies, feeds
 - [Themes](themes.md): built-in themes, overrides, light/dark mode
 - [Search](search.md): client-side SQLite search via WASM
+- [Data apps](data-apps.md): experimental static dashboards backed by shipped database files
 - [Live reload](live-reload.md): dev server with automatic rebuilds
 - [Glossary](glossary.md): quick-reference definitions for web and SSG terms
 

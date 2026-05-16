@@ -98,7 +98,7 @@ generate_llms_txt = false
 
 ### Search index
 
-The SQLite FTS5 search index (`generate_search = true`) builds a `search.db` file containing all page content. For large sites, this file can be several megabytes. If search is not needed, leave it disabled (the default).
+The SQLite search database (`generate_search = true`) builds a `search.db` file containing all page content. For large sites, this file can be several megabytes. If search is not needed, leave it disabled (the default).
 
 ## Build output summary
 
