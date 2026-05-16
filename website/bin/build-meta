@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+WEBSITE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$WEBSITE_DIR/.." && pwd)"
+
+cd "$WEBSITE_DIR"
+exec uv run --locked --script "$WEBSITE_DIR/pipelines/build_meta.py" \
+  --repo-root "$REPO_ROOT" \
+  --website-dir "$WEBSITE_DIR" \
+  "$@"

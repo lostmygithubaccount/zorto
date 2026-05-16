@@ -8,3 +8,6 @@ __pycache__/
 *.so
 *.dSYM/
 TODO.md
+!website/static/data/
+!website/static/data/meta.ddb
+!website/pipelines/build_meta.py.lock

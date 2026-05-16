@@ -45,6 +45,7 @@ menu_items = [
 
 menu_items_right = [
   { name = "llms.txt", url = "/llms.txt" },
+  { name = "Analytics", url = "/analytics/" },
   { name = "Presentations", url = "/presentations/" },
   { name = "Blog", url = "/posts" },
 ]
@@ -57,7 +58,6 @@ hero_title = "Zorto"
 hero_subtitle = "The AI-native static site generator (SSG) with executable code blocks."
 hero_actions = [
   { name = "Get started", url = "/docs/getting-started/", style = "default" },
-  { name = "See a slide deck", url = "/presentations/intro-to-zorto/", style = "outline" },
   { name = "GitHub", url = "https://github.com/dkdc-io/zorto", style = "outline", external = true },
 ]
 

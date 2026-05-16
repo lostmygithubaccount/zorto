@@ -775,6 +775,73 @@
 }
 
 // ========================================
+// Navbar actions menu
+// ========================================
+
+.navbar-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  &__btn {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    color: var(--color-muted);
+    border: 1px solid var(--border-color);
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    font-family: inherit;
+    line-height: 1.54;
+    box-sizing: border-box;
+  }
+
+  &__chevron {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s;
+  }
+
+  &:has(&__menu:not([hidden])) &__chevron {
+    transform: rotate(180deg);
+  }
+
+  &__menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 190px;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--background-raised);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    z-index: 100;
+
+    &[hidden] { display: none; }
+  }
+
+  &__item {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 5px;
+    color: var(--color);
+    font-size: 0.86rem;
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s;
+
+    &:hover {
+      color: var(--accent);
+      background: var(--accent-alpha-20);
+    }
+  }
+}
+
+// ========================================
 // Theme Switcher
 // ========================================
 

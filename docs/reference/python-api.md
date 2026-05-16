@@ -35,6 +35,17 @@ zorto.run_cli(["build"])              # same as `zorto build`
 zorto.run_cli(["preview", "--open"])  # same as `zorto preview --open`
 ```
 
-## API reference
+## API surface
 
-{{ pyref(module="zorto", exclude="main,core", recursive="false") }}
+The Python package exposes a small wrapper around the Rust engine:
+
+| Name | Kind | Purpose |
+| --- | --- | --- |
+| `build(root=".")` | Function | Build a site from Python. |
+| `load(root=".")` | Function | Load a site and inspect its config, sections, and pages. |
+| `run_cli(argv=None)` | Function | Run the Zorto CLI from Python. |
+| `version()` | Function | Return the installed Zorto version. |
+| `Config` | Class | Site configuration. |
+| `Site` | Class | Loaded site model. |
+| `Page` | Class | Renderable content page. |
+| `Section` | Class | Content section with child pages. |

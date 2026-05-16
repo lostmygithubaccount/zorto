@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}{{ section.title }} | {{ config.title }}{% endblock title %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ get_url(path="analytics.css") | safe }}">
+{% endblock extra_head %}
+
+{% block content %}
+<article class="analytics-page" data-analytics-page>
+  <header class="analytics-hero">
+    <p class="analytics-hero__eyebrow">local metadata, shipped as DuckDB</p>
+    <h1 class="analytics-hero__title">{{ section.title }}</h1>
+    {%- if section.description %}
+    <p class="analytics-hero__description">{{ section.description }}</p>
+    {%- endif %}
+    {%- if section.content %}
+    <div class="analytics-hero__body">{{ section.content | safe }}</div>
+    {%- endif %}
+  </header>
+
+  <section class="analytics-loader" aria-labelledby="analytics-loader-title">
+    <div>
+      <h2 id="analytics-loader-title">Open the observatory</h2>
+      <p>Loads the public <code>/data/meta.ddb</code> database and renders every view locally in your browser.</p>
+    </div>
+    <div class="analytics-loader__controls">
+      <button class="button" type="button" data-analytics-load>Load analytics</button>
+      <p class="analytics-loader__status" data-analytics-status aria-live="polite">idle</p>
+    </div>
+  </section>
+
+  <section class="analytics-dashboard" data-analytics-dashboard hidden>
+    <nav class="analytics-tabs" aria-label="Analytics views">
+      <button class="analytics-tab" type="button" data-view-toggle="overview" aria-pressed="true">Overview</button>
+      <button class="analytics-tab" type="button" data-view-toggle="content" aria-pressed="false">Content</button>
+      <button class="analytics-tab" type="button" data-view-toggle="build" aria-pressed="false">Build</button>
+      <button class="analytics-tab" type="button" data-view-toggle="data" aria-pressed="false">Data</button>
+    </nav>
+
+    <section class="analytics-view" data-view="overview">
+      <div class="analytics-kpis" data-analytics-kpis></div>
+      <div class="analytics-signals" data-analytics-signals></div>
+      <div class="analytics-panels">
+        <section class="analytics-panel analytics-panel--wide">
+          <div class="analytics-panel__header">
+            <h2>Commit activity</h2>
+            <p>Local history, line movement, and working tree pulse.</p>
+          </div>
+          <div class="analytics-chart" data-chart="commit-activity"></div>
+        </section>
+        <section class="analytics-panel">
+          <div class="analytics-panel__header">
+            <h2>Build duration</h2>
+            <p>Recorded metadata generation runs.</p>
+          </div>
+          <div class="analytics-chart" data-chart="build-duration"></div>
+        </section>
+        <section class="analytics-panel">
+          <div class="analytics-panel__header">
+            <h2>Public data inventory</h2>
+            <p>Tables stored inside <code>meta.ddb</code>.</p>
+          </div>
+          <div class="analytics-table-wrap">
+            <table class="analytics-table">
+              <thead><tr><th>Table</th><th>Rows</th></tr></thead>
+              <tbody data-table="db-tables"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="analytics-view" data-view="content" hidden>
+      <div class="analytics-panels">
+        <section class="analytics-panel">
+          <div class="analytics-panel__header">
+            <h2>Content freshness</h2>
+            <p>Tracked docs and pages grouped by last commit age.</p>
+          </div>
+          <div class="analytics-chart" data-chart="content-freshness"></div>
+        </section>
+        <section class="analytics-panel">
+          <div class="analytics-panel__header">
+            <h2>Top terms</h2>
+            <p>Search-shaped language from public docs and content.</p>
+          </div>
+          <div class="analytics-chart" data-chart="top-terms"></div>
+        </section>
+      </div>
+      <div class="analytics-tables">
+        <section class="analytics-table-panel">
+          <div class="analytics-panel__header">
+            <h2>Largest content files</h2>
+          </div>
+          <div class="analytics-table-wrap">
+            <table class="analytics-table">
+              <thead><tr><th>Path</th><th>Kind</th><th>Words</th><th>Updated</th></tr></thead>
+              <tbody data-table="content-files"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="analytics-table-panel">
+          <div class="analytics-panel__header">
+            <h2>Local link checks</h2>
+          </div>
+          <div class="analytics-table-wrap">
+            <table class="analytics-table">
+              <thead><tr><th>Source</th><th>Target</th><th>Status</th></tr></thead>
+              <tbody data-table="links"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="analytics-view" data-view="build" hidden>
+      <div class="analytics-panels">
+        <section class="analytics-panel">
+          <div class="analytics-panel__header">
+            <h2>Output footprint</h2>
+            <p>Generated files by kind and extension.</p>
+          </div>
+          <div class="analytics-chart" data-chart="output-footprint"></div>
+        </section>
+        <section class="analytics-panel">
+          <div class="analytics-panel__header">
+            <h2>Output mix</h2>
+            <p>Bytes by generated artifact kind.</p>
+          </div>
+          <div class="analytics-chart" data-chart="output-mix"></div>
+        </section>
+      </div>
+      <div class="analytics-tables">
+        <section class="analytics-table-panel">
+          <div class="analytics-panel__header">
+            <h2>Largest generated outputs</h2>
+          </div>
+          <div class="analytics-table-wrap">
+            <table class="analytics-table">
+              <thead><tr><th>Path</th><th>Kind</th><th>Extension</th><th>Bytes</th></tr></thead>
+              <tbody data-table="outputs"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="analytics-table-panel">
+          <div class="analytics-panel__header">
+            <h2>Packages</h2>
+          </div>
+          <div class="analytics-table-wrap">
+            <table class="analytics-table">
+              <thead><tr><th>Name</th><th>Version</th><th>Ecosystem</th><th>Manifest</th></tr></thead>
+              <tbody data-table="packages"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="analytics-view" data-view="data" hidden>
+      <section class="analytics-query">
+        <div class="analytics-panel__header">
+          <h2>Readonly SQL console</h2>
+          <p>Saved queries run against the attached <code>meta.main</code> schema.</p>
+        </div>
+        <div class="analytics-query__presets" data-query-presets></div>
+        <textarea class="analytics-query__editor" data-query-editor spellcheck="false"></textarea>
+        <div class="analytics-query__bar">
+          <button class="button" type="button" data-query-run>Run query</button>
+          <p class="analytics-query__status" data-query-status aria-live="polite"></p>
+        </div>
+        <div class="analytics-table-wrap">
+          <table class="analytics-table">
+            <thead data-query-head></thead>
+            <tbody data-query-body></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </section>
+</article>
+{% endblock content %}
+
+{% block extra_body %}
+<script type="module" src="{{ get_url(path="js/analytics-dashboard.js") | safe }}"></script>
+{% endblock extra_body %}

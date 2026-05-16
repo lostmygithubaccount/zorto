@@ -90,12 +90,26 @@
         {%- endfor %}
         </ul>
         {%- endif %}
-        {%- if config.extra.menu_items_right %}
+        {%- if config.extra.menu_items_right or config.compile_all_themes %}
         <div class="navbar__right-items">
+        {%- if config.extra.menu_items_right %}
         {%- for item in config.extra.menu_items_right %}
+        {%- if loop.first %}
+        <div class="navbar-actions" id="navbar-actions">
+            <button class="navbar-actions__btn navbar__right-btn" aria-label="More navigation links" aria-expanded="false" title="More">
+                <span>More</span>
+                <svg class="navbar-actions__chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="navbar-actions__menu" id="navbar-actions-menu" hidden>
+        {%- endif %}
             {%- set item_url = item.url | replace(from="$BASE_URL", to=config.base_url) %}
-            <a href="{{ item_url }}" class="navbar__right-btn"{% if item.external | default(value=false) %} target="_blank" rel="noopener"{% endif %}>{{ item.name }}</a>
+                <a href="{{ item_url }}" class="navbar-actions__item"{% if item.external | default(value=false) %} target="_blank" rel="noopener"{% endif %}>{{ item.name }}</a>
+        {%- if loop.last %}
+            </div>
+        </div>
+        {%- endif %}
         {%- endfor %}
+        {%- endif %}
         {%- if config.compile_all_themes %}
         <div class="theme-switcher" id="theme-switcher">
             <button class="theme-switcher__btn navbar__right-btn" aria-label="Themes" title="Switch theme">
@@ -191,6 +205,33 @@
     if (!localStorage.getItem('theme')) {
       setTheme(e.matches ? 'light' : 'dark');
     }
+  });
+})();
+</script>
+<script>
+(function() {
+  var actions = document.getElementById('navbar-actions');
+  if (!actions) return;
+  var btn = actions.querySelector('.navbar-actions__btn');
+  var menu = document.getElementById('navbar-actions-menu');
+  function closeMenu() {
+    menu.setAttribute('hidden', '');
+    btn.setAttribute('aria-expanded', 'false');
+  }
+  btn.addEventListener('click', function() {
+    var isOpen = !menu.hasAttribute('hidden');
+    if (isOpen) {
+      closeMenu();
+    } else {
+      menu.removeAttribute('hidden');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+  });
+  document.addEventListener('click', function(e) {
+    if (!actions.contains(e.target)) closeMenu();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeMenu();
   });
 })();
 </script>
