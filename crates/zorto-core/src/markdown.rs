@@ -137,7 +137,8 @@ pub fn render_markdown(
                 if config.insert_anchor_links == AnchorLinks::Right {
                     let anchor_html = format!(
                         " <a class=\"zorto-anchor\" href=\"#{}\" aria-label=\"Anchor link for: {}\">#</a>",
-                        id, heading_text
+                        escape_xml(&id),
+                        escape_xml(&heading_text)
                     );
                     events.push(Event::Html(CowStr::from(anchor_html)));
                 }
@@ -440,6 +441,21 @@ mod tests {
         assert!(html.contains("zorto-anchor"));
         assert!(html.contains("href=\"#hello-world\""));
         assert!(html.contains("id=\"hello-world\""));
+    }
+
+    #[test]
+    fn test_render_heading_anchor_escapes_aria_label() {
+        let mut config = default_config();
+        config.insert_anchor_links = AnchorLinks::Right;
+        let mut blocks = Vec::new();
+        let html = render_markdown(
+            r#"## Bad "quote""#,
+            &config,
+            &mut blocks,
+            "https://example.com",
+        );
+        assert!(html.contains("aria-label=\"Anchor link for: Bad &quot;quote&quot;\""));
+        assert!(!html.contains(r#"aria-label="Anchor link for: Bad "quote""#));
     }
 
     #[test]

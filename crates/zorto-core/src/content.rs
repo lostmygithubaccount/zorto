@@ -704,6 +704,10 @@ pub fn assign_pages_to_sections(
     sections: &mut HashMap<String, Section>,
     pages: &HashMap<String, Page>,
 ) {
+    for section in sections.values_mut() {
+        section.pages.clear();
+    }
+
     for (rel_path, page) in pages {
         let key = section_key_for(rel_path);
         if let Some(section) = sections.get_mut(&key) {
@@ -1366,6 +1370,36 @@ Content goes here"#;
         // Default sort is by date descending
         assert_eq!(section.pages[0].title, "Post B"); // newer
         assert_eq!(section.pages[1].title, "Post A"); // older
+    }
+
+    #[test]
+    fn test_assign_pages_to_sections_is_idempotent() {
+        let mut sections = HashMap::new();
+        let fm = Frontmatter {
+            title: Some("Blog".into()),
+            ..Default::default()
+        };
+        sections.insert(
+            "posts/_index.md".to_string(),
+            build_section(fm, "".into(), "posts/_index.md", "https://example.com"),
+        );
+
+        let mut pages = HashMap::new();
+        let fm = Frontmatter {
+            title: Some("Post A".into()),
+            ..Default::default()
+        };
+        pages.insert(
+            "posts/a.md".to_string(),
+            build_page(fm, "body a".into(), "posts/a.md", "https://example.com"),
+        );
+
+        assign_pages_to_sections(&mut sections, &pages);
+        assign_pages_to_sections(&mut sections, &pages);
+
+        let section = sections.get("posts/_index.md").unwrap();
+        assert_eq!(section.pages.len(), 1);
+        assert_eq!(section.pages[0].title, "Post A");
     }
 
     #[test]

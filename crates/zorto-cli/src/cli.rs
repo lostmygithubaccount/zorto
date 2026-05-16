@@ -325,6 +325,8 @@ where
         Commands::Clean { output, cache } => {
             let display_output = display_output_path(&display_root, &output);
             let output = resolve_output(&root, output);
+            let extra_protected_dirs = configured_content_dirs(&root)?;
+            site::validate_output_dir(&root, &output, &extra_protected_dirs)?;
             if output.exists() {
                 std::fs::remove_dir_all(&output)?;
                 println!("Removed {}", display_output.display());
@@ -421,6 +423,19 @@ fn resolve_sandbox(sandbox: &Option<PathBuf>) -> anyhow::Result<Option<PathBuf>>
         }
         None => Ok(None),
     }
+}
+
+fn configured_content_dirs(root: &std::path::Path) -> anyhow::Result<Vec<PathBuf>> {
+    if !root.join("config.toml").exists() {
+        return Ok(Vec::new());
+    }
+
+    let config = zorto_core::config::Config::load(root)?;
+    Ok(config
+        .content_dirs
+        .iter()
+        .map(|dir| root.join(&dir.path))
+        .collect())
 }
 
 /// Check if stdin is a TTY.
@@ -710,6 +725,7 @@ impl Preset {
 mod tests {
     use super::*;
     use clap::{CommandFactory, Parser};
+    use tempfile::TempDir;
 
     #[test]
     fn parse_skill_install() {
@@ -807,6 +823,56 @@ mod tests {
         let err = result.unwrap_err().to_string();
         assert!(err.contains("--root"), "got: {err}");
         assert!(err.contains("does not exist"), "got: {err}");
+    }
+
+    #[test]
+    fn clean_rejects_site_root_output() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("site");
+        std::fs::create_dir_all(root.join("content")).unwrap();
+        std::fs::write(
+            root.join("config.toml"),
+            r#"base_url = "https://example.com""#,
+        )
+        .unwrap();
+
+        let err = run([
+            "zorto",
+            "--root",
+            root.to_str().unwrap(),
+            "clean",
+            "-o",
+            ".",
+        ])
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("site root"), "got: {err}");
+        assert!(root.join("config.toml").exists());
+    }
+
+    #[test]
+    fn clean_rejects_content_output() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("site");
+        std::fs::create_dir_all(root.join("content")).unwrap();
+        std::fs::write(
+            root.join("config.toml"),
+            r#"base_url = "https://example.com""#,
+        )
+        .unwrap();
+
+        let err = run([
+            "zorto",
+            "--root",
+            root.to_str().unwrap(),
+            "clean",
+            "-o",
+            "content",
+        ])
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("protected source"), "got: {err}");
+        assert!(root.join("content").exists());
     }
 
     #[test]

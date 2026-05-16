@@ -411,7 +411,7 @@ fn builtin_tabs(args_str: &str, body: Option<&str>) -> anyhow::Result<String> {
         let active = if i == 0 { " tabs__btn--active" } else { "" };
         html.push_str(&format!(
             "<button class=\"tabs__btn{active}\" data-tab-idx=\"{i}\">{}</button>",
-            label.trim()
+            escape_html(label.trim())
         ));
     }
     html.push_str("\n</div>\n");
@@ -517,7 +517,14 @@ fn builtin_figure(args_str: &str) -> anyhow::Result<String> {
     let width = args.get("width");
 
     let width_attr = match width {
-        Some(w) => format!(r#" style="width: {}""#, escape_html(w)),
+        Some(w) => {
+            if !is_safe_css_length(w) {
+                anyhow::bail!(
+                    "figure shortcode: width must be a safe CSS length, percentage, `0`, or `auto`"
+                );
+            }
+            format!(r#" style="width: {}""#, escape_html(w.trim()))
+        }
         None => String::new(),
     };
 
@@ -2844,6 +2851,13 @@ mod tests {
     }
 
     #[test]
+    fn test_figure_rejects_unsafe_width() {
+        let result = builtin_figure(r#"src="/img/pic.png", width="1px; color: red""#);
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("width"), "got: {err}");
+    }
+
+    #[test]
     fn test_figure_no_caption() {
         let result = builtin_figure(r#"src="/img/pic.png""#).unwrap();
         assert!(!result.contains("figcaption"));
@@ -2882,6 +2896,17 @@ mod tests {
         let result = builtin_tabs(r#"labels="A|B""#, None);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("requires a body"));
+    }
+
+    #[test]
+    fn test_tabs_escape_labels() {
+        let result = builtin_tabs(
+            r#"labels="<img src=x onerror=alert(1)>|B""#,
+            Some("First\n<!-- tab -->\nSecond"),
+        )
+        .unwrap();
+        assert!(!result.contains("<img"));
+        assert!(result.contains("&lt;img src=x onerror=alert(1)&gt;"));
     }
 
     // --- Nested shortcode test ---

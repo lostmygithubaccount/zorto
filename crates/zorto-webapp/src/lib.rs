@@ -133,6 +133,10 @@ pub(crate) fn app(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
+pub(crate) fn webapp_bind_addr(port: u16) -> SocketAddr {
+    SocketAddr::from(([127, 0, 0, 1], port))
+}
+
 /// Run the zorto webapp server.
 ///
 /// Starts an HTMX-based CMS webapp for managing the site at the given root directory.
@@ -144,12 +148,12 @@ pub fn run_webapp(root: &Path, output_dir: &Path, sandbox: Option<&Path>) -> any
         // Bind listener first so we know the actual port. The preview base
         // URL bakes the port into every rebuilt site's internal links.
         let port: u16 = DEFAULT_WEBAPP_PORT;
-        let addr = SocketAddr::from(([0, 0, 0, 0], port));
+        let addr = webapp_bind_addr(port);
         let listener = match tokio::net::TcpListener::bind(addr).await {
             Ok(l) => l,
             Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
                 eprintln!("Port {port} is in use, using a random available port...");
-                let fallback = SocketAddr::from(([0, 0, 0, 0], 0));
+                let fallback = webapp_bind_addr(0);
                 tokio::net::TcpListener::bind(fallback).await?
             }
             Err(e) => return Err(e.into()),
@@ -278,6 +282,17 @@ mod integration_tests;
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn test_webapp_bind_addr_defaults_to_localhost() {
+        let addr = webapp_bind_addr(DEFAULT_WEBAPP_PORT);
+        assert_eq!(addr.ip().to_string(), "127.0.0.1");
+        assert_eq!(addr.port(), DEFAULT_WEBAPP_PORT);
+
+        let fallback = webapp_bind_addr(0);
+        assert_eq!(fallback.ip().to_string(), "127.0.0.1");
+        assert_eq!(fallback.port(), 0);
+    }
 
     #[test]
     fn test_validate_path_normal() {

@@ -210,7 +210,7 @@ impl Theme {
     ///
     /// Always includes shared partials (`_structure.scss`, `_components.scss`)
     /// alongside the theme's own `style.scss`.
-    #[allow(unreachable_patterns)]
+    #[allow(unreachable_patterns, unused_mut)]
     pub fn scss(&self) -> Vec<(&'static str, &'static str)> {
         let mut files = vec![
             ("_structure.scss", Self::SHARED_STRUCTURE),

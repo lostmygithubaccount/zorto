@@ -14,6 +14,108 @@ use crate::templates::{self, Paginator, TaxonomyTerm};
 /// Delay before retrying output directory removal during live-reload rebuilds.
 /// macOS file handles can temporarily prevent deletion (ENOTEMPTY race).
 const BUILD_DEBOUNCE_MS: u64 = 50;
+const PROTECTED_OUTPUT_DIRS: &[&str] = &[
+    "content",
+    "templates",
+    "sass",
+    "static",
+    "themes",
+    ".git",
+    ".zorto",
+];
+
+/// Validate that an output directory is safe to remove and recreate.
+///
+/// `root` must exist. `output_dir` and `extra_protected_dirs` may point at paths
+/// that do not exist yet; the nearest existing parent is canonicalized before
+/// comparison.
+pub fn validate_output_dir(
+    root: &Path,
+    output_dir: &Path,
+    extra_protected_dirs: &[PathBuf],
+) -> anyhow::Result<()> {
+    let root = std::fs::canonicalize(root)
+        .map_err(|e| anyhow::anyhow!("cannot resolve site root {}: {e}", root.display()))?;
+    let output_dir = canonicalize_allow_missing(output_dir, "output directory")?;
+
+    if output_dir == root {
+        anyhow::bail!(
+            "refusing to use site root {} as the output directory",
+            output_dir.display()
+        );
+    }
+
+    if root.starts_with(&output_dir) {
+        anyhow::bail!(
+            "refusing to use ancestor directory {} as output for site root {}",
+            output_dir.display(),
+            root.display()
+        );
+    }
+
+    for protected in protected_output_dirs(&root, extra_protected_dirs)? {
+        if output_dir == protected || output_dir.starts_with(&protected) {
+            anyhow::bail!(
+                "refusing to use protected source directory {} as output",
+                output_dir.display()
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn canonicalize_allow_missing(path: &Path, label: &str) -> anyhow::Result<PathBuf> {
+    if path.exists() {
+        return std::fs::canonicalize(path)
+            .map_err(|e| anyhow::anyhow!("cannot resolve {label} {}: {e}", path.display()));
+    }
+
+    let mut missing = PathBuf::new();
+    let mut current = path;
+    loop {
+        if current.exists() {
+            let mut resolved = std::fs::canonicalize(current)
+                .map_err(|e| anyhow::anyhow!("cannot resolve {label} {}: {e}", path.display()))?;
+            if !missing.as_os_str().is_empty() {
+                resolved.push(missing);
+            }
+            return Ok(resolved);
+        }
+
+        let name = current.file_name().ok_or_else(|| {
+            anyhow::anyhow!(
+                "cannot resolve {label} {}: no existing parent directory",
+                path.display()
+            )
+        })?;
+        missing = PathBuf::from(name).join(missing);
+        current = current.parent().ok_or_else(|| {
+            anyhow::anyhow!(
+                "cannot resolve {label} {}: no existing parent directory",
+                path.display()
+            )
+        })?;
+    }
+}
+
+fn protected_output_dirs(
+    root: &Path,
+    extra_protected_dirs: &[PathBuf],
+) -> anyhow::Result<Vec<PathBuf>> {
+    let mut protected =
+        Vec::with_capacity(PROTECTED_OUTPUT_DIRS.len() + extra_protected_dirs.len());
+    for name in PROTECTED_OUTPUT_DIRS {
+        protected.push(canonicalize_allow_missing(
+            &root.join(name),
+            "protected directory",
+        )?);
+    }
+    for dir in extra_protected_dirs {
+        protected.push(canonicalize_allow_missing(dir, "protected directory")?);
+    }
+    Ok(protected)
+}
 
 /// The main entry point for building a zorto site.
 ///
@@ -101,6 +203,9 @@ impl Site {
     /// Returns an error if markdown rendering, template rendering, SCSS
     /// compilation, or file I/O fails.
     pub fn build(&mut self) -> anyhow::Result<()> {
+        let extra_protected_dirs = self.configured_content_dirs();
+        validate_output_dir(&self.root, &self.output_dir, &extra_protected_dirs)?;
+
         // Filter drafts
         if !self.drafts {
             self.pages.retain(|_, p| !p.draft);
@@ -180,6 +285,14 @@ impl Site {
         self.copy_colocated_assets()?;
 
         Ok(())
+    }
+
+    fn configured_content_dirs(&self) -> Vec<PathBuf> {
+        self.config
+            .content_dirs
+            .iter()
+            .map(|dir| self.root.join(&dir.path))
+            .collect()
     }
 
     /// Render markdown for all pages and sections
@@ -1044,6 +1157,77 @@ title = "Test Site"
         assert_eq!(site.config.base_url, "https://example.com");
         assert!(!site.pages.is_empty());
         assert!(!site.sections.is_empty());
+    }
+
+    #[test]
+    fn test_validate_output_dir_allows_public_output() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let output = root.join("public");
+        validate_output_dir(&root, &output, &[]).unwrap();
+    }
+
+    #[test]
+    fn test_validate_output_dir_rejects_site_root_and_ancestor() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+
+        let err = validate_output_dir(&root, &root, &[])
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("site root"), "got: {err}");
+
+        let err = validate_output_dir(&root, tmp.path(), &[])
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("ancestor"), "got: {err}");
+    }
+
+    #[test]
+    fn test_validate_output_dir_rejects_source_dirs() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+
+        for output in [
+            root.join("content"),
+            root.join("content/public"),
+            root.join("templates"),
+            root.join("sass"),
+            root.join("static"),
+            root.join("themes/custom"),
+            root.join(".git/hooks"),
+            root.join(".zorto/cache"),
+        ] {
+            let err = validate_output_dir(&root, &output, &[])
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("protected source"), "got: {err}");
+        }
+    }
+
+    #[test]
+    fn test_validate_output_dir_rejects_extra_protected_dirs() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let external = tmp.path().join("docs");
+        std::fs::create_dir_all(&external).unwrap();
+
+        let err = validate_output_dir(&root, &external.join("public"), &[external])
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("protected source"), "got: {err}");
+    }
+
+    #[test]
+    fn test_build_rejects_site_root_output_without_deleting_site() {
+        let tmp = TempDir::new().unwrap();
+        let root = make_test_site(&tmp);
+        let mut site = Site::load(&root, &root, false).unwrap();
+
+        let err = site.build().unwrap_err().to_string();
+        assert!(err.contains("site root"), "got: {err}");
+        assert!(root.join("config.toml").exists());
+        assert!(root.join("content/posts/hello.md").exists());
     }
 
     #[test]
