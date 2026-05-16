@@ -10,7 +10,7 @@ if ! command -v rustup >/dev/null 2>&1; then
 fi
 
 if command -v rustup >/dev/null 2>&1; then
-    rustup toolchain install stable --profile minimal
+    rustup toolchain install stable --profile minimal --component rustfmt --component clippy
     rustup default stable
 fi
 
