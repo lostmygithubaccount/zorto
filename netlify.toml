@@ -1,4 +1,0 @@
-[build]
-base = "."
-command = "bin/build-netlify"
-publish = "website/public"

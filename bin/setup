@@ -2,7 +2,6 @@
 set -euo pipefail
 
 # Install rustup and uv if not already present.
-export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
 if ! command -v rustup &>/dev/null; then
     echo "Installing rustup..."
