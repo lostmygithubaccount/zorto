@@ -23,11 +23,11 @@ Reference them with absolute paths in templates or markdown:
 
 ```html
 <link rel="icon" href="/favicon.ico">
-<img src="/images/logo.png" alt="Logo">
+<img src="/zorto-mark-transparent.png" alt="Logo">
 ```
 
 ```markdown
-![Logo](/images/logo.png)
+![Logo](/zorto-mark-transparent.png)
 ```
 
 The directory structure is preserved. Nested directories work as expected.
@@ -57,7 +57,7 @@ Any non-markdown file inside a content directory is treated as a co-located asse
 
 | Approach | Use for | Reference with |
 |----------|---------|----------------|
-| `static/` | Favicons, global images, fonts, `robots.txt`, `_headers` | Absolute paths (`/images/logo.png`) |
+| `static/` | Favicons, global images, fonts, `robots.txt`, `_headers` | Absolute paths (`/zorto-mark-transparent.png`) |
 | Co-located | Page-specific images, diagrams, downloads | Relative paths (`photo.jpg`) |
 
 ## Images
@@ -66,7 +66,7 @@ For images in markdown, use standard markdown syntax:
 
 ```markdown
 ![Alt text](photo.jpg)
-![Alt text](/images/hero.png)
+![Alt text](/zorto-logo-dark.png)
 ```
 
 > [!TIP]

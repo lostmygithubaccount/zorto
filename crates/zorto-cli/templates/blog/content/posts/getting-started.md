@@ -4,7 +4,7 @@ date = "2026-04-03"
 description = "A quick guide to building your blog with Zorto."
 +++
 
-Zorto is a fast, AI-native static site generator. Here's how to make the most of it.
+Zorto is the AI-native static site generator (SSG) with executable code blocks & more. Here's how to make the most of it.
 
 ## Project structure
 

@@ -1,13 +1,12 @@
 # zorto.dev: zorto configuration
 base_url = "https://zorto.dev"
 title = "Zorto"
-description = "The AI-native static site generator (SSG) with executable code blocks."
+description = "The AI-native static site generator (SSG) with executable code blocks & more."
 theme = "zorto"
 generate_feed = true
 generate_llms_txt = true
 generate_md_files = true
 compile_all_themes = true
-generate_search = true
 
 [[content_dirs]]
 path = "../docs"
@@ -35,6 +34,10 @@ favicon = "/zorto-favicon-32.png"
 favicon_mimetype = "image/png"
 enable_md_fab = true
 md_fab_exclude = []
+search_database_url = "/data/site.ddb"
+search_database_file = "site.ddb"
+search_database_schema = "site"
+search_runtime_url = "/js/data-app-runtime.js"
 
 menu_items = [
   { name = "Getting started", url = "/docs/getting-started/" },
@@ -55,14 +58,14 @@ social_links = [
 ]
 
 hero_title = "Zorto"
-hero_subtitle = "The AI-native static site generator (SSG) with executable code blocks."
+hero_subtitle = "The AI-native static site generator (SSG) with executable code blocks & more."
 hero_actions = [
   { name = "Get started", url = "/docs/getting-started/", style = "default" },
   { name = "GitHub", url = "https://github.com/dkdc-io/zorto", style = "outline", external = true },
 ]
 
 features = [
-  { name = "Slide decks", description = "Build reveal.js presentations from markdown — one file per slide, weight-ordered, with layouts, backgrounds, transitions, and speaker notes. Keyboard navigation and fullscreen built in.", url = "/docs/concepts/presentations/" },
+  { name = "Slide decks", description = "Build presentation decks from markdown: one file per slide, weight-ordered, template-driven, and easy for humans or agents to edit.", url = "/docs/concepts/presentations/" },
   { name = "Executable code blocks", description = "Run Python and Bash at build time. Matplotlib, Plotly, Altair, and Seaborn charts rendered inline. Output baked into static HTML.", url = "/docs/concepts/executable-code/" },
   { name = "Fast", description = "Written in Rust. Sites build in milliseconds. Live reload with instant browser refresh during development.", url = "/docs/concepts/fast/" },
   { name = "16 themes", description = "Built-in themes with light and dark mode. Switch instantly. Override any template or style locally.", url = "/docs/concepts/themes/" },
@@ -70,8 +73,8 @@ features = [
   { name = "Shortcodes & callouts", description = "Tabs, figures, diagrams, callout alerts, code includes, and more. Rich content without HTML in your markdown.", url = "/docs/concepts/shortcodes/" },
   { name = "Blog & docs", description = "Sections with date sorting, pagination, taxonomies, and search. Blog, documentation, and landing page templates included.", url = "/docs/concepts/blog/" },
   { name = "Python & Rust", description = "Install via uv, pip, or cargo. Use as a CLI, Python library, or Rust crate. MIT-licensed forever.", url = "/docs/concepts/open-source/" },
-  { name = "Built-in search", description = "SQLite-powered full-text search. Generated at build time, runs client-side. No external services.", url = "/docs/getting-started/" },
-  { name = "Web CMS", description = "Optional browser-based content management. Onboarding wizard, page editor, config manager. Run with --webapp.", url = "/docs/getting-started/" },
+  { name = "Built-in search", description = "DuckDB-backed client-side search. The public site data lives in site.ddb and is queried locally in the browser.", url = "/docs/concepts/search/" },
+  { name = "Data apps", description = "Ship local DuckDB data with static pages, lazy-load browser runtime only where needed, and build dashboards from HTML, CSS, and JavaScript.", url = "/docs/concepts/data-apps/" },
 ]
 
 copyright_html = '<a href="/">Zorto</a> by <a href="https://dkdc.io" target="_blank" rel="noopener">dkdc.io</a> via <a href="https://zorto.dev" target="_blank" rel="noopener">Zorto</a>'

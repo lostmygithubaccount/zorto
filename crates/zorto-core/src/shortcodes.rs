@@ -191,6 +191,7 @@ fn resolve_shortcode(
 /// Arguments:
 /// - `path` (required): file path relative to site root, or an `https://` URL
 /// - `strip_frontmatter` (optional): "true" to strip `+++`-delimited TOML frontmatter
+/// - `strip_heading` (optional): "true" to strip the first ATX heading
 /// - `rewrite_links` (optional): "true" to rewrite relative `.md` links to clean URL paths.
 ///   This makes links work on both GitHub (as `.md` links) and the built site (as clean URLs).
 fn builtin_include(
@@ -219,12 +220,36 @@ fn builtin_include(
         content
     };
 
+    if args.get("strip_heading").is_some_and(|v| v == "true") {
+        content = strip_first_atx_heading(&content);
+    }
+
     let rewrite = args.get("rewrite_links").is_some_and(|v| v == "true");
     if rewrite && !path.starts_with("http") {
         content = rewrite_md_links(&content, path);
     }
 
     Ok(content)
+}
+
+fn strip_first_atx_heading(content: &str) -> String {
+    let mut lines = content.lines();
+    let mut output = Vec::new();
+    let mut stripped = false;
+
+    for line in lines.by_ref() {
+        if !stripped && line.trim_start().starts_with('#') {
+            stripped = true;
+            continue;
+        }
+        output.push(line);
+    }
+
+    if !stripped {
+        return content.to_string();
+    }
+
+    output.join("\n").trim_start_matches('\n').to_string()
 }
 
 /// Regex matching markdown links to local `.md` files: `[text](path.md)` or `[text](path.md#anchor)`.
@@ -2536,6 +2561,24 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let result = process_shortcodes(
             r#"{{ include(path="page.md", strip_frontmatter="true") }}"#,
+            &dir,
+            &site,
+            tmp.path(),
+        )
+        .unwrap();
+        assert_eq!(result.trim(), "Content here");
+    }
+
+    #[test]
+    fn test_include_strip_heading() {
+        let tmp = TempDir::new().unwrap();
+        let site = tmp.path().join("site");
+        std::fs::create_dir_all(&site).unwrap();
+        std::fs::write(site.join("page.md"), "# Title\n\nContent here").unwrap();
+        let dir = site.join("shortcodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = process_shortcodes(
+            r#"{{ include(path="page.md", strip_heading="true") }}"#,
             &dir,
             &site,
             tmp.path(),

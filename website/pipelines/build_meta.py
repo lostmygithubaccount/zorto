@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable
 import hashlib
 import importlib
 import json
@@ -20,6 +19,7 @@ import time
 import tomllib
 import uuid
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,8 +28,8 @@ from urllib.parse import unquote, urlsplit
 
 duckdb: Any = importlib.import_module("duckdb")
 
-DEFAULT_SCHEMA_VERSION = 3
-DEFAULT_GENERATOR_VERSION = "0.4.0"
+DEFAULT_SCHEMA_VERSION = 4
+DEFAULT_GENERATOR_VERSION = "0.5.0"
 DEFAULT_PIPELINE_MANIFEST_PATH = "data/meta.toml"
 DEFAULT_CONTENT_PREFIXES = (
     "docs/",
@@ -349,10 +349,11 @@ def load_pipeline_config(
         pipeline.get("generator_version", DEFAULT_GENERATOR_VERSION)
     )
     database_path = repo_path(
-        repo_root, str(pipeline.get("database_path", "website/static/data/meta.ddb"))
+        repo_root, str(pipeline.get("database_path", "website/static/data/site.ddb"))
     )
     build_output_dir = repo_path(
-        repo_root, str(pipeline.get("build_output_dir", "target/zorto-meta-public"))
+        repo_root,
+        str(pipeline.get("build_output_dir", "website/target/zorto-meta-public")),
     )
     command = [
         str(part)
@@ -370,7 +371,7 @@ def load_pipeline_config(
                 ".",
                 "build",
                 "--output",
-                "{build_output_dir}",
+                "target/zorto-meta-public",
             ],
         )
     ]
@@ -378,7 +379,7 @@ def load_pipeline_config(
         zorto_build.get(
             "public_command",
             "cargo run -p zorto -- --root website --sandbox . build --output "
-            "{build_output_dir}",
+            "target/zorto-meta-public",
         )
     )
 
@@ -498,6 +499,13 @@ def write_database(
         output_count=lambda rows: rows,
     )
     recorder.run(
+        "insert_search_pages",
+        "duckdb",
+        lambda: insert_search_pages(con, content_files),
+        input_count=len(content_files),
+        output_count=lambda rows: rows,
+    )
+    recorder.run(
         "insert_content_links",
         "duckdb",
         lambda: insert_content_links(con, repo_root, content_files, build_outputs),
@@ -576,6 +584,18 @@ def create_schema(con: Any) -> None:
             term VARCHAR NOT NULL,
             file_count INTEGER NOT NULL,
             occurrence_count INTEGER NOT NULL
+        );
+        CREATE TABLE search_pages (
+            path VARCHAR NOT NULL,
+            title VARCHAR NOT NULL,
+            url VARCHAR NOT NULL,
+            description VARCHAR,
+            content VARCHAR NOT NULL,
+            title_lower VARCHAR NOT NULL,
+            description_lower VARCHAR NOT NULL,
+            content_lower VARCHAR NOT NULL,
+            kind VARCHAR NOT NULL,
+            word_count INTEGER NOT NULL
         );
         CREATE TABLE content_links (
             source_path VARCHAR NOT NULL,
@@ -830,6 +850,37 @@ def insert_content_terms(
     return len(rows)
 
 
+def insert_search_pages(con: Any, files: list[ContentFile]) -> int:
+    rows: list[tuple[str, str, str, str, str, str, str, str, str, int]] = []
+    for file in files:
+        if file.kind not in {"content", "docs"} or not file.text:
+            continue
+        url = search_url_for_path(file.path)
+        if url is None:
+            continue
+        title = file.title or title_from_path(file.path)
+        description = extract_description(file.text)
+        content = search_text(file.text)
+        rows.append(
+            (
+                file.path,
+                title,
+                url,
+                description,
+                content,
+                title.lower(),
+                (description or "").lower(),
+                content.lower(),
+                file.kind,
+                file.word_count,
+            )
+        )
+    con.executemany(
+        "INSERT INTO search_pages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows
+    )
+    return len(rows)
+
+
 def insert_content_links(
     con: Any,
     repo_root: Path,
@@ -996,9 +1047,19 @@ def run_privacy_checks(
         if re.search(pattern, content):
             findings.append(pattern)
 
+    allowed_untracked = {
+        rel(repo_root, config.database_path),
+        rel(
+            repo_root,
+            config.database_path.with_suffix(config.database_path.suffix + ".wal"),
+        ),
+        rel(repo_root, config.dashboard_manifest_output_path),
+    }
     for untracked in git(
         repo_root, "ls-files", "--others", "--exclude-standard"
     ).splitlines():
+        if untracked in allowed_untracked:
+            continue
         if untracked and untracked in content:
             findings.append(f"untracked path leaked: {untracked}")
 
@@ -1099,6 +1160,20 @@ def extract_title(text: str, suffix: str) -> str | None:
     return None
 
 
+def extract_description(text: str) -> str:
+    if text.startswith("+++\n"):
+        end = text.find("\n+++", 4)
+        if end != -1:
+            try:
+                frontmatter = tomllib.loads(text[4:end])
+                description = frontmatter.get("description")
+                if isinstance(description, str):
+                    return description
+            except tomllib.TOMLDecodeError:
+                pass
+    return ""
+
+
 def count_words(text: str) -> int:
     if not text:
         return 0
@@ -1114,6 +1189,18 @@ def extract_terms(text: str) -> list[str]:
             continue
         terms.append(term)
     return terms
+
+
+def search_text(text: str) -> str:
+    text = strip_code(strip_frontmatter(text))
+    text = re.sub(r"!\[[^\]]*\]\([^)]+\)", " ", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"\{\{.*?\}\}", " ", text, flags=re.DOTALL)
+    text = re.sub(r"\{%.*?%\}", " ", text, flags=re.DOTALL)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"^[#>\-\*\s]+", " ", text, flags=re.MULTILINE)
+    text = re.sub(r"[`*_~|]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def extract_links(text: str) -> list[str]:
@@ -1171,6 +1258,40 @@ def site_route_candidates(path: str) -> list[str]:
         candidates.append(path + "/index.html")
         candidates.append(path + ".html")
     return candidates
+
+
+def search_url_for_path(rel_path: str) -> str | None:
+    if rel_path == "website/content/_index.md":
+        return "/"
+    if rel_path.startswith("website/content/presentations/intro-to-zorto/"):
+        if rel_path != "website/content/presentations/intro-to-zorto/_index.md":
+            return None
+    if rel_path.startswith("website/content/"):
+        local = rel_path.removeprefix("website/content/")
+        if local == "_index.md":
+            return "/"
+        if local.endswith("/_index.md"):
+            return "/" + local.removesuffix("/_index.md") + "/"
+        if local.endswith(".md"):
+            return "/" + local.removesuffix(".md") + "/"
+    if rel_path == "docs/README.md":
+        return "/docs/"
+    if rel_path.startswith("docs/"):
+        local = rel_path.removeprefix("docs/")
+        if local == "README.md":
+            return "/docs/"
+        if local.endswith("/README.md"):
+            return "/docs/" + local.removesuffix("/README.md") + "/"
+        if local.endswith(".md"):
+            return "/docs/" + local.removesuffix(".md") + "/"
+    return None
+
+
+def title_from_path(rel_path: str) -> str:
+    stem = Path(rel_path).stem
+    if stem in {"README", "_index"}:
+        stem = Path(rel_path).parent.name or "Home"
+    return stem.replace("-", " ").replace("_", " ").title()
 
 
 def strip_frontmatter(text: str) -> str:

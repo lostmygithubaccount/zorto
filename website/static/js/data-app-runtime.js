@@ -213,7 +213,13 @@ export async function attachDatabase(duck, manifest, options = {}) {
   if (!response.ok) throw new Error('failed to fetch ' + dbUrl + ' (HTTP ' + response.status + ')');
   const bytes = new Uint8Array(await response.arrayBuffer());
   await duck.db.registerFileBuffer(dbFile, bytes);
-  await duck.conn.query("ATTACH '" + dbFile.replace(/'/g, "''") + "' AS " + sqlIdentifier(dbSchema) + " (READ_ONLY)");
+  try {
+    await duck.conn.query("ATTACH '" + dbFile.replace(/'/g, "''") + "' AS " + sqlIdentifier(dbSchema) + " (READ_ONLY)");
+  } catch (error) {
+    if (!/already exists/i.test(error && error.message ? error.message : String(error))) {
+      throw error;
+    }
+  }
   duck.attachedSchemas.add(dbSchema);
 }
 

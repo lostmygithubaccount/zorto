@@ -3,6 +3,9 @@
 {% block content %}
 <div class="page-content">
     <div class="presentations-list">
+        <header class="post">
+            <h1>{{ section.title }}</h1>
+        </header>
         {%- if section.content %}
         <div class="post">
             <div class="post-content">{{ section.content | safe }}</div>

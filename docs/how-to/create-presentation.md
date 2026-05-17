@@ -1,12 +1,12 @@
 # Create a presentation
 
-This guide walks through creating a slide deck with Zorto and reveal.js.
+This guide walks through creating a slide deck with Zorto. The example uses a reveal.js template, but the content model also works with native HTML/CSS/JS deck templates.
 
 ## 1. Create the presentation template
 
-Add a `presentation.html` template to your site's `templates/` directory. This template assembles slides into a reveal.js deck. See the [zorto.dev source](https://github.com/dkdc-io/zorto/blob/main/website/templates/presentation.html) for a working example.
+Add a `presentation.html` template to your site's `templates/` directory. This template assembles slides into a deck. See the [zorto.dev source](https://github.com/dkdc-io/zorto/tree/main/website/templates) for working template examples.
 
-The template iterates `section.pages` and wraps each page's content in a `<section>` element. It maps `page.extra` fields to reveal.js `data-*` attributes for backgrounds and transitions.
+The template iterates `section.pages` and wraps each page's content in a `<section>` element. It can map `page.extra` fields to CSS classes, data attributes, backgrounds, keyboard behavior, or whatever the deck runtime expects.
 
 ## 2. Create the section
 
@@ -33,10 +33,10 @@ reveal_theme = "black"
 ```
 
 Key settings:
-- `template = "presentation.html"` — uses the reveal.js template
-- `sort_by = "weight"` — orders slides by their weight field
-- `render_pages = false` — slides only exist in the assembled deck
-- `[extra]` — configures reveal.js (dimensions, default transition, theme)
+- `template = "presentation.html"`: uses your presentation template
+- `sort_by = "weight"`: orders slides by their weight field
+- `render_pages = false`: slides only exist in the assembled deck
+- `[extra]`: passes deck-level settings to the template
 
 ## 3. Add slides
 
@@ -70,11 +70,11 @@ Control slide appearance via `[extra]` frontmatter:
 | `background_image` | Background image path or URL |
 | `background_size` | CSS background-size (e.g. `"cover"`, `"contain"`) |
 | `background_opacity` | Background opacity (e.g. `"0.3"`) |
-| `transition` | Per-slide transition: `slide`, `fade`, `convex`, `concave`, `zoom`, `none` |
+| `transition` | Template-specific transition setting |
 
 ## 5. Use presentation shortcodes
 
-**Progressive reveal** — content appears on each click:
+**Progressive reveal**: content appears on each click:
 
 <pre><code>&#123;% fragment(style="fade-in") %&#125;
 This appears first.
@@ -96,13 +96,13 @@ Right column content
 
 With custom widths: `columns(widths="60%|40%")`.
 
-**Speaker notes** — press `S` to open speaker view:
+**Speaker notes**: keep notes beside the slide source. Speaker-view behavior depends on the template:
 
 <pre><code>&#123;% speaker_notes() %&#125;
 Remember to mention the key point here.
 &#123;% end %&#125;</code></pre>
 
-**Positioned images** — place images at arbitrary coordinates:
+**Positioned images**: place images at arbitrary coordinates:
 
 <pre><code>&#123;&#123; slide_image(src="logo.png", top="10%", right="5%", width="200px") &#125;&#125;</code></pre>
 
@@ -112,4 +112,4 @@ Remember to mention the key point here.
 zorto preview --open
 ```
 
-Navigate slides with arrow keys. Press `F` for fullscreen, `S` for speaker notes, `O` for overview.
+Navigation depends on the template. The zorto.dev native deck supports arrow keys, space, and fullscreen.

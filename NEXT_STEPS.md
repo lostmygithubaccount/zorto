@@ -23,7 +23,7 @@ Committed work so far:
 The prototype proves the important runtime shape:
 
 - A static page shell loads first.
-- `meta.ddb` ships as a public static artifact.
+- `site.ddb` ships as a public static artifact.
 - DuckDB-Wasm and Plotly load only after user intent.
 - The dashboard queries local browser-attached DuckDB data.
 - The checked-in database avoids private paths, emails, env vars, tokens, and untracked filenames.
@@ -31,7 +31,7 @@ The prototype proves the important runtime shape:
 Implemented after this checkpoint:
 
 - `website/data/meta.toml` now owns the website-local metadata pipeline contract.
-- `meta.ddb` now includes `pipeline_steps` receipts for the generation path.
+- `site.ddb` now includes `pipeline_steps` receipts for the generation path.
 - `website/data/analytics.toml` owns dashboard queries, panel query bindings, and table columns.
 - `website/static/js/data-app-runtime.js` holds reusable static data-app machinery, with `analytics-dashboard.js` acting as the analytics adapter.
 - Plotly and DuckDB-Wasm are both pinned CDN-loaded runtime assets. Vendoring them should be a deliberate packaging decision later, not an accidental split policy.
@@ -147,7 +147,7 @@ Before a Zorto release:
 - `website/bin/build`
 - Browser smoke for `/analytics/`
 - DuckDB table count and representative query checks
-- Privacy scan on `website/static/data/meta.ddb`
+- Privacy scan on `website/static/data/site.ddb`
 - Confirm `git status` contains only intentional changes
 - Confirm docs clearly mark the data-app pattern as experimental if it is not a public API yet
 
@@ -155,7 +155,7 @@ Before a Zorto release:
 
 Before updating live zorto.dev:
 
-- Regenerate `website/static/data/meta.ddb`.
+- Regenerate `website/static/data/site.ddb`.
 - Regenerate `website/static/data/analytics-dashboard.json`.
 - Confirm the pinned Plotly and DuckDB-Wasm CDN assets load.
 - Confirm `/analytics/` works from local preview.
@@ -165,7 +165,7 @@ Before updating live zorto.dev:
 
 ## Open decisions
 
-- Should the canonical public DB be `meta.ddb`, `site.ddb`, or both during migration?
+- Should the generalized DB name always be `site.ddb`, or should projects configure it freely?
 - Should saved SQL live inline in TOML or in `.sql` files referenced by TOML?
 - Should dashboards be configured from section frontmatter, `data/*.toml`, or both?
 - Should the first generalized runner invoke `duckdb` CLI, Python `duckdb`, or support either?

@@ -35,7 +35,7 @@ zorto build --drafts
 zorto preview --drafts
 ```
 
-Drafts are excluded from sitemaps, feeds, `llms.txt`, and search indexes even when included in a preview build. Use drafts for content that is not ready for publication — remove the `draft = true` line when the page is ready.
+Drafts are excluded from sitemaps, feeds, `llms.txt`, and search data even when included in a preview build. Use drafts for content that is not ready for publication — remove the `draft = true` line when the page is ready.
 
 ## Compile all theme stylesheets
 
@@ -96,9 +96,9 @@ generate_feed = false
 generate_llms_txt = false
 ```
 
-### Search index
+### Search data
 
-The SQLite search database (`generate_search = true`) builds a `search.db` file containing all page content. For large sites, this file can be several megabytes. If search is not needed, leave it disabled (the default).
+DuckDB-backed search ships a `.ddb` file containing searchable page content. For large sites, keep the `search_pages` table lean and avoid indexing private or generated content that visitors do not need.
 
 ## Build output summary
 

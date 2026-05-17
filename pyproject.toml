@@ -1,7 +1,7 @@
 [project]
 name = "zorto"
 version = "0.24.1"
-description = "The AI-native static site generator (SSG) with executable code blocks"
+description = "The AI-native static site generator (SSG) with executable code blocks & more."
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]

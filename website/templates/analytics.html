@@ -3,7 +3,7 @@
 {% block title %}{{ section.title }} | {{ config.title }}{% endblock title %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{{ get_url(path="analytics.css") | safe }}">
+<link rel="stylesheet" href="/analytics.css">
 {% endblock extra_head %}
 
 {% block content %}
@@ -21,8 +21,8 @@
 
   <section class="analytics-loader" aria-labelledby="analytics-loader-title">
     <div>
-      <h2 id="analytics-loader-title">Open the observatory</h2>
-      <p>Loads the public <code>/data/meta.ddb</code> database and renders every view locally in your browser.</p>
+      <h2 id="analytics-loader-title">Open analytics</h2>
+      <p>Loads the public <code>/data/site.ddb</code> database and renders every view locally in your browser.</p>
     </div>
     <div class="analytics-loader__controls">
       <button class="button" type="button" data-analytics-load>Load analytics</button>
@@ -70,7 +70,7 @@
         <section class="analytics-panel" data-panel="db-tables">
           <div class="analytics-panel__header">
             <h2>Public data inventory</h2>
-            <p>Tables stored inside <code>meta.ddb</code>.</p>
+            <p>Tables stored inside <code>site.ddb</code>.</p>
           </div>
           <div class="analytics-table-wrap">
             <table class="analytics-table">
@@ -185,7 +185,7 @@
       <section class="analytics-query" data-panel="query-console">
         <div class="analytics-panel__header">
           <h2>Readonly SQL console</h2>
-          <p>Saved queries run against the attached <code>meta.main</code> schema.</p>
+          <p>Saved queries run against the attached <code>site.main</code> schema.</p>
         </div>
         <div class="analytics-query__presets" data-query-presets></div>
         <textarea class="analytics-query__editor" data-query-editor spellcheck="false"></textarea>
@@ -206,5 +206,5 @@
 {% endblock content %}
 
 {% block extra_body %}
-<script type="module" src="{{ get_url(path="js/analytics-dashboard.js") | safe }}"></script>
+<script type="module" src="/js/analytics-dashboard.js"></script>
 {% endblock extra_body %}

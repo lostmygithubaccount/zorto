@@ -1,28 +1,28 @@
 +++
-title = "Why another SSG?"
+title = "The Zorto contract"
 weight = 30
 +++
 
-{{ slide_image(src="/zorto-mark-transparent.png", alt="Zorto", top="20px", left="20px", width="56px", opacity="0.7") }}
-
-## Why another SSG?
+## Content above config above code
 
 {% columns() %}
 
-### The problem
+### Content
 
-- Existing SSGs aren't optimized for AI workflows
-- Hard to programmatically create and edit content
-- No built-in executable code blocks
-- Complex configuration and templating
+- Markdown pages
+- Prose, docs, decks
+- SQL receipts and notes
+- Mostly human-owned
 
 <!-- column -->
 
-### Zorto's answer
+### Config
 
-- **Markdown + TOML** = simple, parseable by AI
-- One markdown file per page -- easy to generate
-- Code runs at build time, output baked into HTML
-- Minimal configuration, sensible defaults
+- `config.toml`
+- Routes, templates, themes
+- Sources, queries, dashboards
+- Human or AI-owned
 
 {% end %}
+
+Code handles the machinery: Rust builds, Python orchestrates local data, JavaScript renders browser interfaces.

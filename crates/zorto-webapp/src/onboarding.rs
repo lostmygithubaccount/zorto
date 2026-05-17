@@ -382,7 +382,7 @@ const BLOG_FILES: [(&str, &str); 4] = [
     ),
     (
         "content/posts/getting-started.md",
-        "+++\ntitle = \"Getting started with Zorto\"\ndate = \"2026-04-03\"\ndescription = \"A quick guide to building your blog with Zorto.\"\n+++\nZorto is a fast, AI-native static site generator.\n\n## Useful commands\n\n| Command | Description |\n|---------|-------------|\n| `zorto build` | Build the site |\n| `zorto preview --open` | Live preview with hot reload |\n| `zorto check` | Validate without building |\n\nVisit [zorto.dev](https://zorto.dev) for full documentation.\n",
+        "+++\ntitle = \"Getting started with Zorto\"\ndate = \"2026-04-03\"\ndescription = \"A quick guide to building your blog with Zorto.\"\n+++\nZorto is the AI-native static site generator (SSG) with executable code blocks & more.\n\n## Useful commands\n\n| Command | Description |\n|---------|-------------|\n| `zorto build` | Build the site |\n| `zorto preview --open` | Live preview with hot reload |\n| `zorto check` | Validate without building |\n\nVisit [zorto.dev](https://zorto.dev) for full documentation.\n",
     ),
 ];
 

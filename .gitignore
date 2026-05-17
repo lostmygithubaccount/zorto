@@ -12,6 +12,6 @@ TODO.md
 !website/data/analytics.toml
 !website/data/meta.toml
 !website/static/data/
-!website/static/data/meta.ddb
+!website/static/data/site.ddb
 !website/static/data/analytics-dashboard.json
 !website/pipelines/build_meta.py.lock

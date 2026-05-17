@@ -12,6 +12,7 @@ Include the contents of another file.
 |-----------|------|---------|-------------|
 | `path` | string | *required* | Path to the file (relative to project root), or an `https://` URL |
 | `strip_frontmatter` | bool | `false` | Remove `+++`-delimited TOML frontmatter from included content |
+| `strip_heading` | bool | `false` | Remove the first ATX heading from included content |
 | `rewrite_links` | bool | `false` | Rewrite relative `.md` links to clean URL paths |
 
 **Example:**
@@ -119,7 +120,7 @@ Image with optional caption.
 **Syntax:**
 
 ```
-{{ figure(src="/images/screenshot.png", alt="Screenshot", caption="The dashboard view", width="80%") }}
+{{ figure(src="/zorto-logo-dark.png", alt="Zorto logo", caption="The dashboard view", width="80%") }}
 ```
 
 ## youtube
@@ -355,7 +356,7 @@ Absolutely positioned image for slide layouts.
 
 ## speaker_notes
 
-Speaker notes for reveal.js presentations. Press `S` in a presentation to open the speaker view.
+Speaker notes for presentation templates. Whether notes render in a speaker view depends on the deck template.
 
 **Syntax:**
 
@@ -365,7 +366,7 @@ Remember to mention the key point about performance.
 
 ## fragment
 
-Progressive reveal — content appears on each click/advance within a slide.
+Progressive reveal: content appears on each click/advance within a slide.
 
 **Parameters:**
 

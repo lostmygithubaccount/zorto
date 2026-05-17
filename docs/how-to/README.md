@@ -16,7 +16,7 @@ Step-by-step guides for common Zorto tasks.
 
 ## Presentations
 
-- [Create a presentation](create-presentation.md): slide deck with reveal.js, one markdown file per slide
+- [Create a presentation](create-presentation.md): slide deck from one markdown file per slide
 
 ## Visualizations
 
@@ -34,7 +34,7 @@ Step-by-step guides for common Zorto tasks.
 
 ## Search
 
-- [Add search](add-search.md): enable client-side search with one config line
+- [Add search](add-search.md): enable DuckDB-backed client-side search
 
 ## Deployment
 

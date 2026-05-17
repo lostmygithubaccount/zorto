@@ -1,4 +1,4 @@
-//! Zorto — the AI-native static site generator (SSG) with executable code blocks.
+//! Zorto: the AI-native static site generator (SSG) with executable code blocks & more.
 //!
 //! This crate provides the CLI binary and the `run` entry point used by
 //! the PyO3 Python bindings.

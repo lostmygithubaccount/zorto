@@ -24,7 +24,6 @@ generate_feed = true
 generate_sitemap = true
 generate_llms_txt = true
 generate_md_files = true
-generate_search = true
 compile_all_themes = false
 default_language = "en"
 
@@ -71,7 +70,6 @@ author = "Your Name"
 | `generate_sitemap` | bool | `true` | Generate sitemap.xml |
 | `generate_llms_txt` | bool | `true` | Generate llms.txt and llms-full.txt |
 | `generate_md_files` | bool | `false` | Generate .md versions of every page alongside HTML |
-| `generate_search` | bool | `false` | Generate a SQLite search database |
 | `compile_all_themes` | bool | `false` | Compile CSS for every built-in theme |
 | `default_language` | string | `"en"` | Default language code |
 
@@ -134,9 +132,14 @@ menu_items = [
   { name = "Docs", url = "/docs/" },
   { name = "Blog", url = "/posts/" },
 ]
+search_database_url = "/data/site.ddb"
+search_database_file = "site.ddb"
+search_database_schema = "site"
 ```
 
 Access in templates: `{{ config.extra.author }}`, `{% for item in config.extra.menu_items %}`.
+
+The built-in Zorto theme also reads `search_database_url` to enable DuckDB-backed search.
 
 ## Further reading
 

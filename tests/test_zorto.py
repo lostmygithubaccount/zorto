@@ -3,7 +3,6 @@
 import zorto
 from zorto import Config, Page, Section, Site
 
-
 # -- version ------------------------------------------------------------------
 
 

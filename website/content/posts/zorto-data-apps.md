@@ -2,7 +2,7 @@
 title = "Zorto as a data app builder"
 date = "2026-05-16"
 author = "Cody"
-description = "The zorto.dev analytics page is the first prototype of static data apps backed by DuckDB."
+description = "The zorto.dev analytics page is the first prototype of data apps backed by DuckDB."
 tags = ["zorto", "duckdb", "data"]
 +++
 
@@ -26,9 +26,9 @@ That boundary matters because it gives humans a stable surface to edit and gives
 
 ## What changed
 
-The website now has an `/analytics/` page. The shell is static HTML. When you click the load button, it lazy-loads DuckDB-Wasm and Plotly, fetches `/data/meta.ddb`, attaches it read-only in the browser, and renders the dashboard locally.
+The website now has an `/analytics/` page. The shell is static HTML. When you click the load button, it lazy-loads DuckDB-Wasm and Plotly, fetches `/data/site.ddb`, attaches it read-only in the browser, and renders the dashboard locally.
 
-The metadata pipeline lives in `website/bin/build-meta`. It runs as a self-contained `uv` script, uses DuckDB, runs a timed current-code Zorto build through the Rust CLI, and writes `website/static/data/meta.ddb` only after generation succeeds.
+The metadata pipeline lives in `website/bin/build-meta`. It runs as a self-contained `uv` script, uses DuckDB, runs a timed current-code Zorto build through the Rust CLI, and writes `website/static/data/site.ddb` only after generation succeeds.
 
 The pipeline now has a manifest too: `website/data/meta.toml`. That file owns the database path, build output path, collection limits, content include/exclude rules, privacy checks, and the build command. The script is the executor; the manifest is the intent.
 
@@ -48,13 +48,13 @@ The browser can do more now because DuckDB-Wasm is good enough to make local que
 
 This is a zorto.dev prototype, not a public Zorto API yet.
 
-Search still uses `search.db` and sql.js. There is no `[data]` config in Zorto core. There is no automatic data pipeline hook in `zorto build`. There is no remote database story in this pass. DuckDB-Wasm and Plotly are pinned CDN-loaded runtime assets for now; vendoring and offline packaging need an explicit decision later.
+Search now reads from `site.ddb` too. There is no `[data]` config in Zorto core. There is no automatic data pipeline hook in `zorto build`. There is no remote database story in this pass. DuckDB-Wasm and Plotly are pinned CDN-loaded runtime assets for now; vendoring and offline packaging need an explicit decision later.
 
 That restraint is the important part. Prove the pattern on the website, make it boring, then promote the stable pieces into Zorto.
 
 ## Where this is going
 
-Zorto can become a static data app builder without becoming a traditional app framework.
+Zorto can become a data app builder without becoming a traditional app framework.
 
 Run pipelines locally. Use Python through `uv`, SQL through DuckDB, Rust for the site generator, HTML/CSS/JavaScript for the interface. Ship the data beside the site. Let agents help with the code, but keep the human-editable contract in Markdown and TOML.
 

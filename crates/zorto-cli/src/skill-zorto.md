@@ -1,11 +1,11 @@
 ---
 name: zorto
-description: Use the zorto CLI to build and manage static sites with executable code blocks.
+description: Use the zorto CLI to build and manage static sites with executable code blocks & more.
 ---
 
 # Zorto CLI
 
-Build and manage static sites with the `zorto` CLI. Zorto is an AI-native static site generator (SSG) with executable code blocks, inspired by Zola and Quarto.
+Build and manage static sites with the `zorto` CLI. Zorto is the AI-native static site generator (SSG) with executable code blocks & more.
 
 ## Installation
 

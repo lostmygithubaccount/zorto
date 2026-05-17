@@ -27,17 +27,17 @@ const defaultQueryPresets = [
     id: 'catalog',
     label: 'Catalog',
     sql: `
-SELECT 'meta_info' AS table_name, count(*) AS rows FROM meta.main.meta_info
-UNION ALL SELECT 'repo_snapshot', count(*) FROM meta.main.repo_snapshot
-UNION ALL SELECT 'commits', count(*) FROM meta.main.commits
-UNION ALL SELECT 'commit_daily', count(*) FROM meta.main.commit_daily
-UNION ALL SELECT 'packages', count(*) FROM meta.main.packages
-UNION ALL SELECT 'content_files', count(*) FROM meta.main.content_files
-UNION ALL SELECT 'content_terms', count(*) FROM meta.main.content_terms
-UNION ALL SELECT 'content_links', count(*) FROM meta.main.content_links
-UNION ALL SELECT 'build_runs', count(*) FROM meta.main.build_runs
-UNION ALL SELECT 'build_outputs', count(*) FROM meta.main.build_outputs
-UNION ALL SELECT 'pipeline_steps', count(*) FROM meta.main.pipeline_steps
+SELECT 'meta_info' AS table_name, count(*) AS rows FROM site.main.meta_info
+UNION ALL SELECT 'repo_snapshot', count(*) FROM site.main.repo_snapshot
+UNION ALL SELECT 'commits', count(*) FROM site.main.commits
+UNION ALL SELECT 'commit_daily', count(*) FROM site.main.commit_daily
+UNION ALL SELECT 'packages', count(*) FROM site.main.packages
+UNION ALL SELECT 'content_files', count(*) FROM site.main.content_files
+UNION ALL SELECT 'content_terms', count(*) FROM site.main.content_terms
+UNION ALL SELECT 'content_links', count(*) FROM site.main.content_links
+UNION ALL SELECT 'build_runs', count(*) FROM site.main.build_runs
+UNION ALL SELECT 'build_outputs', count(*) FROM site.main.build_outputs
+UNION ALL SELECT 'pipeline_steps', count(*) FROM site.main.pipeline_steps
 ORDER BY rows DESC`
   }
 ];
@@ -57,9 +57,9 @@ registerDataApp({
   dashboardSelector: '[data-analytics-dashboard]',
   statusSelector: '[data-analytics-status]',
   defaultManifestUrl: '/data/analytics-dashboard.json',
-  defaultDatabaseUrl: '/data/meta.ddb',
-  defaultDatabaseFile: 'meta.ddb',
-  defaultDatabaseSchema: 'meta',
+  defaultDatabaseUrl: '/data/site.ddb',
+  defaultDatabaseFile: 'site.ddb',
+  defaultDatabaseSchema: 'site',
   defaultQueryPresets,
   loadedLabel: 'analytics loaded',
   applyManifest: applyBasicManifest,

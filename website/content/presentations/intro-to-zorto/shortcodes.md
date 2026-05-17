@@ -3,10 +3,8 @@ title = "Shortcodes"
 weight = 85
 
 [extra]
-reveal_theme = "league"
+slide_theme = "paper"
 +++
-
-{{ slide_image(src="/zorto-mark-transparent.png", alt="Zorto", top="20px", right="20px", width="72px") }}
 
 ## Shortcodes: rich content without HTML
 
@@ -14,10 +12,10 @@ reveal_theme = "league"
 
 ### Built-in
 
-- **`slide_image`** -- positioned or inline images
-- **`fragment`** -- progressive reveal
-- **`columns`** -- side-by-side layout
-- **`speaker_notes`** -- reveal.js speaker view
+- **`slide_image`**: positioned or inline images
+- **`fragment`**: progressive reveal
+- **`columns`**: side-by-side layout
+- **`speaker_notes`**: source-level presenter notes
 
 <!-- column -->
 
@@ -25,8 +23,9 @@ reveal_theme = "league"
 
 - Drop a `.tera` template in `shortcodes/`
 - Call it from any markdown page
-- Fully sandboxed, deterministic
-- Tested via `zorto check`
+- Keep repeated HTML out of prose
+- Validate author-facing inputs at shortcode boundaries
+- Test the rendered result with `zorto check`
 
 {% end %}
 

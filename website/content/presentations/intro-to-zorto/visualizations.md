@@ -1,14 +1,12 @@
 +++
-title = "Live visualizations"
+title = "Build-time visualizations"
 weight = 55
 +++
 
-{{ slide_image(src="/zorto-mark-transparent.png", alt="Zorto", top="20px", right="20px", width="56px") }}
-
-## Live visualizations at build time
+## Build-time visualizations
 
 ```{python}
-# Stdlib only -- a tiny ASCII sparkline of a damped oscillation.
+# Stdlib only: a tiny ASCII sparkline of a damped oscillation.
 import math
 
 x = [i * 0.4 for i in range(40)]
@@ -21,4 +19,4 @@ print(f"damped sin(x) * e^(-0.12x), 40 samples")
 print(spark)
 ```
 
-For real charts, install `matplotlib`, `plotly`, `altair`, or `seaborn` -- Zorto captures Figure objects and embeds them as static HTML automatically.
+For real charts, install `matplotlib`, `plotly`, `altair`, or `seaborn`: Zorto captures Figure objects and embeds them as static HTML automatically.

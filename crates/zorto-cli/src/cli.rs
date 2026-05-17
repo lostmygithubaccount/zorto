@@ -20,7 +20,7 @@ const DEFAULT_SITE_TITLE: &str = "My Site";
 #[command(
     name = "zorto",
     version,
-    about = "The AI-native static site generator (SSG) with executable code blocks",
+    about = "The AI-native static site generator (SSG) with executable code blocks & more.",
     after_help = "Quickstart:\n  \
         zorto init                  # set up a new site (interactive)\n  \
         zorto preview --open        # preview with live reload\n\

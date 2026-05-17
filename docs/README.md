@@ -1,6 +1,6 @@
 # Zorto documentation
 
-Zorto is the AI-native static site generator (SSG) with executable code blocks.
+Zorto is the AI-native static site generator (SSG) with executable code blocks & more.
 
 ```bash
 zorto init my-site && cd my-site && zorto preview

@@ -1,8 +1,8 @@
 [pipeline]
-schema_version = 3
-generator_version = "0.4.0"
-database_path = "website/static/data/meta.ddb"
-build_output_dir = "target/zorto-meta-public"
+schema_version = 4
+generator_version = "0.5.0"
+database_path = "website/static/data/site.ddb"
+build_output_dir = "website/target/zorto-meta-public"
 
 [limits]
 commit_limit = 250
@@ -21,9 +21,9 @@ command = [
   ".",
   "build",
   "--output",
-  "{build_output_dir}",
+  "target/zorto-meta-public",
 ]
-public_command = "cargo run -p zorto -- --root website --sandbox . build --output {build_output_dir}"
+public_command = "cargo run -p zorto -- --root website --sandbox . build --output target/zorto-meta-public"
 
 [dashboard_manifest]
 source = "website/data/analytics.toml"
@@ -36,6 +36,8 @@ prefixes = [
   "website/static/",
 ]
 excludes = [
+  "website/static/data/site.ddb",
+  "website/static/data/site.ddb.wal",
   "website/static/data/meta.ddb",
   "website/static/data/meta.ddb.wal",
   "website/static/data/analytics-dashboard.json",

@@ -1,9 +1,7 @@
 +++
 title = "Themes"
-weight = 60
+weight = 62
 +++
-
-{{ slide_image(src="/zorto-mark-transparent.png", alt="Zorto", top="20px", right="20px", width="72px") }}
 
 ## 16 built-in themes
 

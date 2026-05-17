@@ -1,4 +1,4 @@
-"""Zorto — the AI-native static site generator."""
+"""Zorto: the AI-native static site generator (SSG) with executable code blocks & more."""
 
 import sys
 
@@ -9,8 +9,10 @@ from zorto.core import (
     Site,
     build,
     load,
-    run_cli as _run_cli,
     version,
+)
+from zorto.core import (
+    run_cli as _run_cli,
 )
 
 __all__ = [

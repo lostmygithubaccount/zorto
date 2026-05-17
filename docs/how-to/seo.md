@@ -6,7 +6,7 @@ Three layers:
 
 1. **Content** — `title` and `description` in every page's frontmatter (you write this)
 2. **Meta tags** — Open Graph, Twitter Cards, canonical URLs (built-in themes handle this)
-3. **Discovery** — sitemap.xml, robots.txt, llms.txt, search index (Zorto generates these automatically)
+3. **Discovery** — sitemap.xml, robots.txt, llms.txt, search data
 
 > [!TIP]
 > If you use a built-in theme (`zorto`, `dkdc`, `default`, `ember`, `forest`, `ocean`, `rose`, `slate`, etc.), Open Graph tags, canonical URLs, and Twitter Card tags are already included. The sections below show how to set them up manually if you use custom templates.
@@ -109,15 +109,16 @@ When `generate_md_files = true` is also set, `llms.txt` links point to the `.md`
 
 ## Built-in search
 
-Zorto can generate a SQLite search database for client-side search:
+Zorto search is DuckDB-backed. Ship a public `.ddb` file with a `search_pages` table, then point the built-in theme at it:
 
 ```toml
-generate_search = true
+[extra]
+search_database_url = "/data/site.ddb"
+search_database_file = "site.ddb"
+search_database_schema = "site"
 ```
 
-This generates a `search.db` file in your output directory containing every page and section. The built-in themes include a search UI that queries this database using sql.js (SQLite compiled to WebAssembly).
-
-The search index supports:
+The search data supports:
 
 - Case-insensitive matching
 - Ranked results (title matches score higher than body matches)

@@ -33,7 +33,5 @@ pub(crate) mod execute;
 pub(crate) mod links;
 pub mod lint;
 pub(crate) mod sass;
-#[cfg(feature = "search")]
-pub mod search;
 pub mod shortcodes;
 pub(crate) mod templates;

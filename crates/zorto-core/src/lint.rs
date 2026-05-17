@@ -118,18 +118,14 @@ fn lint_template_content(file: &str, content: &str, warnings: &mut Vec<LintWarni
     // Remove <script>...</script> and <style>...</style> blocks
     let no_script = remove_blocks(content, "script");
     let cleaned = remove_blocks(&no_script, "style");
+    let no_tera = remove_regex_preserving_lines(&TERA_RE, &cleaned);
+    let no_html = remove_regex_preserving_lines(&HTML_TAG_RE, &no_tera);
 
-    for (line_idx, line) in cleaned.lines().enumerate() {
+    for (line_idx, line) in no_html.lines().enumerate() {
         let line_num = line_idx + 1;
 
-        // Strip Tera expressions/tags from the line
-        let no_tera = TERA_RE.replace_all(line, " ");
-
-        // Strip HTML tags
-        let no_html = HTML_TAG_RE.replace_all(&no_tera, " ");
-
         // Look for remaining text that looks like user-facing content
-        for m in TEXT_RE.find_iter(&no_html) {
+        for m in TEXT_RE.find_iter(line) {
             let word = m.as_str();
 
             // Skip allowlisted words
@@ -151,6 +147,26 @@ fn lint_template_content(file: &str, content: &str, warnings: &mut Vec<LintWarni
             });
         }
     }
+}
+
+fn remove_regex_preserving_lines(re: &Regex, content: &str) -> String {
+    let mut result = String::with_capacity(content.len());
+    let mut last = 0;
+
+    for m in re.find_iter(content) {
+        result.push_str(&content[last..m.start()]);
+        for ch in m.as_str().chars() {
+            if ch == '\n' {
+                result.push('\n');
+            } else {
+                result.push(' ');
+            }
+        }
+        last = m.end();
+    }
+
+    result.push_str(&content[last..]);
+    result
 }
 
 /// Remove all `<tag>...</tag>` blocks from content.
@@ -436,6 +452,27 @@ mod tests {
     }
 
     #[test]
+    fn test_lint_skips_multiline_tera_blocks() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("templates");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("test.html"),
+            "{#- Internal implementation note that should not warn. -#}\n\
+             {%- if page.extra.title\n\
+             | default(value=\"Fallback\") -%}\n\
+             <h1>{{ page.title }}</h1>\n\
+             {%- endif -%}",
+        )
+        .unwrap();
+        let warnings = lint_templates(&dir);
+        assert!(
+            warnings.is_empty(),
+            "Should not flag multiline Tera blocks: {warnings:?}"
+        );
+    }
+
+    #[test]
     fn test_lint_skips_script_blocks() {
         let tmp = TempDir::new().unwrap();
         let dir = tmp.path().join("templates");
@@ -466,6 +503,25 @@ mod tests {
         assert!(
             warnings.is_empty(),
             "Should not flag content in style tags: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn test_lint_skips_multiline_html_attributes() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("templates");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("test.html"),
+            "<link rel=\"stylesheet\"\n\
+             href=\"https://cdn.example.com/package/file.css\"\n\
+             integrity=\"sha384-example\" crossorigin=\"anonymous\">",
+        )
+        .unwrap();
+        let warnings = lint_templates(&dir);
+        assert!(
+            warnings.is_empty(),
+            "Should not flag multiline tag attributes: {warnings:?}"
         );
     }
 

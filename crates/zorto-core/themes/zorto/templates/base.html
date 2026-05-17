@@ -142,7 +142,7 @@
         <label for="nav-toggle" class="navbar__hamburger" role="button" aria-label="Toggle menu" aria-expanded="false">
             <span></span><span></span><span></span>
         </label>
-        {%- if config.generate_search %}
+        {%- if config.extra.search_database_url is defined and config.extra.search_database_url != "" %}
         <button class="search-toggle navbar__icon-link" aria-label="Search" title="Search (Ctrl+K)">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </button>
@@ -337,7 +337,7 @@
 </script>
 {%- endif %}
 {%- endif %}
-{%- if config.generate_search %}
+{%- if config.extra.search_database_url is defined and config.extra.search_database_url != "" %}
 <div class="search-modal" id="search-modal" hidden>
   <div class="search-modal__backdrop"></div>
   <div class="search-modal__dialog">
@@ -365,12 +365,19 @@
   var resultsEl = document.getElementById('search-results');
   var statusEl = document.getElementById('search-status');
   var backdrop = modal.querySelector('.search-modal__backdrop');
-  var db = null;
-  var SQL = null;
+  var duck = null;
+  var dbPromise = null;
   var dbLoading = false;
   var dbReady = false;
   var debounceTimer = null;
   var selectedIdx = -1;
+  var pendingQuery = '';
+  var searchConfig = {
+    databaseUrl: '{{ config.extra.search_database_url | safe }}',
+    databaseFile: '{{ config.extra.search_database_file | default(value="site.ddb") | safe }}',
+    databaseSchema: '{{ config.extra.search_database_schema | default(value="site") | safe }}',
+    duckdbModuleUrl: {%- if config.extra.search_duckdb_module_url %}'{{ config.extra.search_duckdb_module_url | safe }}'{%- else %}'https://' + 'cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.33.1-dev45.0/+esm'{%- endif %}
+  };
 
   function openModal() {
     modal.removeAttribute('hidden');
@@ -382,8 +389,11 @@
     input.focus({ preventScroll: true });
     requestAnimationFrame(function() { modal.classList.add('search-modal--visible'); });
     if (!dbReady && !dbLoading) {
-      statusEl.innerHTML = '<div class="search-modal__loading"><div class="search-modal__spinner"></div><span>Loading search index...</span></div>';
-      initDB().then(function() { statusEl.innerHTML = ''; });
+      statusEl.innerHTML = '<div class="search-modal__loading"><div class="search-modal__spinner"></div><span>Loading site data...</span></div>';
+      initDB().then(function() {
+        statusEl.innerHTML = '';
+        if (pendingQuery) doSearch(pendingQuery);
+      });
     }
   }
 
@@ -455,35 +465,50 @@
   if (closeBtn) closeBtn.addEventListener('click', closeModal);
 
   async function initDB() {
-    if (db) return db;
-    if (dbLoading) return null;
+    if (duck) return duck;
+    if (dbPromise) return dbPromise;
     dbLoading = true;
-    try {
-      if (!SQL) {
-        var sqlPromise = window.initSqlJs || null;
-        if (!sqlPromise) {
-          await new Promise(function(resolve, reject) {
-            var script = document.createElement('script');
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/sql-wasm.js';
-            script.onload = resolve;
-            script.onerror = reject;
-            document.head.appendChild(script);
-          });
-        }
-        SQL = await initSqlJs({ locateFile: function(file) { return 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/' + file; } });
-      }
-      var response = await fetch('{{ get_url(path="search.db") | safe }}');
-      var buf = await response.arrayBuffer();
-      db = new SQL.Database(new Uint8Array(buf));
+    dbPromise = (async function() {
+      var duckdb = await import(searchConfig.duckdbModuleUrl);
+      var bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
+      var worker = await duckdb.createWorker(bundle.mainWorker);
+      var db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
+      await db.instantiate(bundle.mainModule, bundle.pthreadWorker || null);
+      var conn = await db.connect();
+      var response = await fetch(assetPath(searchConfig.databaseUrl));
+      if (!response.ok) throw new Error('site data returned HTTP ' + response.status);
+      var bytes = new Uint8Array(await response.arrayBuffer());
+      await db.registerFileBuffer(searchConfig.databaseFile, bytes);
+      await conn.query(
+        "ATTACH '" + searchConfig.databaseFile.replace(/'/g, "''") + "' AS " +
+        sqlIdentifier(searchConfig.databaseSchema) +
+        " (READ_ONLY)"
+      );
+      duck = { db: db, conn: conn };
       dbReady = true;
-      return db;
+      return duck;
+    })();
+    try {
+      return await dbPromise;
     } catch(err) {
       console.error('Search init failed:', err);
       statusEl.textContent = '';
-      resultsEl.innerHTML = '<div class="search-modal__empty">Failed to load search index.</div>';
+      resultsEl.innerHTML = '<div class="search-modal__empty">Failed to load site data.' +
+        (err && err.message ? '<br><small>' + escapeHtml(err.message) + '</small>' : '') +
+        '</div>';
+      dbPromise = null;
       return null;
     } finally {
       dbLoading = false;
+    }
+  }
+
+  function assetPath(url) {
+    try {
+      var parsed = new URL(url, window.location.href);
+      return parsed.pathname + parsed.search + parsed.hash;
+    } catch (err) {
+      return url;
     }
   }
 
@@ -498,27 +523,25 @@
     if (!database) return;
     try {
       var term = query.trim().toLowerCase().replace(/%/g, '\\%').replace(/_/g, '\\_');
-      var stmt = database.prepare(
+      var tableName = sqlIdentifier(searchConfig.databaseSchema) + '.main.search_pages';
+      var termSql = sqlString(term);
+      var rows = await duckRows(database.conn.query(
         "SELECT title, url, description, content, " +
-        "CASE WHEN title_lower = ?1 THEN 100 " +
-        "     WHEN title_lower LIKE ?1 || '%' ESCAPE '\\' THEN 80 " +
-        "     WHEN title_lower LIKE '%' || ?1 || '%' ESCAPE '\\' THEN 60 " +
+        "CASE WHEN title_lower = " + termSql + " THEN 100 " +
+        "     WHEN title_lower LIKE " + termSql + " || '%' ESCAPE '\\' THEN 80 " +
+        "     WHEN title_lower LIKE '%' || " + termSql + " || '%' ESCAPE '\\' THEN 60 " +
         "     ELSE 0 END + " +
-        "CASE WHEN description_lower LIKE '%' || ?1 || '%' ESCAPE '\\' THEN 20 ELSE 0 END + " +
-        "CASE WHEN content_lower LIKE '%' || ?1 || '%' ESCAPE '\\' THEN 10 ELSE 0 END as score " +
-        "FROM pages " +
-        "WHERE title_lower LIKE '%' || ?1 || '%' ESCAPE '\\' " +
-        "   OR description_lower LIKE '%' || ?1 || '%' ESCAPE '\\' " +
-        "   OR content_lower LIKE '%' || ?1 || '%' ESCAPE '\\' " +
-        "ORDER BY score DESC LIMIT 10"
-      );
-      stmt.bind([term]);
+        "CASE WHEN description_lower LIKE '%' || " + termSql + " || '%' ESCAPE '\\' THEN 20 ELSE 0 END + " +
+        "CASE WHEN content_lower LIKE '%' || " + termSql + " || '%' ESCAPE '\\' THEN 10 ELSE 0 END as score " +
+        "FROM " + tableName + " " +
+        "WHERE title_lower LIKE '%' || " + termSql + " || '%' ESCAPE '\\' " +
+        "   OR description_lower LIKE '%' || " + termSql + " || '%' ESCAPE '\\' " +
+        "   OR content_lower LIKE '%' || " + termSql + " || '%' ESCAPE '\\' " +
+        "ORDER BY score DESC, title LIMIT 10"
+      ));
       var html = '';
-      var count = 0;
       var re = new RegExp('(' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
-      while (stmt.step()) {
-        var row = stmt.getAsObject();
-        count++;
+      rows.forEach(function(row) {
         // Build snippet: prefer description, fall back to content around first match
         var snippet = '';
         var desc = row.description || '';
@@ -544,14 +567,13 @@
           '<div class="search-modal__result-url">' + escapeHtml(row.url) + '</div>' +
           '<div class="search-modal__result-snippet">' + snippet + '</div>' +
           '</a>';
-      }
-      stmt.free();
+      });
       selectedIdx = -1;
-      if (count === 0) {
+      if (rows.length === 0) {
         statusEl.textContent = '';
         resultsEl.innerHTML = '<div class="search-modal__empty">No results found.</div>';
       } else {
-        statusEl.textContent = count + ' result' + (count === 1 ? '' : 's');
+        statusEl.textContent = rows.length + ' result' + (rows.length === 1 ? '' : 's');
         resultsEl.innerHTML = html;
       }
     } catch(err) {
@@ -561,6 +583,29 @@
     }
   }
 
+  async function duckRows(queryPromise) {
+    var table = await queryPromise;
+    var rows = [];
+    for (var row of table) {
+      var obj = row && row.toJSON ? row.toJSON() : row;
+      Object.keys(obj || {}).forEach(function(key) {
+        if (typeof obj[key] === 'bigint') obj[key] = Number(obj[key]);
+      });
+      rows.push(obj);
+    }
+    return rows;
+  }
+
+  function sqlIdentifier(value) {
+    var name = String(value || '');
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error('invalid DuckDB schema name');
+    return name;
+  }
+
+  function sqlString(value) {
+    return "'" + String(value || '').replace(/'/g, "''") + "'";
+  }
+
   function escapeHtml(s) {
     var d = document.createElement('div');
     d.appendChild(document.createTextNode(s));
@@ -568,8 +613,9 @@
   }
 
   input.addEventListener('input', function() {
+    pendingQuery = input.value;
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(function() { doSearch(input.value); }, 100);
+    debounceTimer = setTimeout(function() { doSearch(pendingQuery); }, 100);
   });
 })();
 </script>

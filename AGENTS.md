@@ -1,6 +1,6 @@
 # zorto
 
-The AI-native static site generator (SSG) with executable code blocks, inspired by [Zola](https://github.com/getzola/zola) and [Quarto](https://github.com/quarto-dev/quarto-cli).
+The AI-native static site generator (SSG) with executable code blocks & more, inspired by [Zola](https://github.com/getzola/zola) and [Quarto](https://github.com/quarto-dev/quarto-cli).
 
 ## architecture
 
@@ -64,6 +64,7 @@ Netlify deploys for zorto.dev are intentionally KISS: configure the Netlify UI c
 - DO NOT depend on any dkdc-* packages. This is a standalone open source project.
 - do clone Zola & Quarto (and any other repos) into the .gitignored 'external' directory and use them as references for how to implement the features in this project.
 - Python distribution (via PyO3/maturin) is a hard requirement. The `crates/zorto-py/` bindings and `py/zorto/` wrapper must be maintained.
+- Search and data app direction: DuckDB only. Public site data should ship as `.ddb` files and browser runtime should query them with DuckDB-Wasm. Do not add new SQLite/sql.js search paths.
 
 ## threat model
 

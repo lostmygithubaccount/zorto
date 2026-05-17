@@ -1,14 +1,14 @@
 {
   "dashboard": {
-    "database_file": "meta.ddb",
-    "database_schema": "meta",
-    "database_url": "/data/meta.ddb",
+    "database_file": "site.ddb",
+    "database_schema": "site",
+    "database_url": "/data/site.ddb",
     "duckdb_module_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.33.1-dev45.0/+esm",
     "load_label": "Load analytics",
     "loaded_label": "analytics loaded",
     "plotly_url": "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@3.4.0/plotly.min.js"
   },
-  "generated_at": "2026-05-16T19:24:19+00:00",
+  "generated_at": "2026-05-17T01:47:37+00:00",
   "kpis": [
     {
       "id": "commits",
@@ -107,7 +107,7 @@
           "label": "Rows"
         }
       ],
-      "description": "Tables stored inside meta.ddb.",
+      "description": "Tables stored inside site.ddb.",
       "id": "db-tables",
       "kind": "table",
       "query_id": "db_tables",
@@ -297,7 +297,7 @@
       "view": "data"
     },
     {
-      "description": "Saved queries run against the attached meta.main schema.",
+      "description": "Saved queries run against the attached site.main schema.",
       "id": "query-console",
       "kind": "query",
       "renderer": "queryConsole",
@@ -308,102 +308,102 @@
   "queries": [
     {
       "id": "info",
-      "sql": "SELECT * FROM meta.main.meta_info LIMIT 1"
+      "sql": "SELECT * FROM site.main.meta_info LIMIT 1"
     },
     {
       "id": "snapshot",
-      "sql": "SELECT * FROM meta.main.repo_snapshot LIMIT 1"
+      "sql": "SELECT * FROM site.main.repo_snapshot LIMIT 1"
     },
     {
       "id": "totals",
-      "sql": "SELECT\n  (SELECT count(*) FROM meta.main.commits) AS commits,\n  (SELECT count(*) FROM meta.main.content_files) AS content_files,\n  (SELECT coalesce(sum(word_count), 0) FROM meta.main.content_files) AS words,\n  (SELECT CAST(coalesce(sum(bytes), 0) AS DOUBLE) FROM meta.main.build_outputs) AS output_bytes,\n  (SELECT duration_ms FROM meta.main.build_runs ORDER BY finished_at DESC LIMIT 1) AS latest_build_ms,\n  (SELECT count(*) FROM meta.main.content_links WHERE target_exists = false) AS broken_links,\n  (SELECT count(*) FROM meta.main.content_terms) AS terms\n"
+      "sql": "SELECT\n  (SELECT count(*) FROM site.main.commits) AS commits,\n  (SELECT count(*) FROM site.main.content_files) AS content_files,\n  (SELECT coalesce(sum(word_count), 0) FROM site.main.content_files) AS words,\n  (SELECT CAST(coalesce(sum(bytes), 0) AS DOUBLE) FROM site.main.build_outputs) AS output_bytes,\n  (SELECT duration_ms FROM site.main.build_runs ORDER BY finished_at DESC LIMIT 1) AS latest_build_ms,\n  (SELECT count(*) FROM site.main.content_links WHERE target_exists = false) AS broken_links,\n  (SELECT count(*) FROM site.main.search_pages) AS search_pages,\n  (SELECT count(*) FROM site.main.content_terms) AS terms\n"
     },
     {
       "id": "health",
-      "sql": "SELECT\n  count(*) FILTER (WHERE kind IN ('docs', 'content')) AS authored_files,\n  count(*) FILTER (WHERE kind IN ('docs', 'content') AND title IS NULL) AS untitled_files,\n  count(*) FILTER (WHERE kind IN ('docs', 'content') AND word_count = 0) AS empty_files,\n  (SELECT count(*) FROM meta.main.content_links) AS local_links,\n  (SELECT count(*) FROM meta.main.content_links WHERE target_exists = false) AS broken_links,\n  (SELECT count(*) FROM meta.main.content_terms) AS indexed_terms\nFROM meta.main.content_files\n"
+      "sql": "SELECT\n  count(*) FILTER (WHERE kind IN ('docs', 'content')) AS authored_files,\n  count(*) FILTER (WHERE kind IN ('docs', 'content') AND title IS NULL) AS untitled_files,\n  count(*) FILTER (WHERE kind IN ('docs', 'content') AND word_count = 0) AS empty_files,\n  (SELECT count(*) FROM site.main.content_links) AS local_links,\n  (SELECT count(*) FROM site.main.content_links WHERE target_exists = false) AS broken_links,\n  (SELECT count(*) FROM site.main.search_pages) AS search_pages,\n  (SELECT count(*) FROM site.main.content_terms) AS indexed_terms\nFROM site.main.content_files\n"
     },
     {
       "id": "daily",
-      "sql": "SELECT day, commit_count, additions, deletions\nFROM meta.main.commit_daily\nORDER BY day\n"
+      "sql": "SELECT day, commit_count, additions, deletions\nFROM site.main.commit_daily\nORDER BY day\n"
     },
     {
       "id": "freshness",
-      "sql": "WITH generated AS (\n  SELECT CAST(generated_at AS DATE) AS generated_day\n  FROM meta.main.meta_info\n  LIMIT 1\n),\naged AS (\n  SELECT\n    kind,\n    CASE\n      WHEN last_commit_at IS NULL THEN 'unknown'\n      WHEN date_diff('day', CAST(last_commit_at AS DATE), generated_day) <= 7 THEN '0-7d'\n      WHEN date_diff('day', CAST(last_commit_at AS DATE), generated_day) <= 30 THEN '8-30d'\n      WHEN date_diff('day', CAST(last_commit_at AS DATE), generated_day) <= 90 THEN '31-90d'\n      ELSE '90d+'\n    END AS age_bucket,\n    CASE\n      WHEN last_commit_at IS NULL THEN 5\n      WHEN date_diff('day', CAST(last_commit_at AS DATE), generated_day) <= 7 THEN 1\n      WHEN date_diff('day', CAST(last_commit_at AS DATE), generated_day) <= 30 THEN 2\n      WHEN date_diff('day', CAST(last_commit_at AS DATE), generated_day) <= 90 THEN 3\n      ELSE 4\n    END AS age_order,\n    word_count\n  FROM meta.main.content_files, generated\n  WHERE kind IN ('docs', 'content')\n)\nSELECT kind, age_bucket, min(age_order) AS age_order, count(*) AS file_count, coalesce(sum(word_count), 0) AS words\nFROM aged\nGROUP BY kind, age_bucket\nORDER BY age_order, kind\n"
+      "sql": "WITH generated AS (\n  SELECT CAST(generated_at AS DATE) AS generated_day\n  FROM site.main.meta_info\n  LIMIT 1\n),\naged AS (\n  SELECT\n    kind,\n    CASE\n      WHEN last_commit_at IS NULL THEN 'unknown'\n      WHEN date_diff('day', CAST(last_commit_at AS DATE), generated_day) <= 7 THEN '0-7d'\n      WHEN date_diff('day', CAST(last_commit_at AS DATE), generated_day) <= 30 THEN '8-30d'\n      WHEN date_diff('day', CAST(last_commit_at AS DATE), generated_day) <= 90 THEN '31-90d'\n      ELSE '90d+'\n    END AS age_bucket,\n    CASE\n      WHEN last_commit_at IS NULL THEN 5\n      WHEN date_diff('day', CAST(last_commit_at AS DATE), generated_day) <= 7 THEN 1\n      WHEN date_diff('day', CAST(last_commit_at AS DATE), generated_day) <= 30 THEN 2\n      WHEN date_diff('day', CAST(last_commit_at AS DATE), generated_day) <= 90 THEN 3\n      ELSE 4\n    END AS age_order,\n    word_count\n  FROM site.main.content_files, generated\n  WHERE kind IN ('docs', 'content')\n)\nSELECT kind, age_bucket, min(age_order) AS age_order, count(*) AS file_count, coalesce(sum(word_count), 0) AS words\nFROM aged\nGROUP BY kind, age_bucket\nORDER BY age_order, kind\n"
     },
     {
       "id": "terms",
-      "sql": "SELECT term, file_count, occurrence_count\nFROM meta.main.content_terms\nORDER BY occurrence_count DESC, file_count DESC\nLIMIT 20\n"
+      "sql": "SELECT term, file_count, occurrence_count\nFROM site.main.content_terms\nORDER BY occurrence_count DESC, file_count DESC\nLIMIT 20\n"
     },
     {
       "id": "outputs_by_kind",
-      "sql": "SELECT kind, count(*) AS file_count, CAST(sum(bytes) AS DOUBLE) AS bytes\nFROM meta.main.build_outputs\nGROUP BY kind\nORDER BY bytes DESC\n"
+      "sql": "SELECT kind, count(*) AS file_count, CAST(sum(bytes) AS DOUBLE) AS bytes\nFROM site.main.build_outputs\nGROUP BY kind\nORDER BY bytes DESC\n"
     },
     {
       "id": "outputs_by_extension",
-      "sql": "SELECT kind, extension, count(*) AS file_count, CAST(sum(bytes) AS DOUBLE) AS bytes\nFROM meta.main.build_outputs\nGROUP BY kind, extension\nORDER BY kind, bytes DESC\n"
+      "sql": "SELECT kind, extension, count(*) AS file_count, CAST(sum(bytes) AS DOUBLE) AS bytes\nFROM site.main.build_outputs\nGROUP BY kind, extension\nORDER BY kind, bytes DESC\n"
     },
     {
       "id": "builds",
-      "sql": "SELECT started_at, finished_at, duration_ms, status\nFROM meta.main.build_runs\nORDER BY started_at\n"
+      "sql": "SELECT started_at, finished_at, duration_ms, status\nFROM site.main.build_runs\nORDER BY started_at\n"
     },
     {
       "id": "build_runs",
-      "sql": "SELECT started_at, finished_at, duration_ms, status, zorto_version, command\nFROM meta.main.build_runs\nORDER BY finished_at DESC\nLIMIT 2\n"
+      "sql": "SELECT started_at, finished_at, duration_ms, status, zorto_version, command\nFROM site.main.build_runs\nORDER BY finished_at DESC\nLIMIT 2\n"
     },
     {
       "id": "recent_commits",
-      "sql": "SELECT short_sha, committed_at, subject, file_count, additions, deletions\nFROM meta.main.commits\nORDER BY committed_at DESC\nLIMIT 8\n"
+      "sql": "SELECT short_sha, committed_at, subject, file_count, additions, deletions\nFROM site.main.commits\nORDER BY committed_at DESC\nLIMIT 8\n"
     },
     {
       "id": "content_files",
-      "sql": "SELECT path, kind, title, word_count, bytes, last_commit_at\nFROM meta.main.content_files\nWHERE kind IN ('docs', 'content')\nORDER BY word_count DESC, bytes DESC\nLIMIT 14\n"
+      "sql": "SELECT path, kind, title, word_count, bytes, last_commit_at\nFROM site.main.content_files\nWHERE kind IN ('docs', 'content')\nORDER BY word_count DESC, bytes DESC\nLIMIT 14\n"
     },
     {
       "id": "links",
-      "sql": "SELECT source_path, target, target_path, link_kind, target_exists\nFROM meta.main.content_links\nORDER BY target_exists ASC NULLS LAST, source_path\nLIMIT 14\n"
+      "sql": "SELECT source_path, target, target_path, link_kind, target_exists\nFROM site.main.content_links\nORDER BY target_exists ASC NULLS LAST, source_path\nLIMIT 14\n"
     },
     {
       "id": "outputs",
-      "sql": "SELECT path, kind, extension, CAST(bytes AS DOUBLE) AS bytes\nFROM meta.main.build_outputs\nORDER BY bytes DESC\nLIMIT 14\n"
+      "sql": "SELECT path, kind, extension, CAST(bytes AS DOUBLE) AS bytes\nFROM site.main.build_outputs\nORDER BY bytes DESC\nLIMIT 14\n"
     },
     {
       "id": "packages",
-      "sql": "SELECT ecosystem, name, version, manifest_path\nFROM meta.main.packages\nORDER BY ecosystem, name\n"
+      "sql": "SELECT ecosystem, name, version, manifest_path\nFROM site.main.packages\nORDER BY ecosystem, name\n"
     },
     {
       "id": "db_tables",
-      "sql": "SELECT 'meta_info' AS table_name, count(*) AS rows FROM meta.main.meta_info\nUNION ALL SELECT 'repo_snapshot', count(*) FROM meta.main.repo_snapshot\nUNION ALL SELECT 'commits', count(*) FROM meta.main.commits\nUNION ALL SELECT 'commit_daily', count(*) FROM meta.main.commit_daily\nUNION ALL SELECT 'packages', count(*) FROM meta.main.packages\nUNION ALL SELECT 'content_files', count(*) FROM meta.main.content_files\nUNION ALL SELECT 'content_terms', count(*) FROM meta.main.content_terms\nUNION ALL SELECT 'content_links', count(*) FROM meta.main.content_links\nUNION ALL SELECT 'build_runs', count(*) FROM meta.main.build_runs\nUNION ALL SELECT 'build_outputs', count(*) FROM meta.main.build_outputs\nUNION ALL SELECT 'pipeline_steps', count(*) FROM meta.main.pipeline_steps\nORDER BY rows DESC\n"
+      "sql": "SELECT 'meta_info' AS table_name, count(*) AS rows FROM site.main.meta_info\nUNION ALL SELECT 'repo_snapshot', count(*) FROM site.main.repo_snapshot\nUNION ALL SELECT 'commits', count(*) FROM site.main.commits\nUNION ALL SELECT 'commit_daily', count(*) FROM site.main.commit_daily\nUNION ALL SELECT 'packages', count(*) FROM site.main.packages\nUNION ALL SELECT 'content_files', count(*) FROM site.main.content_files\nUNION ALL SELECT 'content_terms', count(*) FROM site.main.content_terms\nUNION ALL SELECT 'search_pages', count(*) FROM site.main.search_pages\nUNION ALL SELECT 'content_links', count(*) FROM site.main.content_links\nUNION ALL SELECT 'build_runs', count(*) FROM site.main.build_runs\nUNION ALL SELECT 'build_outputs', count(*) FROM site.main.build_outputs\nUNION ALL SELECT 'pipeline_steps', count(*) FROM site.main.pipeline_steps\nORDER BY rows DESC\n"
     },
     {
       "id": "pipeline_steps",
-      "sql": "SELECT step_name, step_kind, status, duration_ms, output_count, command, detail\nFROM meta.main.pipeline_steps\nORDER BY started_at\n"
+      "sql": "SELECT step_name, step_kind, status, duration_ms, output_count, command, detail\nFROM site.main.pipeline_steps\nORDER BY started_at\n"
     }
   ],
   "query_presets": [
     {
       "id": "catalog",
       "label": "Catalog",
-      "sql": "SELECT 'meta_info' AS table_name, count(*) AS rows FROM meta.main.meta_info\nUNION ALL SELECT 'repo_snapshot', count(*) FROM meta.main.repo_snapshot\nUNION ALL SELECT 'commits', count(*) FROM meta.main.commits\nUNION ALL SELECT 'commit_daily', count(*) FROM meta.main.commit_daily\nUNION ALL SELECT 'packages', count(*) FROM meta.main.packages\nUNION ALL SELECT 'content_files', count(*) FROM meta.main.content_files\nUNION ALL SELECT 'content_terms', count(*) FROM meta.main.content_terms\nUNION ALL SELECT 'content_links', count(*) FROM meta.main.content_links\nUNION ALL SELECT 'build_runs', count(*) FROM meta.main.build_runs\nUNION ALL SELECT 'build_outputs', count(*) FROM meta.main.build_outputs\nUNION ALL SELECT 'pipeline_steps', count(*) FROM meta.main.pipeline_steps\nORDER BY rows DESC\n"
+      "sql": "SELECT 'meta_info' AS table_name, count(*) AS rows FROM site.main.meta_info\nUNION ALL SELECT 'repo_snapshot', count(*) FROM site.main.repo_snapshot\nUNION ALL SELECT 'commits', count(*) FROM site.main.commits\nUNION ALL SELECT 'commit_daily', count(*) FROM site.main.commit_daily\nUNION ALL SELECT 'packages', count(*) FROM site.main.packages\nUNION ALL SELECT 'content_files', count(*) FROM site.main.content_files\nUNION ALL SELECT 'content_terms', count(*) FROM site.main.content_terms\nUNION ALL SELECT 'search_pages', count(*) FROM site.main.search_pages\nUNION ALL SELECT 'content_links', count(*) FROM site.main.content_links\nUNION ALL SELECT 'build_runs', count(*) FROM site.main.build_runs\nUNION ALL SELECT 'build_outputs', count(*) FROM site.main.build_outputs\nUNION ALL SELECT 'pipeline_steps', count(*) FROM site.main.pipeline_steps\nORDER BY rows DESC\n"
     },
     {
       "id": "terms",
       "label": "Terms",
-      "sql": "SELECT term, file_count, occurrence_count\nFROM meta.main.content_terms\nORDER BY occurrence_count DESC, file_count DESC\nLIMIT 30\n"
+      "sql": "SELECT term, file_count, occurrence_count\nFROM site.main.content_terms\nORDER BY occurrence_count DESC, file_count DESC\nLIMIT 30\n"
     },
     {
       "id": "freshness",
       "label": "Freshness",
-      "sql": "WITH generated AS (\n  SELECT CAST(generated_at AS DATE) AS generated_day\n  FROM meta.main.meta_info\n  LIMIT 1\n)\nSELECT path, kind, word_count, date_diff('day', CAST(last_commit_at AS DATE), generated_day) AS days_since_update\nFROM meta.main.content_files, generated\nWHERE kind IN ('docs', 'content')\nORDER BY days_since_update DESC NULLS LAST, word_count DESC\nLIMIT 30\n"
+      "sql": "WITH generated AS (\n  SELECT CAST(generated_at AS DATE) AS generated_day\n  FROM site.main.meta_info\n  LIMIT 1\n)\nSELECT path, kind, word_count, date_diff('day', CAST(last_commit_at AS DATE), generated_day) AS days_since_update\nFROM site.main.content_files, generated\nWHERE kind IN ('docs', 'content')\nORDER BY days_since_update DESC NULLS LAST, word_count DESC\nLIMIT 30\n"
     },
     {
       "id": "outputs",
       "label": "Outputs",
-      "sql": "SELECT path, kind, extension, CAST(bytes AS DOUBLE) AS bytes\nFROM meta.main.build_outputs\nORDER BY bytes DESC\nLIMIT 30\n"
+      "sql": "SELECT path, kind, extension, CAST(bytes AS DOUBLE) AS bytes\nFROM site.main.build_outputs\nORDER BY bytes DESC\nLIMIT 30\n"
     },
     {
       "id": "links",
       "label": "Links",
-      "sql": "SELECT source_path, target, target_path, link_kind, target_exists\nFROM meta.main.content_links\nORDER BY target_exists ASC NULLS LAST, source_path\nLIMIT 40\n"
+      "sql": "SELECT source_path, target, target_path, link_kind, target_exists\nFROM site.main.content_links\nORDER BY target_exists ASC NULLS LAST, source_path\nLIMIT 40\n"
     }
   ],
   "signals": [
