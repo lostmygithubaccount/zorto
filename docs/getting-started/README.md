@@ -1,3 +1,7 @@
++++
+sort_by = "weight"
++++
+
 # Getting started
 
 This tutorial walks you through building a complete site with Zorto, from installation to production build.

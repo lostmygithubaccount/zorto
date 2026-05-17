@@ -429,8 +429,9 @@ pub fn load_content(content_dir: &Path, base_url: &str) -> anyhow::Result<Loaded
 ///
 /// - `README.md` files become sections (like `_index.md`)
 /// - Other `.md` files become pages
-/// - Title is extracted from the first `# Heading`
-/// - Description is extracted from the first paragraph after the heading
+/// - TOML frontmatter is honored when present
+/// - Title is extracted from frontmatter, then the first `# Heading`
+/// - Description is extracted from frontmatter, then the first paragraph after the heading
 /// - Files listed in `config.exclude` are skipped
 pub fn load_content_dir(
     dir: &Path,
@@ -491,12 +492,18 @@ pub fn load_content_dir(
             .to_string_lossy()
             .to_string();
 
-        let (extracted_title, description) = extract_title_description(&raw);
-        // Use extracted H1 title, or derive from filename for non-README files
-        let title = extracted_title.unwrap_or_else(|| title_from_filename(&stem));
+        let (mut fm, parsed_body) =
+            parse_frontmatter(&raw).map_err(|e| e.context(format!("in {}", path.display())))?;
+        let (extracted_title, description) = extract_title_description(&parsed_body);
+        if fm.title.is_none() {
+            fm.title = Some(extracted_title.unwrap_or_else(|| title_from_filename(&stem)));
+        }
+        if fm.description.is_none() {
+            fm.description = description;
+        }
 
         // Strip the title heading from body content so it doesn't render twice
-        let body = strip_title_heading(&raw);
+        let body = strip_title_heading(&parsed_body);
 
         // Optionally rewrite .md links to clean URLs
         let body = if config.rewrite_links {
@@ -522,13 +529,12 @@ pub fn load_content_dir(
                 }
             };
 
-            let fm = Frontmatter {
-                title: Some(title),
-                description,
-                template: Some(config.section_template.clone()),
-                sort_by: config.sort_by,
-                ..Default::default()
-            };
+            if fm.template.is_none() {
+                fm.template = Some(config.section_template.clone());
+            }
+            if fm.sort_by.is_none() {
+                fm.sort_by = config.sort_by;
+            }
             let section = build_section(fm, body, &rel_path, base_url);
             sections.insert(rel_path, section);
         } else {
@@ -543,12 +549,9 @@ pub fn load_content_dir(
                 format!("{}/{parent}/{stem}.md", config.url_prefix)
             };
 
-            let fm = Frontmatter {
-                title: Some(title),
-                description,
-                template: Some(config.template.clone()),
-                ..Default::default()
-            };
+            if fm.template.is_none() {
+                fm.template = Some(config.template.clone());
+            }
             let page = build_page(fm, body, &rel_path, base_url);
             pages.insert(rel_path, page);
         }
