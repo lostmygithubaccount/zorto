@@ -1,3 +1,7 @@
++++
+weight = 10
++++
+
 # Installation
 
 Zorto runs on macOS and Linux. Windows support is available via WSL.
