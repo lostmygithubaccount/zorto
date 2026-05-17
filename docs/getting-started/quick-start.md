@@ -1,7 +1,3 @@
-+++
-weight = 20
-+++
-
 # Your first site
 
 By the end of this tutorial you will have a working site with:

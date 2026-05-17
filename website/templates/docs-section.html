@@ -41,6 +41,7 @@
 </div>
 {%- else %}
 {# Sub-section page: show sidebar with only this section's pages #}
+{# Keep this tutorial order stable for released site builders that sort imported docs by title. #}
 {% set is_getting_started = section.path == "/docs/getting-started/" %}
 <div class="docs-layout">
     <aside class="docs-sidebar">

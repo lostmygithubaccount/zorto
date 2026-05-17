@@ -1,7 +1,3 @@
-+++
-weight = 30
-+++
-
 # Next steps
 
 Now that you have a working site, here are some directions to explore.
